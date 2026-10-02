@@ -1,6 +1,8 @@
 # Project management
 
-Canonical product: **chat-with-books**. Tracker: GitHub Issues (`aubed9/chat-with-books`). Structured index: GitHub Project [chat-with-books Product Delivery](https://github.com/users/aubed9/projects/3). Adapter config: `docs/agents/github-pm.json`.
+Canonical product: **agentic book-learning (B2C)** — the 2026-10-02 rebrand of chat-with-books; working name until the PM picks the rebrand name. PM tracker: GitHub Issues (`Rayesh-company/fast-book-learning`) — moved there 2026-10-02 from `aubed9/chat-with-books`, whose issues #34+ were renumbered from #1 (the old repo stays as the archive; its issues #1–#33 never moved). Structured index: GitHub Project [fast-book-learning Product Delivery](https://github.com/orgs/Rayesh-company/projects/2). Adapter config: `docs/agents/github-pm.json`. Single tracker for PM and engineering since the 2026-10-02 consolidation: GitHub Issues (`Rayesh-company/fast-book-learning`) per `issue-tracker.md`; the pre-rebrand GitLab tracker and the pre-move PM repo are read-only archives.
+
+Canonical records: project [**#1**](https://github.com/Rayesh-company/fast-book-learning/issues/1) · active phase [**#2**](https://github.com/Rayesh-company/fast-book-learning/issues/2) (Phase 0 — Research & business planning) · Wayfinder map [**#3**](https://github.com/Rayesh-company/fast-book-learning/issues/3). History: the 2026-10-02 PM-state restart superseded the first records (aubed9/chat-with-books#1 project, #2 Phase 2 record, #3 Wayfinder map — closed, evidence preserved in their bodies); later that day the restarted records (old #34/#35/#36) moved here as #1/#2/#3.
 
 Issue bodies are the work contract. Project fields are sortable indexes only. Assignment is the authoritative claim.
 
@@ -61,7 +63,7 @@ Story points: **1 / 2 / 3 / 5 / 8**. Forecasts, not promises. Expected shape (fo
 
 ## Sprint cadence
 
-**1-week sprints.** Sprint 1 is the deadline sprint: **4–10 September 2026** (through 19 Shahrivar 1405). Sprint planning commits only `pm:ready` work. Unassigned ready work stays claimable.
+**1-week sprints.** No active sprint since the 2026-10-02 restart; plan the next sprint's goal and dates at the first status review. Sprint planning commits only `pm:ready` work. Unassigned ready work stays claimable.
 
 ## Definition of claim
 
@@ -72,4 +74,10 @@ A teammate **claims** a ticket by becoming its GitHub assignee. That assignment 
 - Preferred write path: `github_adapter.py` (`issue-create`, `enroll`, `relate`, `claim`, `state`, `done`).
 - Native parent/sub-issue and blocking relationships; do not duplicate dependency truth in comments.
 - GitHub Project fields: `PM Status`, `Product Phase`, `Sprint`, `Effort`, `Deadline`, `Technical Depth`, `Work Type`, `Priority`.
+- Known limitation (see `project_field_sync_warning` in `github-pm.json`): `gh project item-edit` in this environment rejects the adapter's `--owner` flag, so Project field sync fails while issue/label/relationship writes succeed. Issues stay canonical; fix by aligning adapter and gh CLI before relying on Project field values.
 - If Projects access drops, continue in Issues-only mode. Labels, assignment, and relationships still apply.
+- Engineering and PM work share this repo's issues (engineering work carries `work:engineering` and the triage vocabulary); the pre-rebrand GitLab tracker (`mohamadreza/chatbot-v1`) and `aubed9/chat-with-books` are archives — link their history from issue bodies rather than reopening work there.
+
+## Phase 0 specifics
+
+The phase goal, exit criteria, scope, and evidence live in [#2](https://github.com/Rayesh-company/fast-book-learning/issues/2). The bilingual English/Farsi proposal is the phase's required deliverable (structure: the PM skill's `PHASE-0-PROPOSAL.md`); it may live in this repo as Markdown linked from #2, which holds status and pointers only. Defaults set by the agent at the 2026-10-02 restart (PM absent for the goal interview; revisable at any status review): the thesis go/no-go goal shape, the six exit criteria, and "no target date yet".

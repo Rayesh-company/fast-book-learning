@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live in GitHub Issues for `aubed9/chat-with-books` and are operated with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues for `Rayesh-company/fast-book-learning` and are operated with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
