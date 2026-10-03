@@ -4,12 +4,16 @@ Farsi question-answering over a fixed Book set through a prebuilt Cognee agent, 
 
 ## Language
 
+**Learner (فراگیر)**:
+The B2C persona the rebranded product serves (the 2026-10-02 B2C pivot, settled in Wayfinder #37): a Farsi-speaking, Iran-based aspirational self-improver, dissatisfied with summaries and capsules, who wants to genuinely master one specific important Book — led through it as a student by the agent, who teaches. The beachhead Book is طرح کلی اندیشۀ اسلامی در قرآن; the draw is the topic, not the method.
+_Avoid_: Customer (the superseded B2B persona), user, reader (reading is exposure; the Learner's job is mastery)
+
 **Customer**:
-A Farsi-speaking professional who needs answers from the Book set. In Phase 2 this is a persona, not a named company; industry and job title are left unspecified.
+A Farsi-speaking professional who needs answers from the Book set. In Phase 2 this is a persona, not a named company; industry and job title are left unspecified. Superseded by the 2026-10-02 B2C pivot — the persona is now the Learner (فراگیر); retained for Phase-2 history.
 _Avoid_: Client, user, account, the Session operator
 
 **Stand-in**:
-A named human the PM accepts to complete the Phase 2 exit sitting in place of a paying Customer.
+A named human the PM accepts to complete the Phase 2 exit sitting in place of a paying Customer. Superseded with the 2026-10-02 B2C pivot; retained for Phase-2 history.
 _Avoid_: Persona, "a colleague" without a name
 
 **Session operator**:
@@ -136,9 +140,33 @@ _Avoid_: evidence block, snippet, quote-only paragraph
 The AI-written connective text inside a Quoted paragraph; it claims no pages and is never shown as quoted.
 _Avoid_: glue text, preamble, filler paragraph (the superseded standalone-paragraph design)
 
-**Book reader**:
-The split-view panel (کتاب‌خوان) that renders the original Book PDFs; every Quote on the sheet clicks through to the passage's actual PDF page with the quoted letters highlighted (ADR-0007).
-_Avoid_: PDF viewer chrome (it is a provenance surface, not a generic viewer), book preview
+**کتاب‌خوان (Book reader — mode 1)**:
+One of the product's two modes (settled 2026-10-03, Wayfinder #5): the Learner reads the Book freely — reading, notes, TTS, and chat with the Book — and content questions are answered directly. The ADR-0007 split-view provenance panel is this mode's first surface; free reading, notes, and TTS grow onto it.
+_Avoid_: PDF viewer chrome (the panel is a provenance surface, not a generic viewer), book preview, using the word for the panel alone (the panel belongs to the mode now)
+
+**Learning mode (حالت یادگیری)**:
+The product's second mode (settled 2026-10-03, Wayfinder #5): an agent helps the Learner learn one Book by running the weekly book-study protocol — calibration, the Learning session, between-day retrieval, the weekly closing ritual, the +1/+7/+30 ladder, the adaptive signals/levers loop. The Learner produces (brain dumps, explanations, mind maps, presentations) — accepted as text, audio, or photographed handwriting; the agent schedules, prompts, and judges productions against the Book's own text. On content questions it guides first; the correct answer is an earned reveal — shown only after the Learner attempts or explicitly skips. Reading in Learning mode uses its own tools, distinct from کتاب‌خوان's; reading outside the app is allowed. There is no separate research mode inside Learning mode.
+_Avoid_: chat-with-book (that is mode 1), tutor-that-explains-first, course
+
+**Learning session (جلسهٔ مطالعه)**:
+The learning-mode unit (settled 2026-10-03, Wayfinder #5): a pre-reading session (DEFUSE, the distraction checklist, priming, and mental-image creation — the agent questions the Learner and draws the mind map from their text, audio, or photographed-handwriting input), then the reading session (interleaving, the 15–30-second pause discipline, feeding the mind map, and the Confusion Compass — the Learner writes what confuses, logs questions, and hunts the answers; TTS is the Learner's choice, and with TTS the pause stops are too), then the 2-minute uncued brain dump, mind-map cleanup, exercises (free recall, Feynman), and recovery. Between sessions: recall activities — Feynman, new-perspective thinking, مباحثه/آموزش with the agent, or answering open Confusion-Compass questions. The week closes with interleaving, real-world scenario use, mind-map cleanup, and the next week's plan.
+_Avoid_: study block, lesson, chapter (the session is protocol-shaped, not content-shaped)
+
+**Learning report (گزارش یادگیری)**:
+The walk-away artifact of learning a Book in Learning mode: the cleaned mental image, the closed Confusion-Compass questions, the retrieval history, and the scenario readiness — proof of learning the Learner can keep and share.
+_Avoid_: export, transcript, Session report (that is the superseded research artifact)
+
+**Target scenario (سناریوی هدف)**:
+The sixth calibration dimension (settled 2026-10-03, Wayfinder #5): the real-world use the Learner chooses for this Book — مباحثه، سخنرانی، تدریس، ارائه، or امتحان — chosen once, biasing the activity mix toward it. The observable end state of learning includes performing in the chosen scenario, not only retrieving.
+_Avoid_: use case, goal, learning style
+
+**Confusion compass (قطب‌نمای سردرگمی)**:
+The learning-mode ledger of questions born from confusion during reading. The Learner writes what confuses and logs the questions; the agent never resolves them silently — the Learner hunts answers (targeted search over the Book), and unresolved items ride into the next session's start and the weekly closing.
+_Avoid_: FAQ, error log, notes
+
+**Mental image (نقشۀ ذهنی)**:
+The Learner's evolving map of the whole Book: created at pre-reading from the Learner's own words (the agent renders it; the content is always the Learner's production), fed during reading, cleaned at week's end.
+_Avoid_: knowledge graph (Cognee's internal graph is not the Learner's map), diagram, illustration
 
 **Account**:
 The credential the platform recognizes (ADR-0013): an email and a password, issued by the Admin — never self-created — owning one Balance and every Session run under it. It replaced the honor-system phone gate; the phone number is legacy data attached to it, not an identity.
