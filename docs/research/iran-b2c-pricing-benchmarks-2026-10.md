@@ -1,0 +1,52 @@
+# Iran B2C pricing benchmarks for Farsi book/learning products (2026-10)
+
+Research ticket: [#15](https://github.com/Rayesh-company/fast-book-learning/issues/15) (Wayfinder research).
+Question: *What do comparable Farsi/Iran B2C products charge, and through what payment channels?*
+
+Method: live fetches of primary pages (curl, 2026-10-04) plus web search for figures that sit behind logins. Every number carries its source; what could not be verified on a primary page is marked **[reported]**, and everything under "What it implies" is **[inference]**. Currency: all figures in Toman (1 Toman = 10 Rial; Iranian consumer prices are quoted in Toman).
+
+## 1. Benchmarks table
+
+| Product | Model | Price points (Toman) | Free tier / discounting | Source |
+|---|---|---|---|---|
+| **Fidibo** (فیدیبو, e-book + audiobook store) | Per-book purchase (own + Fidi Plus catalog) | Live catalog 2026-10-04: 25,000–835,000; common band 49,000–260,000. Examples: *مرگ ایوان ایلیچ* 94,000; *1984* 191,000; *شرق بهشت* 165,000; *اما* bundle 560,000→504,000 (−10%); audiobooks 49,000–260,000 | Free titles marked رایگان (e.g. *اسماء الهی و ادعیه*); a few −10% tags | [fidibo.com/fidiplus](https://fidibo.com/fidiplus) (fetched 2026-10-04) |
+| **Fidibo "Fidi Plus"** (فیدی‌پلاس subscription) | Subscription: 1/3/6/12-month tiers; unlimited reading of ~40k titles | **[reported]** 160,000 (May 2025, tier unspecified in article; described as "today's price" with 50% discount offers alongside) | 50% discount codes via Digikala DigiClub; up to 70–100% promo codes on coupon sites | [ibna.ir interview with Fidibo CEO, May 2025](https://www.ibna.ir) (quote: «اشتراک فیدی پلاس که امروز ۱۶۰ هزار تومان است را با ۵۰ درصد تخفیف تهیه کنند»); tiers per [mopon.ir](https://www.mopon.ir); DigiClub 50% per [offerjo.ir](https://offerjo.ir) |
+| **Taqche "بی‌نهایت" (Infinite)** (طاقچه — the ticket's "طاقد" is طاقچه) | Subscription: 1/3/6/12-month tiers; borrow up to 30 titles per 24h; max 2 years stackable | **[reported]** 1-month ~165,000; 3-month 495,000→396,000 (−20%); 6-month 770,000→539,000 (−30%); annual 1,250,000→750,000 (−40%). Live page (fetched 2026-10-04) confirms the tier structure, the 60k+ title library, 30-titles/24h and 2-year cap — but plan prices render only for logged-in sessions | "Free week" element on the plans page; ~80% promo codes common (e.g. 95,000→19,000 on single titles) | Structure/mechanics verified on [taaghche.com/subscription](https://taaghche.com/subscription) (fetched 2026-10-04); prices [reported] from [mopon.ir](https://www.mopon.ir) search summary — **gap: could not re-verify numbers on the live page from outside Iran** |
+| **Navar** (نوار, Taqche's audio brand — audiobooks, کپسول summaries, audio series) | Per-book purchase + unlimited subscription (1/3/6/12-month) | Live catalog 2026-10-04: 19,000–394,100 per audiobook; common band 72,000–207,200; promo example 95,000→19,000 (−80%) | Free audiobooks section (کتاب‌های صوتی رایگان); 3-month sub bundles 3 free audiobooks + all series + 100 کپسول/month; 25% off codes common | Per-book prices from [navaar.ir](https://www.navaar.ir) / [pwa.navaar.ir/subscription](https://pwa.navaar.ir/subscription) embedded catalog JSON (fetched 2026-10-04); sub perks per [Tiwall](https://www.tiwall.com); 25% codes per [offch.com](https://www.offch.com) |
+| **Maktabkhooneh** (مکتب‌خونه, MOOC) | Per-course + "مکتب‌پلاس" all-access subscription | Live 2026-10-04: courses list 99,000–4,999,000, typically sold at 35–70% off (e.g. 2,599,000→1,169,550; 849,000→551,850); site's own "single course average: 700,000–1,500,000"; **مکتب‌پلاس: from 124,000/month; annual 1,490,000 (crossed-out 7,449,000, "80% تخفیف")** for 6,000+ courses | Free courses exist; heavy permanent-sale pricing; 4-instalment Snapp Pay credit on annual | [maktabkhooneh.org](https://maktabkhooneh.org) + [maktabkhooneh.org/subscription](https://maktabkhooneh.org/subscription/) (both fetched 2026-10-04) |
+| **Faradars** (فرادرس, course marketplace) | Per-course purchase (پکیج); no all-access sub surfaced | **[reported]** festival pricing: 500 packages at 69,000 («شگفتی آموختن»); 600 selected courses at 119,000; 700 packages at 89,000; network-security courses 299,000–990,000 before ~60% discounts; discount walls of 80–94% routine | Free courses filter on explore page (verified live); Telegram-channel offers (400 courses at 98,000) | Free/paid filter verified on [faradars.org/explore](https://faradars.org/explore) (fetched 2026-10-04); price points [reported] from [storecode.ir](https://storecode.ir), [mopon.ir](https://www.mopon.ir), [offch.com](https://www.offch.com) |
+
+Reading the ladder (all live-verified unless marked): **single digital book ≈ 20k–260k Toman; book-app subscription ≈ 124k–200k Toman/month, 3-month ≈ 400k, annual ≈ 750k–1,490k; single course ≈ 100k–5M list but real transaction prices cluster 70k–1.2M.** Anchor: an Audible-like Western $14.95/month is **[inference]** ~3,000,000 Toman at the free rate — 15–25x above what Iranian book apps charge, so Western subscription prices cannot be transplanted.
+
+## 2. Payment rails available in Iran for digital goods
+
+Verified structure, with sources:
+
+- **Shaparak is the only domestic rail.** Every online card payment (direct gateway or aggregator) settles over the CBI-run Shaparak network via licensed PSPs (e.g. Behpardakht Mellat); when a PSP stutters, front-end gateways go down with it — ZarinPal's downtime during Mellat PSP disruptions shows the stack: merchant → aggregator (ZarinPal) → PSP → Shaparak. ([intellinews.com, Nov 2024](https://www.intellinews.com); [startupik.com](https://startupik.com))
+- **Aggregator economics (ZarinPal, live pricing page 2026-10-04):** new merchants' first month free (pay only the Shaparak fee); then **0.5% per transaction capped at 16,000 Toman + 500 Toman fixed**; the **Enamad (اینماد)** e-trust seal — effectively mandatory for consumer e-commerce — costs **600,000 Toman per issuance**. ([zarinpal.com/pricing](https://www.zarinpal.com/pricing))
+- **Wallet top-up / gift codes are a standard rail.** Taqche sells subscription gift cards ([taaghche.com/subscription/giftcard](https://taaghche.com/subscription/giftcard), verified in live page assets); Navar 3-month codes are retailed as products on the Basalam marketplace ([basalam.com](https://basalam.com)); Digikala hands out Fidibo e-book gift codes ([digikala.com](https://www.digikala.com)).
+- **BNPL/installments exist for digital goods:** Maktabkhooneh's checkout offers annual plans on **Snapp Pay (اسنپ‌پی)** — 4 end-of-month instalments on bank credit (verified on its live subscription page, 2026-10-04); Taqche's plans page carries Snapp Pay branding (`landing-snappay.png`, verified in page assets).
+- **App-store billing:** Google Play billing is unavailable to Iran-based buyers (sanctions), so Iranian Android apps monetise via Cafe Bazaar / Myket in-app billing (BazaarPay wallet) or PWA + direct card gateway — Navar ships a PWA checkout on its own domain (verified live). Cafe Bazaar commission **[reported, unverified]** in the ~20–30% band (community sources; official docs page did not load). ([developers.cafebazaar.ir](https://developers.cafebazaar.ir); [myket.ir](https://myket.ir); ICT Press Bazaar-report coverage [ictpress.ir](https://ictpress.ir))
+- **No international cards/PayPal inside Iran**; buying foreign digital services requires broker workarounds (e.g. Iranian resellers selling Audible subscriptions — [ireasypay.com](https://www.ireasypay.com)) — a structural moat for local Farsi products. **[inference]** from these sources' existence.
+
+## 3. Honest gaps
+
+- Exact **live** Fidi Plus and Taqche بی‌نهایت plan prices: both render plan prices only for logged-in/client-side sessions; figures above are [reported] from secondary sources (news + coupon aggregators), cross-consistent but not re-verified on the primary page from outside Iran.
+- Cafe Bazaar's official developer commission %: not confirmed (docs portal unreachable from here).
+- No public ARPU/conversion data for any of these services; nothing verifiable on revenue side.
+- TTS-specific subscription products for Iran (beyond audiobook apps) did not surface as a distinct priced category in searches.
+
+## 4. What it implies for a کتاب‌خوان pricing hypothesis — [inference]
+
+*(Everything in this section is inference from the verified table above, not fact.)*
+
+- **Per-book credit purchases fit the market's floor:** 49,000–150,000 Toman per book matches the live Fidibo/Navar/Taqche transaction band; the app's existing Balance/credit machinery (ADR-0013) maps onto the wallet top-up rail users already know.
+- **A subscription anchor of ~120,000–200,000 Toman/month** (and ~750,000–1,500,000/year, displayed against a crossed-out list price with a 40–80% "discount") sits exactly on the Fidi Plus / Taqche بی‌نهایت / مکتب‌پلاس ladder; pricing materially above ~250,000/month would be 1.5–2x every comparable.
+- **Discount framing is the norm, not the exception** (permanent 35–80% walls everywhere) — list price should be set high and always shown discounted, or the product looks expensive.
+- **Free tier is table stakes:** free books + a free trial week (Taqche pattern) is the minimum credible freemium.
+- **Payment: launch with an aggregator** (ZarinPal-class: 0.5% capped at 16k + 500 Toman — negligible at these price points) + budget 600,000 Toman for Enamad; add gift codes early (gifting is culturally significant — Nowruz/Yalda); Snapp Pay instalments only if an annual plan ships; Cafe Bazaar/Myket listing only if a native Android build exists, and its ~20–30% cut **[unverified]** argues for PWA-first billing.
+- **Purchasing-power sanity check [inference]:** at the Oct-2026 free-market rate (USD ≈ 200,000+ Toman, inferred from CAD 189,100 / CNY 40,150 quotes — [dolarchand.com](https://dolarchand.com), [pashizi.com](https://pashizi.com)), a 165,000 Toman month is under $1 nominal — but Iranian incomes are Toman-denominated, so price against the local ladder above, not against USD equivalents.
+
+---
+
+*Collected 2026-10-04 for Wayfinder ticket [#15](https://github.com/Rayesh-company/fast-book-learning/issues/15); branch `research/pricing-benchmarks`. Live-fetch receipts: primary pages pulled via curl on 2026-10-04 (Fidibo, Taqche, Navaar, Maktabkhooneh, Faradars, ZarinPal); figures not visible without login are marked [reported] with their secondary source.*
