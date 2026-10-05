@@ -192,6 +192,12 @@ except ImportError:  # the container runs this file as a script beside the modul
     from ask import ask_pool
     from chat_store import latest_chat
     import chat_store
+    from agent_client import AgentError, agent_answer
+    from question_window import (
+        QUESTION_WINDOW_LIMIT,
+        questions_in_window,
+        record_question,
+    )
     from composer import (
         COMPOSER_MAX_TOKENS,
         COMPOSER_TIMEOUT,
