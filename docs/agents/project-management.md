@@ -1,8 +1,10 @@
 # Project management
 
-Canonical product: **agentic book-learning (B2C)** — a two-mode app (PM decision, 2026-10-03; see [#1](https://github.com/Rayesh-company/fast-book-learning/issues/1)): mode 1 **کتاب خوان** (reader mode — free reading, notes, TTS, chat-with-book) and mode 2 **Learning mode** (agent-guided learning via the repo's `weekly-book-study-protocol.md`). The 2026-10-02 rebrand of chat-with-books; working name until the PM picks the rebrand name. PM tracker: GitHub Issues (`Rayesh-company/fast-book-learning`) — moved there 2026-10-02 from `aubed9/chat-with-books`, whose issues #34+ were renumbered from #1 (the old repo stays as the archive; its issues #1–#33 never moved). Structured index: GitHub Project [fast-book-learning Product Delivery](https://github.com/orgs/Rayesh-company/projects/2). Adapter config: `docs/agents/github-pm.json`. Single tracker for PM and engineering since the 2026-10-02 consolidation: GitHub Issues (`Rayesh-company/fast-book-learning`) per `issue-tracker.md`; the pre-rebrand GitLab tracker and the pre-move PM repo are read-only archives.
+Canonical product: **agentic book-learning (B2C)** — the two-mode app (کتاب‌خوان reader mode + Learning mode; see [#10](https://github.com/Rayesh-company/fast-book-learning/issues/10)). **Proposal focus is کتاب‌خوان (mode 1) first** (PM decision, 2026-10-04); Learning mode's go/no-go is deferred to a later proposal. PM tracker: GitHub Issues (`Rayesh-company/fast-book-learning`). Structured index: GitHub Project [fast-book-learning Product Delivery](https://github.com/orgs/Rayesh-company/projects/3). Adapter config: `docs/agents/github-pm.json`.
 
-Canonical records: project [**#1**](https://github.com/Rayesh-company/fast-book-learning/issues/1) · active phase [**#2**](https://github.com/Rayesh-company/fast-book-learning/issues/2) (Phase 0 — Research & business planning) · Wayfinder map [**#3**](https://github.com/Rayesh-company/fast-book-learning/issues/3). History: the 2026-10-02 PM-state restart superseded the first records (aubed9/chat-with-books#1 project, #2 Phase 2 record, #3 Wayfinder map — closed, evidence preserved in their bodies); later that day the restarted records (old #34/#35/#36) moved here as #1/#2/#3.
+Canonical records: project [**#10**](https://github.com/Rayesh-company/fast-book-learning/issues/10) · active phase [**#11**](https://github.com/Rayesh-company/fast-book-learning/issues/11) (Phase 0 — Research & business planning).
+
+**Binding deadline (PM, 2026-10-04): کتاب‌خوان (mode 1) production-ready for 100 users by 2026-10-08.** Supersedes the 2026-10-03 launch line (19 Shahrivar 1406 ≈ 10 Sep 2027, ≥1,000 users). The Farsi proposal, the Demo funding call, and the build all land inside this window.
 
 Issue bodies are the work contract. Project fields are sortable indexes only. Assignment is the authoritative claim.
 
@@ -10,13 +12,13 @@ Issue bodies are the work contract. Project fields are sortable indexes only. As
 
 | Phase | Name | Purpose |
 | --- | --- | --- |
-| 0 | Research & business planning | Credible problem/opportunity and bilingual proposal before a Demo |
+| 0 | Research & business planning | Credible problem/opportunity and proposal before a Demo |
 | 1 | Demo | Convince that the core value proposition justifies an MVP |
 | 2 | MVP | Real target users succeed with a minimally complete product |
 | 3 | V1 | Reliable enough for repeatable commercial or organizational use |
 | 4 | Full product | Operate and evolve the mature product at intended scale |
 
-A phase ends when its exit criteria have evidence and the PM chooses a transition. An empty backlog is not an exit criterion.
+A phase ends when its exit criteria have evidence and the PM chooses a transition. An empty backlog is not an exit criterion. Given the 8-Oct line, phase transitions are expected to be rapid and evidence-driven.
 
 ## PM labels
 
@@ -63,7 +65,7 @@ Story points: **1 / 2 / 3 / 5 / 8**. Forecasts, not promises. Expected shape (fo
 
 ## Sprint cadence
 
-**1-week sprints.** No active sprint since the 2026-10-02 restart; plan the next sprint's goal and dates at the first status review. Sprint planning commits only `pm:ready` work. Unassigned ready work stays claimable.
+**1-week sprints.** No active sprint yet; plan the next sprint's goal and dates at the first status review. Sprint planning commits only `pm:ready` work. Unassigned ready work stays claimable.
 
 ## Definition of claim
 
@@ -72,12 +74,15 @@ A teammate **claims** a ticket by becoming its GitHub assignee. That assignment 
 ## Tracker notes
 
 - Preferred write path: `github_adapter.py` (`issue-create`, `enroll`, `relate`, `claim`, `state`, `done`).
+- Known limitation (see `project_field_sync_warning` in `github-pm.json`): adapter-driven `gh project item-edit` calls fail in this environment (`--owner` flag mismatch); issue/label/relationship writes and Project enrollment still land, and field writes work when done manually with `--project-id/--id/--field-id`. Issues stay canonical.
+- If Projects access drops, continue in Issues-only mode. Labels, assignment, and relationships still apply.
 - Native parent/sub-issue and blocking relationships; do not duplicate dependency truth in comments.
 - GitHub Project fields: `PM Status`, `Product Phase`, `Sprint`, `Effort`, `Deadline`, `Technical Depth`, `Work Type`, `Priority`.
-- Known limitation (see `project_field_sync_warning` in `github-pm.json`): `gh project item-edit` in this environment rejects the adapter's `--owner` flag, so Project field sync fails while issue/label/relationship writes succeed. Issues stay canonical; fix by aligning adapter and gh CLI before relying on Project field values.
-- If Projects access drops, continue in Issues-only mode. Labels, assignment, and relationships still apply.
-- Engineering and PM work share this repo's issues (engineering work carries `work:engineering` and the triage vocabulary); the pre-rebrand GitLab tracker (`mohamadreza/chatbot-v1`) and `aubed9/chat-with-books` are archives — link their history from issue bodies rather than reopening work there.
 
 ## Phase 0 specifics
 
-The phase goal, exit criteria, scope, and evidence live in [#2](https://github.com/Rayesh-company/fast-book-learning/issues/2). The bilingual English/Farsi proposal is the phase's required deliverable (structure: the PM skill's `PHASE-0-PROPOSAL.md`); it may live in this repo as Markdown linked from #2, which holds status and pointers only. Defaults set by the agent at the 2026-10-02 restart (PM absent for the goal interview; revisable at any status review): the thesis go/no-go goal shape, the six exit criteria, and "no target date yet" — that last one superseded 2026-10-03, when the PM set the **launch deadline: 19 Shahrivar 1406 ≈ 10 Sep 2027** (mode 1 production-ready for ≥1,000 users, launch-blocking; mode 2 ships if acceptable — see [#1](https://github.com/Rayesh-company/fast-book-learning/issues/1)). A Phase-0-specific exit date is an agent recommendation pending PM confirmation in [#2](https://github.com/Rayesh-company/fast-book-learning/issues/2).
+The phase goal, exit criteria (PC-1 … PC-6), scope, and evidence live in [#11](https://github.com/Rayesh-company/fast-book-learning/issues/11). **PM overrides recorded at the 2026-10-04 init:**
+
+- The proposal is **Farsi-only** (overrides the PM skill's bilingual English/Farsi Phase-0 default).
+- The proposal is **کتاب‌خوان-scoped** — the two-mode product stands, but this go/no-go covers mode 1 only.
+- The 8-Oct mode-1 launch line (above) is the phase's target date and the product's binding deadline.

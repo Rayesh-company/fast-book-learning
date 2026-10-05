@@ -1,27 +1,45 @@
 # Issue tracker: GitHub
 
-Issues and specs for this project live as GitHub issues on `Rayesh-company/fast-book-learning` — this clone's origin. Use the `gh` CLI for all operations.
+Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
 ## Conventions
 
-Every command pins the repo explicitly (`-R Rayesh-company/fast-book-learning`), so it works from any clone:
+- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
+- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
+- **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
+- **Comment on an issue**: `gh issue comment <number> --body "..."`
+- **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
+- **Close**: `gh issue close <number> --comment "..."`
 
-- **Create an issue**: `gh issue create -R Rayesh-company/fast-book-learning --title "..." --body-file <file>`. Use a body file for multi-line bodies.
-- **Read an issue**: `gh issue view <number> -R Rayesh-company/fast-book-learning --comments`.
-- **List issues**: `gh issue list -R Rayesh-company/fast-book-learning --state open` (add `--label "..."` as needed).
-- **Comment on an issue**: `gh issue comment <number> -R Rayesh-company/fast-book-learning --body-file <file>`.
-- **Labels**: pass `--label "ready-for-agent"` at create time; create a missing label with `gh label create -R Rayesh-company/fast-book-learning <name> --color <hex> --description "..."`.
-- **Close**: `gh issue close <number> -R Rayesh-company/fast-book-learning`.
-- **Blocking edges** (used by `/to-tickets`): native GitHub relationships — `gh issue edit <n> -R ... --add-blocked-by <m>` (and `--parent <p>` for sub-issues).
-- **PM state**: canonical PM records, labels, and the workflow live per `docs/agents/project-management.md`; PM writes go through the bundled `github_adapter.py` configured by `docs/agents/github-pm.json`.
-
-## Archives (read-only)
-
-- Pre-rebrand engineering tracker: self-hosted GitLab `mohamadreza/chatbot-v1` on `gitlab.rayesh-team.ir`. History only — file nothing new there. Note: the installed `glab` rejects the old `--hostname` conventions, so treat it as unreachable from this machine.
-- Pre-move PM repo: `aubed9/chat-with-books` — issues #34+ moved here 2026-10-02 and were renumbered from #1; its earlier issues stay there as history.
+Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
 ## Pull requests as a triage surface
 
-**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests.)_
+**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage-rpm` reads this flag.)_
 
-When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents.
+When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
+
+- **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
+- **List external PRs for triage**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` then keep only `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop `OWNER`/`MEMBER`/`COLLABORATOR`).
+- **Comment / label / close**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`, `gh pr close`.
+
+GitHub shares one number space across issues and PRs, so a bare `#42` may be either: resolve with `gh pr view 42` and fall back to `gh issue view 42`.
+
+## When a skill says "publish to the issue tracker"
+
+Create a GitHub issue.
+
+## When a skill says "fetch the relevant ticket"
+
+Run `gh issue view <number> --comments`.
+
+## Wayfinding operations
+
+Used by `/wayfinder-rpm`. The **map** is a single issue with **child** issues as tickets.
+
+- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
+- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research-rpm`/`prototype-rpm`/`grilling-rpm`/`task`). Once claimed, the ticket is assigned to the driving dev.
+- **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only, the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
+- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
+- **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
+- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.

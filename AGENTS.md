@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live in GitHub Issues for `Rayesh-company/fast-book-learning` (this clone's origin) and are operated with the `gh` CLI, always passing `-R Rayesh-company/fast-book-learning`. See `docs/agents/issue-tracker.md`.
+Issues and specs live in GitHub Issues on `Rayesh-company/fast-book-learning` (this clone's origin), operated with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

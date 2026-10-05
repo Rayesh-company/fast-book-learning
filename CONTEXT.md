@@ -184,6 +184,18 @@ _Avoid_: credit card, wallet, quota (the daily ask limit is not the Balance; the
 The price table that turns recorded usage into Toman. Held apart from the code so prices change without the code.
 _Avoid_: pricing logic, hardcoded price, rate limiter
 
+**Subscription (اشتراک)**:
+The monthly pass a Learner buys for کتاب‌خوان (settled in Wayfinder #13, 2026-10-04): unmetered reading, notes, and TTS, and chat-with-book within the Question window. Replaces per-use Balance billing — the Balance machinery stays, dormant, re-armable. A lapsed Subscription keeps reading, notes, and TTS; only chat stops.
+_Avoid_: plan, top-up, credit package, Balance (the per-use posture it replaces at launch)
+
+**Question (پرسش)**:
+In کتاب‌خوان, one ask together with its answer — the counted unit of the Question window.
+_Avoid_: chat pair (the draft term, retired), message, turn
+
+**Question window (پنجرهٔ پرسش)**:
+The meter that caps chat-with-book: 30 Questions per 5 hours per Account (launch value). Reading, notes, and TTS are never windowed.
+_Avoid_: quota (the superseded 5-ask daily meter), rate limit
+
 **Admin (مدیر)**:
 The role on one Account that issues every other Account, tops up Balances, and watches the system. The PM holds it.
 _Avoid_: superuser, root, operator (the Session operator is the customer side)
