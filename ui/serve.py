@@ -105,6 +105,12 @@ try:
     from ui import chat_store
     from ui.chat_store import latest_chat
     from ui.ask import ask_pool
+    from ui.agent_client import AgentError, agent_answer
+    from ui.question_window import (
+        QUESTION_WINDOW_LIMIT,
+        questions_in_window,
+        record_question,
+    )
     from ui.research import (
         COMMAND_AUDIT,
         COMMAND_BRIEF,
@@ -540,6 +546,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path == "/chat/latest":
             self._chat_latest()
+            return
+        if path == "/agent/chat/history":
+            self._agent_chat_history()
             return
         if path.startswith("/books/"):
             self._book_file(path)
@@ -989,6 +998,35 @@ class SessionHandler(SimpleHTTPRequestHandler):
             )
             self._ask(phone)
             return
+        if path == "/agent/chat":
+            phone = resolve_identity(self)
+            if phone is None:
+                return
+            if not self._balance_gate(phone):
+                return
+            # The Question window (ADR-0017/0018): a Learner message
+            # that RECEIVES an agent answer is one Question, inside 30
+            # per rolling 5 hours. A full window stops the next message;
+            # an answer already in flight finishes and meters on landing.
+            if questions_in_window(phone) >= QUESTION_WINDOW_LIMIT:
+                self._json_error(
+                    429,
+                    "پنجرهٔ پرسش‌های این حساب در پنج ساعت گذشته پر شده است؛"
+                    " کمی بعد دوباره بپرسید.",
+                )
+                return
+            # A new ask owns the sheet exactly like /ask (issue #26): the
+            # phone's in-flight research turns abort cooperatively.
+            abort_phone_research(phone)
+            # The Question's own ledger entry (T22's pattern): an
+            # input-side size estimate — the model calls happen in the
+            # agent service, so the Toman ledger sees the volume, not
+            # tokens it never metered.
+            record_size_estimate(
+                phone, "agent", int(self.headers.get("Content-Length", "0") or "0")
+            )
+            self._agent_chat(phone)
+            return
         if path == "/agent/recall":
             self._agent_recall()
             return
@@ -1155,6 +1193,63 @@ class SessionHandler(SimpleHTTPRequestHandler):
         self._send_json(
             200,
             {"chat_id": chat_id, "sources": sources, "pool_size": len(sources)},
+        )
+
+    def _agent_chat(self, phone: str) -> None:
+        """The Learner-facing seam (ADR-0018): the sheet's chat surface —
+        the Learner's message goes to the Mastra agent (its tools are
+        the Book pool through /agent/recall and web search), the agent's
+        free prose IS the first answer, and the exchange persists for
+        the reload's restore (ADR-0014's persistence leg: a reload
+        re-reads, never re-bills). One ANSWERED message meters one
+        Question; an agent failure meters nothing and answers the honest
+        Farsi error. The thread is stable per phone, so the agent's own
+        memory carries the conversation even though the sheet renders
+        from this store."""
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            query = payload["query"]
+            if not isinstance(query, str) or not query.strip():
+                raise ValueError("query is required")
+            datasets = validated_datasets(payload.get("datasets"))
+        except (ValueError, KeyError, TypeError):
+            # The body is already read above, so _send_json is safe.
+            self._send_json(400, {"detail": "پرسش را بنویسید."})
+            return
+        thread_id = f"learner-{phone}"
+        try:
+            answer = agent_answer(query.strip(), datasets, thread_id)
+        except AgentError:
+            # The body is already read above, so _send_json is safe (the
+            # _json_error drain would block re-reading consumed bytes).
+            self._send_json(502, {"detail": "عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید."})
+            return
+        except (URLError, TimeoutError, OSError):
+            self._send_json(
+                504, {"detail": "ارتباط با عامل گفت‌وگو قطع شد؛ دوباره بپرسید."}
+            )
+            return
+        # The answer landed: this message is one Question (ADR-0018).
+        record_question(phone)
+        chat_store.record_agent_exchange(phone, thread_id, query.strip(), answer)
+        self._send_json(200, {"answer": answer, "thread_id": thread_id})
+
+    def _agent_chat_history(self) -> None:
+        """The agent conversation's restore read (ADR-0014/0018): the
+        phone's persisted transcript — question/answer exchanges, oldest
+        first. No LLM call, no metering: a reload restores without
+        re-billing. The identity comes from the login cookie (ADR-0013),
+        and one phone's reload never reads another's conversation."""
+        phone = resolve_identity(self)
+        if phone is None:
+            return
+        self._send_json(
+            200,
+            {
+                "thread_id": f"learner-{phone}",
+                "messages": chat_store.agent_conversation(phone),
+            },
         )
 
     def _agent_recall(self) -> None:

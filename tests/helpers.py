@@ -19,6 +19,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from ui import (  # noqa: E402
     accounts,
+    agent_client,
     ask,
     chat_store,
     composer,
@@ -363,8 +364,9 @@ def with_gate(tmp_path, upstream):
     client must sign tokens alike), the research store's DB at
     ui.research_store, and the fake stands at every owning module's
     urlopen seam — the facade's own relay/proxy, the composer's, the
-    picker's, the dive kernel's, and the research engine's (one
-    upstream told apart by URL). The turn registry starts empty — a
+    picker's, the dive kernel's, the research engine's, and the agent
+    client's (one upstream told apart by URL). The turn registry starts
+    empty — a
     server restart is what empties it in production."""
     quotas.QUOTA_DB = tmp_path / "usage.sqlite3"
     research_store.RESEARCH_DB = tmp_path / "research.sqlite3"
@@ -373,7 +375,16 @@ def with_gate(tmp_path, upstream):
     research.RESEARCH_REGISTRY.clear()
     originals = [
         (module, module.urlopen)
-        for module in (serve, composer, picker, dive, research, recall_more, ask)
+        for module in (
+            serve,
+            composer,
+            picker,
+            dive,
+            research,
+            recall_more,
+            ask,
+            agent_client,
+        )
     ]
     for module, _ in originals:
         module.urlopen = upstream

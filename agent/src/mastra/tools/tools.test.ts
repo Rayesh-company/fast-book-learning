@@ -16,8 +16,11 @@ afterEach(() => {
 type BookResult = { passages: Array<{ reference: string; passage: string }> };
 type WebResult = { results: Array<{ title: string; url: string; snippet: string }> };
 
-async function runBooks(input: { query: string; datasets?: string[] }): Promise<BookResult> {
-  const result = await searchBooksTool.execute!(input, {} as never);
+async function runBooks(
+  input: { query: string; datasets?: string[] },
+  context?: unknown,
+): Promise<BookResult> {
+  const result = await searchBooksTool.execute!(input, (context ?? {}) as never);
   if (!result || result instanceof Error) {
     throw new Error(`unexpected tool result: ${JSON.stringify(result)}`);
   }
@@ -52,6 +55,36 @@ describe("searchBooksTool", () => {
     expect(JSON.parse(init.body)).toEqual({ query: "علم از نظر قرآن", datasets: undefined });
     expect(result.passages).toHaveLength(1);
     expect(result.passages[0].reference).toContain("pages 12-13");
+  });
+
+  it("reads the Learner's Book selection from the requestContext", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ passages: [] }), { status: 200 }),
+    );
+    // The Learner-facing seam (ADR-0018) sends the sheet's Book toggles
+    // as the run's requestContext — the selection reaches the tool
+    // without ever becoming prompt text. An empty selection means the
+    // whole Book set, the recall body omits datasets.
+    const withSelection = {
+      requestContext: {
+        get: (key: string) => (key === "datasets" ? ["book-a"] : undefined),
+      },
+    };
+    await runBooks({ query: "علم از نظر قرآن" }, withSelection);
+    let [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      query: "علم از نظر قرآن",
+      datasets: ["book-a"],
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ passages: [] }), { status: 200 }),
+    );
+    await runBooks({ query: "dگر" }, {
+      requestContext: { get: (key: string) => (key === "datasets" ? [] : undefined) },
+    });
+    [, init] = fetchMock.mock.calls[1];
+    expect(JSON.parse(init.body)).toEqual({ query: "dگر", datasets: undefined });
   });
 
   it("contributes nothing when the seam is unreachable", async () => {

@@ -839,6 +839,58 @@
         margin: 0 0 0.8rem;
       }
 
+      /* The Chat agent's transcript (ADR-0018): the Learner's messages
+         and the agent's free-prose answers — the same visual grammar as
+         the research chat (clay-tinted questions, bordered answers),
+         one column, newest at the bottom. */
+      .agent-chat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+        margin: 0 0 0.8rem;
+        max-height: 62vh;
+        overflow-y: auto;
+      }
+
+      .agent-msg.user {
+        align-self: flex-start;
+        max-width: 85%;
+      }
+
+      .agent-msg.user p {
+        background: rgba(196, 92, 38, 0.12);
+        border-radius: 10px 10px 10px 2px;
+        padding: 0.45rem 0.95rem;
+        margin: 0;
+        line-height: 1.8;
+      }
+
+      .agent-msg.assistant {
+        align-self: stretch;
+        border-right: 3px solid var(--clay);
+        padding-right: 0.9rem;
+      }
+
+      .agent-msg.assistant p {
+        margin: 0 0 0.55rem;
+        line-height: 1.9;
+      }
+
+      .agent-msg.assistant a {
+        color: var(--clay);
+        text-underline-offset: 3px;
+      }
+
+      .agent-msg.waiting,
+      .agent-msg.error {
+        color: var(--mute);
+        line-height: 1.8;
+      }
+
+      .agent-msg.error {
+        color: #a33a1f;
+      }
+
       .research-msg.user {
         align-self: flex-start;
         max-width: 85%;
@@ -1185,7 +1237,7 @@
           maxlength="16"
           placeholder="۰۹۱۲۳۴۵۶۷۸۹"
         />
-        <p class="phone-hint">هر شماره در روز پنج گفتگو دارد.</p>
+        <p class="phone-hint">پرسش‌های هر حساب در پنجره‌های پنج‌ساعته شمرده می‌شوند.</p>
         <!-- The ask's Book pick (ADR-0011): exactly ONE Book per
              investigation, chosen at platform entry; the ask stays
              disabled until one is picked. The choice persists in
@@ -1209,12 +1261,11 @@
           placeholder="پرسش خود را بنویسید"
         ></textarea>
         <!-- The Research Mode switch (the operator's 2026-09-23 call):
-             OFF — the ask answers with the retrieval phases only; ON —
-             the ask also opens the guided research conversation on the
-             same Evidence pool. The default is off: research stays an
-             opt-in mode, never a longer first answer (CONTEXT.md's
-             حالت پژوهش). -->
-        <label class="research-toggle" for="research-mode">
+             hidden at launch (ADR-0017 — the surface stays intact, not
+             offered) and retired from the chat surface with it
+             (ADR-0018): the agent's conversation is the chat; the
+             guided research journey is not offered here. -->
+        <label class="research-toggle" for="research-mode" hidden>
           <input type="checkbox" id="research-mode" />
           <span class="toggle-track" aria-hidden="true"><span class="toggle-knob"></span></span>
           <span class="toggle-name">حالت پژوهش</span>
@@ -1226,7 +1277,12 @@
       </form>
 
       <section class="out" aria-live="polite">
-        <div class="phase-tabs" role="tablist" aria-label="مراحل پاسخ">
+        <!-- The phase tabs retire from the chat surface (ADR-0018): the
+             agent's free-prose answer IS the chat's first answer — the
+             picker and the Quoted answer no longer gate what the
+             Learner sees, and Research Mode is hidden at launch
+             (ADR-0017). -->
+        <div class="phase-tabs" role="tablist" aria-label="مراحل پاسخ" hidden>
           <button
             type="button"
             class="phase-tab"
@@ -1271,13 +1327,19 @@
         <p class="phase-now" id="phase-now" hidden></p>
 
         <div class="phase-panel" id="panel-1" role="tabpanel" aria-labelledby="tab-1">
+          <!-- The Chat agent's transcript (ADR-0018): the Learner's
+               messages and the agent's free-prose answers — Book
+               citations inline, web-sourced parts marked «بیرون از
+               کتاب» with visible links. -->
+          <div id="agent-chat" class="agent-chat"></div>
           <div id="answer" class="answer">
             <p class="empty">هنوز پرسشی نپرسیده‌اید.</p>
           </div>
-          <!-- The Evidence pool stays visible, collapsed (issue #28):
-               the Quote selection renders as the first answer above it
-               and the pool remains phase 2's exact payload. -->
-          <details id="evidence-pool">
+          <!-- The Evidence pool retires from the chat surface
+               (ADR-0018: the Quote selection's first-answer role is
+               superseded here; the verbatim-citation machinery keeps
+               its role in provenance). -->
+          <details id="evidence-pool" hidden>
             <summary>همۀ نقل‌قول‌های بازیابی‌شده</summary>
             <h2 id="citations-heading">استناد</h2>
             <div id="citations">
@@ -1389,6 +1451,7 @@
       const buttonEl = document.getElementById("ask-btn");
       const elapsedEl = document.getElementById("elapsed");
       const researchModeEl = document.getElementById("research-mode");
+      const agentChatEl = document.getElementById("agent-chat");
       const answerEl = document.getElementById("answer");
       const citationsEl = document.getElementById("citations");
       const citationsHeadingEl = document.getElementById("citations-heading");
@@ -2457,84 +2520,21 @@
         researchSendEl.disabled = true;
       }
 
-      // Refresh reconnect: a stored session means this phone has a
-      // research conversation the reload must not throw away. The
-      // transcript is RE-FETCHED (ADR-0011 — what was said stays
-      // visible across a refresh), the map re-renders from
-      // /research/state, and any in-flight turn is polled to its
-      // settle.
-      (function reconnectResearch() {
-        const stored = storedResearch();
-        if (!stored || !stored.session_id) return;
-        if (stored.phone && stored.phone !== phoneEl.value.trim()) {
-          clearResearch();
-          return;
-        }
-        researchSessionId = stored.session_id;
-        selectPhase(3);
-        (async () => {
-          try {
-            const [msgRes, stateRes] = await Promise.all([
-              fetch(
-                `/research/messages?session=${encodeURIComponent(researchSessionId)}`,
-                { headers: phoneHeader(), cache: "no-store" }
-              ),
-              fetch(
-                `/research/state?session=${encodeURIComponent(researchSessionId)}`,
-                { headers: phoneHeader(), cache: "no-store" }
-              ),
-            ]);
-            if (msgRes.ok) {
-              const payload = await msgRes.json();
-              researchChatEl.replaceChildren();
-              for (const message of Array.isArray(payload.messages) ? payload.messages : []) {
-                if (message.role === "user") {
-                  appendResearchMessage(
-                    "user",
-                    researchText(String(message.payload || ""), "research-msg-text")
-                  );
-                } else {
-                  appendResearchMessage(
-                    "assistant",
-                    researchBlocksNode(
-                      Array.isArray(message.payload) ? message.payload : []
-                    )
-                  );
-                }
-              }
-            }
-            if (stateRes.ok) {
-              const payload = await stateRes.json();
-              renderResearchState(payload.research_state || payload);
-              renderResearchSuggestions(payload.suggestions || []);
-            }
-          } catch {
-            appendResearchError("بازخوانی گفتگو نشد؛ ادامه از سرور ممکن است.");
-          }
-          if (!stored.turn_id) return;
-          setPhaseState(3, "running");
-          setRunningPhase(3);
-          researchInputEl.disabled = true;
-          researchSendEl.disabled = true;
-          showResearchStatus("در حال پیگیری پاسخ پژوهش…");
-          pollResearchTurn(stored.turn_id);
-        })();
-      })();
+      // Research Mode is hidden at launch (ADR-0017) and retired from
+      // the chat surface (ADR-0018): no stored research session
+      // reconnects here — the chat conversation below is the surface.
 
-      // The ask's reload restore (ADR-0014): the newest ask row —
-      // question, pool, Quote selection, Quoted answer — is re-fetched
-      // from the server's chat store and re-rendered, so a refresh
-      // never throws the conversation away. The research conversation
-      // reconnects separately through its own stored identity above;
-      // this restore only rebuilds phases 1 and 2 and re-arms the
-      // research seed from the stored pool. A missing body (the
-      // Account never asked, or the gate answers 401) leaves the idle
-      // sheet untouched.
-      (function restoreAsk() {
+      // The chat's reload restore (ADR-0014/0018): the persisted
+      // transcript — every Question and its agent answer — is re-fetched
+      // from the server's chat store. No LLM call, no metering: a
+      // reload restores without re-billing. A missing body (the Account
+      // never asked, or the gate answers 401) leaves the idle sheet
+      // untouched.
+      (function restoreAgentChat() {
         (async () => {
           let payload = null;
           try {
-            const res = await fetch("/chat/latest", {
+            const res = await fetch("/agent/chat/history", {
               headers: phoneHeader(),
               cache: "no-store",
             });
@@ -2544,90 +2544,16 @@
           } catch {
             return;
           }
-          const chat = payload && payload.chat;
-          if (!chat || !chat.question) return;
-          const lines = (Array.isArray(chat.sources) ? chat.sources : []).map(
-            (s) => `${s.reference}: "${s.passage}"`
-          );
-          const selections = Array.isArray(chat.selections) ? chat.selections : [];
-          const blocks = Array.isArray(chat.blocks) ? chat.blocks : [];
-          askState = {
-            question: chat.question,
-            lines,
-            datasets: Array.isArray(chat.datasets) ? chat.datasets : null,
-            chatId: chat.id,
-            research: false,
-          };
-          questionEl.value = chat.question;
-          // Phase 1: the stored pool and, when the picker had landed,
-          // its selection — the same first answer, re-rendered.
-          setPhaseState(1, "done");
-          citationsEl.replaceChildren();
-          if (selections.length) {
-            answerEl.className = "answer";
-            const doc = document.createDocumentFragment();
-            for (const item of selections) {
-              const sentence = document.createElement("p");
-              sentence.className = "doc-para";
-              const span = document.createElement("span");
-              span.className = "cite-sent";
-              span.tabIndex = 0;
-              span.textContent = item.text;
-              span.dataset.ref = citationRef(item);
-              const located = parseReference(item.reference);
-              wireQuoteSpan(
-                span,
-                located.doc,
-                located.first ? `${located.first}-${located.last}` : ""
-              );
-              sentence.append(span);
-              if (item.pages_label) {
-                const pages = document.createElement("span");
-                pages.className = "cite-pages";
-                pages.textContent = ` [${item.pages_label}]`;
-                sentence.append(pages);
-              }
-              doc.append(sentence);
-            }
-            answerEl.replaceChildren(doc);
-          } else if (lines.length) {
-            answerEl.className = "answer";
-            const note = document.createElement("p");
-            note.className = "empty";
-            note.textContent = "انتخاب نقل‌قول‌ها آماده نشد؛ استنادهای بازیابی‌شده زیر همان پاسخ‌اند.";
-            answerEl.append(note);
+          const messages =
+            payload && Array.isArray(payload.messages) ? payload.messages : [];
+          if (!messages.length) return;
+          answerEl.hidden = true;
+          agentChatEl.replaceChildren();
+          for (const message of messages) {
+            agentChatEl.append(agentQuestionNode(String(message.question || "")));
+            agentChatEl.append(agentAnswerNode(String(message.answer || "")));
           }
-          for (const item of lines) {
-            const p = document.createElement("p");
-            p.className = "cite";
-            p.textContent = item;
-            citationsEl.append(p);
-          }
-          // Phase 2: the stored guarded document, or the honest skip.
-          if (blocks.length) {
-            const doc = document.createDocumentFragment();
-            if (chat.truncated) {
-              doc.append(truncatedNote());
-            }
-            for (const block of blocks) {
-              if (block.type === "heading") {
-                const heading = document.createElement("h3");
-                heading.className = "doc-heading";
-                heading.textContent = block.text;
-                doc.append(heading);
-              } else if (block.type === "paragraph") {
-                doc.append(paragraphNode(block));
-              }
-            }
-            quotedDocEl.replaceChildren(doc);
-            setPhaseState(2, "done");
-          } else if (lines.length) {
-            skipQuotedPhase();
-          }
-          if (lines.length) {
-            armResearch(chat.question, chat.sources || []);
-            showRecallMore();
-          }
+          agentScroll();
         })();
       })();
 
@@ -2762,6 +2688,80 @@
         }
       });
 
+      // ===== The Chat agent's Learner-facing surface (ADR-0018) =====
+      // The composer's message rides the production seam (/agent/chat):
+      // the server owns the Question window (30 answered messages per
+      // 5 hours), the persistence, and the abort of this Account's
+      // in-flight work. The agent's free prose IS the chat's answer —
+      // Book citations inline, web-sourced parts marked «بیرون از کتاب»
+      // with visible links (Avalai's display requirement). The retired
+      // pipeline's phases stay defined for the provenance machinery but
+      // nothing on this surface arms them anymore.
+
+      let agentBusy = false;
+
+      function agentLink(href, label) {
+        const a = document.createElement("a");
+        a.href = href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = label;
+        return a;
+      }
+
+      function agentParagraphNode(text) {
+        // One paragraph of the agent's prose: escaped text in which
+        // markdown and bare links become real anchors — a web citation
+        // is always a visible, clickable link.
+        const p = document.createElement("p");
+        const parts = String(text).split(
+          /(\[[^\]]+\]\([^)\s]+\)|https?:\/\/[^\s)<>"']+)/g
+        );
+        for (const part of parts) {
+          if (!part) continue;
+          const md = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(part);
+          if (md) {
+            p.append(agentLink(md[2], md[1]));
+          } else if (/^https?:\/\//.test(part)) {
+            p.append(agentLink(part, part));
+          } else {
+            p.append(document.createTextNode(part));
+          }
+        }
+        return p;
+      }
+
+      function agentQuestionNode(text) {
+        const div = document.createElement("div");
+        div.className = "agent-msg user";
+        const p = document.createElement("p");
+        p.textContent = text;
+        div.append(p);
+        return div;
+      }
+
+      function agentAnswerNode(answer) {
+        const div = document.createElement("div");
+        div.className = "agent-msg assistant";
+        for (const chunk of String(answer).split(/\n{2,}/)) {
+          if (chunk.trim()) div.append(agentParagraphNode(chunk.trim()));
+        }
+        return div;
+      }
+
+      function agentNoticeNode(kind, text) {
+        const div = document.createElement("div");
+        div.className = `agent-msg ${kind}`;
+        const p = document.createElement("p");
+        p.textContent = text;
+        div.append(p);
+        return div;
+      }
+
+      function agentScroll() {
+        agentChatEl.scrollTop = agentChatEl.scrollHeight;
+      }
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const query = questionEl.value.trim();
@@ -2773,6 +2773,8 @@
           questionEl.focus();
           return;
         }
+        if (agentBusy) return;
+        agentBusy = true;
 
         buttonEl.disabled = true;
         elapsedEl.hidden = false;
@@ -2781,57 +2783,26 @@
           const seconds = Math.round((Date.now() - started) / 1000);
           elapsedEl.textContent = `${seconds} ثانیه`;
         }, 250);
-        // The clock times the retrieval pipeline and stops when the
-        // ask's phases settle — phase 2's landing, or right here when
-        // the Research Mode switch hands the question to phase 3 (whose
-        // turns time their own chip, issue #25).
         const stopTimer = () => {
           clearInterval(tick);
           const seconds = Math.round((Date.now() - started) / 1000);
           elapsedEl.textContent = `${seconds} ثانیه`;
         };
 
-        // A new ask owns the sheet: abort any in-flight phase 2 of the
-        // previous one and reset all three sections to idle. The
-        // research turn's server-side abort rides this ask's own /ask
-        // POST (ADR 0008) — here the client only stops polling and
-        // drops the stored session identity.
-        if (quotedAbort) quotedAbort.abort();
-        quotedAbort = new AbortController();
-        resetResearch();
-        for (const n of [1, 2, 3]) {
-          stopPhaseTimer(n);
-          phaseEls[n].startedAt = null;
-          if (phaseEls[n].timer) phaseEls[n].timer.hidden = true;
-          setPhaseState(n, "idle");
-        }
-        const researchAsked = researchModeEl.checked;
-        setPhaseState(1, "running");
-        setRunningPhase(1);
-        selectPhase(1);
-        quotedDocEl.replaceChildren();
-        setText(answerEl, "در حال بازیابی نقل‌قول‌ها…", "empty");
-        citationRun += 1;
-        const run = citationRun;
-        // The collapsed pool starts the ask closed — a previous ask's
-        // no-citations error note must not sit open on the new one.
-        evidencePoolEl.open = false;
-        citationsEl.replaceChildren();
-        askState = null;
-        hideRecallMore();
-        const waiting = document.createElement("p");
-        waiting.className = "empty";
-        waiting.textContent = "در حال بازیابی استنادها…";
-        citationsEl.append(waiting);
-
+        // The message rides the production seam (ADR-0018): one POST —
+        // the server owns the Question window, the abort of this
+        // Account's in-flight work (issue #26), and the persistence.
+        // A waiting line stands in until the agent's answer replaces
+        // it; a failure (or a full window's 429) lands as the notice
+        // and never clears the question.
+        answerEl.hidden = true;
+        agentChatEl.append(agentQuestionNode(query));
+        const waiting = agentNoticeNode("waiting", "عامل گفت‌وگو در حال پاسخ…");
+        agentChatEl.append(waiting);
+        agentScroll();
         try {
           refreshUsageLive();
-          // The ask (ADR-0014): retrieval only. The Evidence pool comes
-          // straight from the Books' hybrid retrieval — one only_context
-          // search per selected Book, NO LLM completion in the loop — so
-          // the first answer can never arrive as a conclusive model
-          // essay, and the pool lands in seconds, not minutes.
-          const res = await fetch("/ask", {
+          const res = await fetch("/agent/chat", {
             method: "POST",
             headers: {
               "Content-Type": "application/json; charset=utf-8",
@@ -2849,99 +2820,27 @@
               : payload.detail;
             throw new Error(detail || "پاسخ نیامد.");
           }
-          if (run !== citationRun) {
-            return;
+          const answer =
+            typeof payload.answer === "string" ? payload.answer : "";
+          if (!answer) {
+            throw new Error("عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید.");
           }
-          const sources = Array.isArray(payload.sources) ? payload.sources : [];
-          const chatId =
-            typeof payload.chat_id === "string" ? payload.chat_id : "";
-          const lines = sources.map(
-            (s) => `${s.reference}: "${s.passage}"`
-          );
-          askState = {
-            question: query,
-            lines,
-            datasets: selectedDatasets(),
-            chatId,
-            research: researchAsked,
-          };
-          setPhaseState(1, "done");
-          // The pool exists — the ask has a question and citations to
-          // seed Research Mode with. With the switch off, the research
-          // conversation still stays the operator's call (ADR 0008).
-          setPhaseState(3, "ready");
-          citationsEl.replaceChildren();
-          if (!lines.length) {
-            // No pool anywhere: the honest no-citation note. The sheet
-            // never paints a model-written answer over an empty pool —
-            // there is no prose to fall back to (ADR-0014).
-            answerEl.className = "answer";
-            answerEl.replaceChildren();
-            const note = document.createElement("p");
-            note.className = "empty";
-            note.textContent = "استنادی از کتاب‌ها پیدا نشد.";
-            answerEl.append(note);
-            const missing = document.createElement("p");
-            missing.className = "error";
-            missing.textContent = "استنادی از کتاب‌ها پیدا نشد.";
-            citationsEl.append(missing);
-            // The failure note must stay readable — open the collapsed
-            // pool for it, then close again on the next ask.
-            evidencePoolEl.open = true;
-            // No Evidence pool means no Quoted answer, but the research
-            // session never needed one — the operator may still start
-            // it (its gathers search for their own evidence).
-            skipQuotedPhase();
-            armResearch(query, []);
-            // Without a phase-2 run the pipeline still ends here.
-            stopTimer();
-            return;
-          }
-          for (const item of lines) {
-            const p = document.createElement("p");
-            p.className = "cite";
-            p.textContent = item;
-            citationsEl.append(p);
-          }
-          armResearch(query, sources);
-          showRecallMore();
-          // The Quote selection — the retrieval's own verbatim
-          // sentences — IS the first answer (ADR 0006); the picker runs
-          // on the pool the ask just fetched.
-          renderQuoteSelection(query, chatId, lines);
-          if (researchAsked) {
-            // The switch is on: the ask itself opens the guided research
-            // conversation on the same pool — the creating call rides
-            // the ask's question and Evidence pool (ADR 0008) — and the
-            // pipeline clock stops here; the research turns run on
-            // phase 3's own chip.
-            stopTimer();
-            selectPhase(3);
-            sendResearchMessage(query);
-          } else {
-            // Phase 2 starts right here on the same pool (its exact
-            // payload) and runs in PARALLEL with the picker (issue #28):
-            // each lands in its own tab.
-            renderQuotedAnswer(query, chatId, lines, stopTimer);
-          }
+          waiting.replaceWith(agentAnswerNode(answer));
         } catch (err) {
-          setText(
-            answerEl,
-            err.message === "Failed to fetch"
-              ? "ارتباط با سرویس پاسخ قطع شد."
-              : String(err.message || err),
-            "error"
+          waiting.replaceWith(
+            agentNoticeNode(
+              "error",
+              err.message === "Failed to fetch"
+                ? "ارتباط با عامل گفت‌وگو قطع شد."
+                : String(err.message || err)
+            )
           );
-          setPhaseState(1, "failed");
-          setRunningPhase(null);
-          citationsEl.replaceChildren();
-          const missing = document.createElement("p");
-          missing.className = "empty";
-          missing.textContent = "بدون استناد.";
-          citationsEl.append(missing);
-          stopTimer();
         } finally {
+          stopTimer();
+          agentBusy = false;
           buttonEl.disabled = false;
+          questionEl.value = "";
+          agentScroll();
         }
       });
 

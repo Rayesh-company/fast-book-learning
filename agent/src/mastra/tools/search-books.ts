@@ -26,9 +26,24 @@ export const searchBooksTool = createTool({
       }),
     ),
   }),
-  execute: async ({ query, datasets }, { abortSignal }) => {
+  execute: async ({ query, datasets }, { abortSignal, requestContext }) => {
     const coreUrl = (process.env.PYTHON_CORE_URL ?? "http://127.0.0.1:8765").replace(/\/+$/, "");
     const agentToken = process.env.AGENT_SERVICE_TOKEN ?? "";
+    // The Learner-facing seam (ADR-0018) sends the sheet's Book toggles
+    // as the run's requestContext — the selection reaches the tool
+    // without ever becoming prompt text. The Learner's selection wins
+    // when present; an empty selection means the whole Book set, the
+    // same default an omitted parameter carries.
+    const fromContext =
+      typeof requestContext?.get === "function"
+        ? requestContext.get("datasets")
+        : undefined;
+    const selection =
+      Array.isArray(fromContext) && fromContext.length > 0
+        ? fromContext.filter((name): name is string => typeof name === "string")
+        : Array.isArray(datasets) && datasets.length > 0
+          ? datasets
+          : undefined;
     try {
       const response = await fetch(`${coreUrl}/agent/recall`, {
         method: "POST",
@@ -36,7 +51,7 @@ export const searchBooksTool = createTool({
           "Content-Type": "application/json",
           "X-Agent-Token": agentToken,
         },
-        body: JSON.stringify({ query, datasets }),
+        body: JSON.stringify({ query, datasets: selection }),
         signal: abortSignal ?? undefined,
       });
       if (!response.ok) {

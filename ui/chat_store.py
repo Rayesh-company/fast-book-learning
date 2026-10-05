@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import secrets
 import sqlite3
 from pathlib import Path
 
@@ -37,6 +38,12 @@ def _connect() -> sqlite3.Connection:
         "sources_json TEXT NOT NULL, selections_json TEXT NOT NULL, "
         "blocks_json TEXT NOT NULL, truncated INTEGER NOT NULL DEFAULT 0, "
         "created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS agent_chats ("
+        "id TEXT PRIMARY KEY, phone TEXT NOT NULL, thread_id TEXT NOT NULL, "
+        "question TEXT NOT NULL, answer TEXT NOT NULL, "
+        "created_at TEXT NOT NULL)"
     )
     return conn
 
@@ -137,6 +144,51 @@ def update_quoted(chat_id: str, phone: str, blocks, truncated: bool = False) -> 
         conn.commit()
     finally:
         conn.close()
+
+
+def record_agent_exchange(phone: str, thread_id: str, question: str, answer: str) -> str:
+    """One Question's row in the agent conversation (ADR-0018): the
+    Learner's message and the agent's answer, kept for the reload's
+    restore — the Python-side transcript beside the agent service's own
+    thread memory, so a reload restores without a model call. Returns
+    the minted row id."""
+    exchange_id = secrets.token_hex(8)
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO agent_chats (id, phone, thread_id, question, answer,"
+            " created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (exchange_id, phone, thread_id, question, answer, _now()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return exchange_id
+
+
+def agent_conversation(phone: str, limit: int = 50) -> list:
+    """The phone's agent-chat transcript — the newest ``limit``
+    exchanges, oldest first: the reload's restore payload (ADR-0014's
+    persistence leg). No LLM call, no metering; one phone's reload never
+    reads another's conversation."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, question, answer, created_at FROM agent_chats"
+            " WHERE phone = ? ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (phone, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "id": row[0],
+            "question": row[1],
+            "answer": row[2],
+            "created_at": row[3],
+        }
+        for row in reversed(rows)
+    ]
 
 
 def latest_chat(phone: str):

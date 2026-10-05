@@ -91,22 +91,27 @@ def test_sheet_calls_the_quote_selection_picker_with_the_pool():
 
 
 def test_sheet_renders_no_model_prose_as_the_phase1_answer():
-    # ADR-0014: there is no streamed prose and no markdown renderer —
-    # the selection (or its honest missed note) is the only first
-    # answer the sheet can show.
+    # Re-recorded for ADR-0018: the agent's free prose IS the chat's
+    # first answer — the sheet renders it through its own paragraph
+    # builder (escaped text, real links), never a general markdown
+    # renderer, and the retired picker no longer gates what the Learner
+    # sees on this surface.
     html = UI.read_text(encoding="utf-8")
     assert "renderMarkdown(answerEl, preview)" not in html
     assert "preview" not in html
     assert "function renderMarkdown" not in html
-    assert "renderQuoteSelection(query, chatId, lines)" in html
+    assert "function agentAnswerNode" in html
+    assert "function agentParagraphNode" in html
+    assert "renderQuoteSelection(query, chatId, lines)" not in html
 
 
 def test_sheet_keeps_the_evidence_pool_collapsed_in_the_first_tab():
-    # Issue #28: the «استناد» heading and list stay visible inside a
-    # collapsed <details> under the selection — inspectable, and still
-    # phase 2's input.
+    # Re-recorded for ADR-0018: the Evidence pool retires from the chat
+    # surface (the Quote selection's first-answer role is superseded
+    # here) — the <details> stays in the markup, hidden, its structure
+    # preserved for the provenance machinery that keeps its role.
     html = UI.read_text(encoding="utf-8")
-    assert '<details id="evidence-pool">' in html
+    assert '<details id="evidence-pool" hidden>' in html
     assert "همۀ نقل‌قول‌های بازیابی‌شده" in html
     assert 'id="citations-heading"' in html
     assert 'id="citations"' in html

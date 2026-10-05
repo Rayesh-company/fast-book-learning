@@ -14,15 +14,17 @@ def test_session_ui_is_farsi_first_rtl():
 
 
 def test_session_ui_pins_first_answer_recall_contract():
-    # ADR-0014: the sheet's ask goes to the sheet's own /ask endpoint —
-    # retrieval only, no Cognee search type named in the browser at all
-    # (the only_context lanes are pinned server-side in ui/ask.py).
+    # Re-recorded for ADR-0018: the chat surface is the free
+    # conversational agent — the composer POSTs /agent/chat and the
+    # Book retrieval happens inside the agent's own tool (the
+    # only_context lanes stay pinned server-side in ui/ask.py, behind
+    # /agent/recall). The browser still names no Cognee search type at
+    # all — the dive payloads are pinned server-side (issue #25).
     html = UI.read_text(encoding="utf-8")
-    assert 'fetch("/ask"' in html
+    assert 'fetch("/agent/chat"' in html
     assert "tarhe-kolli" in html
-    # The browser names no Cognee search type at all — the dive payloads
-    # are pinned server-side (issue #25). Tightened from the COT-only
-    # assertion: any GRAPH_COMPLETION* string must stay out of the sheet.
+    # Tightened from the COT-only assertion: any GRAPH_COMPLETION*
+    # string must stay out of the sheet.
     assert "GRAPH_COMPLETION" not in html
     assert "sessionId" not in html
 
@@ -68,27 +70,30 @@ def test_readme_records_session_ui_command():
 
 
 def test_session_ui_asks_with_retrieval_only_no_stream():
-    # ADR-0014: the ask is one JSON POST to the sheet's own /ask and the
-    # pool rides back — no SSE reader on the sheet, no streamed prose to
-    # drift into a conclusive essay, no TTFT chip (the elapsed clock
-    # times the retrieval pipeline).
+    # Re-recorded for ADR-0018: the chat is one JSON POST to
+    # /agent/chat and the agent's answer rides back complete — no SSE
+    # reader on the sheet, no TTFT chip (the elapsed clock times the
+    # agent's whole turn: the model call and its tool rounds).
     html = UI.read_text(encoding="utf-8")
-    assert 'fetch("/ask"' in html
+    assert 'fetch("/agent/chat"' in html
     assert "stream: true" not in html
     assert "TextDecoder" not in html
     assert 'id="ttft"' not in html
-    # The Research Mode switch (default off) sits in the ask form.
+    # The Research Mode switch stays in the markup (hidden at launch,
+    # ADR-0017 — the surface intact, not offered).
     assert 'id="research-mode"' in html
     assert "researchModeEl.checked" in html
     assert 'localStorage.setItem("researchMode"' in html
 
 
 def test_session_ui_restores_the_last_ask_on_reload():
-    # ADR-0014: the sheet re-fetches its newest ask row — pool, Quote
-    # selection, Quoted answer — so a reload never throws the chat away.
+    # Re-recorded for ADR-0014/0018: the sheet re-fetches its persisted
+    # agent transcript — every Question and its agent answer — so a
+    # reload never throws the conversation away and never re-bills (the
+    # restore re-reads the store; it never calls the agent).
     html = UI.read_text(encoding="utf-8")
-    assert 'fetch("/chat/latest"' in html
-    assert "restoreAsk" in html
+    assert 'fetch("/agent/chat/history"' in html
+    assert "restoreAgentChat" in html
 
 
 def test_session_ui_server_relays_sse_without_buffering():
