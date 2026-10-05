@@ -188,6 +188,9 @@ services:
       # generates a per-process secret and warns that a restart logs
       # every Account out.
       AUTH_SECRET: ${AUTH_SECRET:-}
+      # The Mastra chat agent's seam token (ADR-0016/0018): the agent
+      # service presents it on /agent/recall's X-Agent-Token header.
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
       # Research Mode's sessions persist beside the quota counts on the
       # same volume (ADR-0008) — a container rebuild must not throw an
       # in-progress investigation away.

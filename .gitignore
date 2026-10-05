@@ -22,3 +22,12 @@ books/*.pdf
 *.zip
 
 ui/usage_ledger.sqlite3
+
+# The Mastra chat agent service (ADR-0018)
+agent/node_modules/
+agent/.mastra/
+agent/dist/
+agent/src/mastra/public/data/
+
+# Reticle browser-test artifacts
+.reticle/

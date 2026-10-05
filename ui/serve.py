@@ -989,6 +989,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             )
             self._ask(phone)
             return
+        if path == "/agent/recall":
+            self._agent_recall()
+            return
         if path == "/api/v1/recall":
             phone = self._gate_phone()
             if phone is None:
@@ -1153,6 +1156,36 @@ class SessionHandler(SimpleHTTPRequestHandler):
             200,
             {"chat_id": chat_id, "sources": sources, "pool_size": len(sources)},
         )
+
+    def _agent_recall(self) -> None:
+        """The agent seam (ADR-0016/0018): the Mastra chat agent's
+        search-books tool calls this for the Book pool — the SAME
+        parsed only_context passages /ask builds (ui.ask.ask_pool),
+        never duplicated on the TS side. There is no phone gate: the
+        caller is the agent service presenting the shared
+        AGENT_SERVICE_TOKEN (hmac-compared; a missing token env keeps
+        the seam closed). No metering and no chat row here: the
+        Question window meters Learner messages on the Learner-facing
+        seam, not the agent's tool rounds (ADR-0018). A bad token is
+        401; a malformed body 400; a searcher that finds nothing is
+        200 {"passages": []} — the honest empty the agent reports."""
+        expected = os.environ.get("AGENT_SERVICE_TOKEN", "")
+        presented = self.headers.get("X-Agent-Token", "")
+        if not expected or not hmac.compare_digest(expected, presented):
+            self._send_json(401, {"detail": "agent token required"})
+            return
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            query = payload["query"]
+            if not isinstance(query, str) or not query.strip():
+                raise ValueError("query is required")
+            datasets = validated_datasets(payload.get("datasets"))
+        except (ValueError, KeyError, TypeError):
+            # The body is already read above, so _send_json is safe.
+            self._send_json(400, {"detail": "query is required"})
+            return
+        self._send_json(200, {"passages": ask_pool(query.strip(), datasets)})
 
     def _chat_latest(self) -> None:
         """The reload's restore read (ADR-0014): the phone's newest ask

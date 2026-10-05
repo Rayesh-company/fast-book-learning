@@ -117,7 +117,7 @@ The Book identity plus the exact pages of a quoted passage, shown with an answer
 _Avoid_: footnote, Evidence (Cognee's block name is not the domain name)
 
 **Quote selection**:
-The first answer of an ask: a list of verbatim Book sentences that together answer the question, each shown with its own Citation, with no AI-written text.
+The first answer of an ask (superseded on the chat surface by the Chat agent, ADR-0018; the verbatim-citation machinery keeps its role in provenance): a list of verbatim Book sentences that together answer the question, each shown with its own Citation, with no AI-written text.
 _Avoid_: evidence list (the Cognee block name is not the domain name), quote-only answer, fast answer, snippet list
 
 **Quoted answer**:
@@ -143,6 +143,10 @@ _Avoid_: glue text, preamble, filler paragraph (the superseded standalone-paragr
 **کتاب‌خوان (Book reader — mode 1)**:
 One of the product's two modes (settled 2026-10-03, Wayfinder #5): the Learner reads the Book freely — reading, notes, TTS, and chat with the Book — and content questions are answered directly. The ADR-0007 split-view provenance panel is this mode's first surface; free reading, notes, and TTS grow onto it.
 _Avoid_: PDF viewer chrome (the panel is a provenance surface, not a generic viewer), book preview, using the word for the panel alone (the panel belongs to the mode now)
+
+**Chat agent (عامل گفت‌وگو)**:
+کتاب‌خوان's conversational answerer (ADR-0018): a free Mastra agent whose tools are the Book pool (Cognee's hybrid retrieval through the Python seam) and web search — it composes its answer freely, cites best-effort, and marks web-sourced parts of the answer «بیرون از کتاب». Its answer is the chat's first answer; each Learner message that receives one is a Question.
+_Avoid_: Research Mode (the hidden guided-research surface is not this), quote picker (the superseded first answer), chatbot
 
 **Learning mode (حالت یادگیری)**:
 The product's second mode (settled 2026-10-03, Wayfinder #5): an agent helps the Learner learn one Book by running the weekly book-study protocol — calibration, the Learning session, between-day retrieval, the weekly closing ritual, the +1/+7/+30 ladder, the adaptive signals/levers loop. The Learner produces (brain dumps, explanations, mind maps, presentations) — accepted as text, audio, or photographed handwriting; the agent schedules, prompts, and judges productions against the Book's own text. On content questions it guides first; the correct answer is an earned reveal — shown only after the Learner attempts or explicitly skips. Reading in Learning mode uses its own tools, distinct from کتاب‌خوان's; reading outside the app is allowed. There is no separate research mode inside Learning mode.
@@ -189,7 +193,7 @@ The monthly pass a Learner buys for کتاب‌خوان (settled in Wayfinder #1
 _Avoid_: plan, top-up, credit package, Balance (the per-use posture it replaces at launch)
 
 **Question (پرسش)**:
-In کتاب‌خوان, one ask together with its answer — the counted unit of the Question window.
+In کتاب‌خوان, one ask together with its answer — the counted unit of the Question window. With the Chat agent (ADR-0018): each Learner message that receives an agent answer is one Question.
 _Avoid_: chat pair (the draft term, retired), message, turn
 
 **Question window (پنجرهٔ پرسش)**:
