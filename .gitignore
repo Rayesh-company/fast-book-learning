@@ -31,3 +31,7 @@ agent/src/mastra/public/data/
 
 # Reticle browser-test artifacts
 .reticle/
+
+# Local e2e scratch
+e2e-tmp/
+agent-dev.log

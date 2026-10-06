@@ -149,6 +149,41 @@ services:
     networks:
       - cognee-network
 
+  agent:
+    build: ./agent
+    image: chat-with-books-agent:latest
+    container_name: chat-with-books-agent
+    profiles:
+      - session
+    restart: unless-stopped
+    environment:
+      # The generated server's own dials: 4111 in-container, all
+      # interfaces, the LibSQL thread store on the persisted volume.
+      PORT: "4111"
+      MASTRA_HOST: 0.0.0.0
+      MASTRA_STORAGE_URL: file:/data/mastra.sqlite
+      # deepseek-v4.1-flash via Avalai (ADR-0018); the key rides the
+      # same root-.env LLM_API_KEY the cognee services read.
+      AVALAI_API_KEY: ${LLM_API_KEY}
+      AVALAI_BASE_URL: ${AVALAI_BASE_URL:-https://api.avalai.ir/v1}
+      AVALAI_SEARCH_TOOL: ${AVALAI_SEARCH_TOOL:-perplexity-search}
+      # The Book pool rides the session service's /agent/recall seam
+      # (ADR-0016/0018), container-to-container.
+      PYTHON_CORE_URL: http://session:8765
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
+    volumes:
+      # The agent's conversation memory (durable threads, ADR-0014's
+      # persistence leg) — a rebuild must not throw it away.
+      - agent_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4111/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - cognee-network
+
   session:
     build: ./ui
     image: chat-with-books-session:latest
@@ -191,6 +226,9 @@ services:
       # The Mastra chat agent's seam token (ADR-0016/0018): the agent
       # service presents it on /agent/recall's X-Agent-Token header.
       AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
+      # The Learner-facing seam's upstream (ADR-0018): the agent
+      # service's generate route, container-to-container.
+      AGENT_URL: http://agent:4111
       # Research Mode's sessions persist beside the quota counts on the
       # same volume (ADR-0008) — a container rebuild must not throw an
       # in-progress investigation away.
@@ -252,3 +290,4 @@ volumes:
   cognee_data:
   cognee_system:
   session_quota:
+  agent_data:
