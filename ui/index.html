@@ -200,6 +200,14 @@
         user-select: none;
       }
 
+      /* A display rule must never beat the hidden attribute (ADR-0017's
+         launch-hidden research toggle, ADR-0018's retired phase tabs):
+         the Learner-facing chat surface keeps both off-screen. */
+      .research-toggle[hidden],
+      .phase-tabs[hidden] {
+        display: none;
+      }
+
       .research-toggle input {
         position: absolute;
         opacity: 0;
@@ -1216,7 +1224,7 @@
     </section>
     <main>
       <header>
-        <p class="kicker">نشست · سه مرحلهٔ پاسخ</p>
+        <p class="kicker">نشست · گفت‌وگو با کتاب</p>
         <h1>طرح کلی اندیشۀ اسلامی در قرآن · انسان ۲۵۰ ساله</h1>
         <div class="status-row">
           <p class="status" id="status" data-state="unknown">در حال بررسی سرویس…</p>
@@ -1227,7 +1235,11 @@
       </header>
 
       <form id="ask">
-        <label for="phone">شمارهٔ تلفن</label>
+        <!-- The phone textbox retires with the chat surface (ADR-0013's
+             cookie identity + ADR-0018): the element stays (the legacy
+             localStorage sync and the ignored X-Session-Phone header
+             still read it) but the Learner never sees or fills it. -->
+        <label for="phone" hidden>شمارهٔ تلفن</label>
         <input
           type="tel"
           id="phone"
@@ -1236,6 +1248,7 @@
           autocomplete="tel"
           maxlength="16"
           placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+          hidden
         />
         <p class="phone-hint">پرسش‌های هر حساب در پنجره‌های پنج‌ساعته شمرده می‌شوند.</p>
         <!-- The ask's Book pick (ADR-0011): exactly ONE Book per
@@ -2765,10 +2778,6 @@
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const query = questionEl.value.trim();
-        if (!phoneEl.value.trim()) {
-          phoneEl.focus();
-          return;
-        }
         if (!query) {
           questionEl.focus();
           return;
