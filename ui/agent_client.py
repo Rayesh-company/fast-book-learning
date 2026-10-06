@@ -12,11 +12,15 @@ from __future__ import annotations
 
 import json
 import os
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
 class AgentError(Exception):
-    """The service answered something that carries no answer text."""
+    """The service was reached but carries no answer — an HTTP error
+    status of its own (its model upstream refused, e.g. the provider's
+    rate limit) or a reply without answer text. The seam answers 502:
+    the agent is up and failed, not unreachable."""
 
 
 def _agent_url() -> str:
@@ -46,8 +50,13 @@ def agent_answer(query: str, datasets, thread_id: str) -> str:
         method="POST",
     )
     timeout = int(os.environ.get("AGENT_TIMEOUT", "120"))
-    with urlopen(request, timeout=timeout) as response:
-        payload = json.loads(response.read() or b"{}")
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read() or b"{}")
+    except HTTPError as exc:
+        # HTTPError is a URLError subclass; caught here first so a
+        # reachable-but-failing agent stays a 502, never a 504.
+        raise AgentError(f"the agent service answered {exc.code}") from exc
     text = payload.get("text")
     if not isinstance(text, str) or not text.strip():
         raise AgentError("the agent reply carries no answer")

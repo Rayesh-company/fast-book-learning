@@ -124,6 +124,26 @@ def test_a_reply_without_an_answer_text_is_not_a_question(tmp_path):
     assert question_window.questions_in_window(PHONE) == 0
 
 
+def test_an_agent_error_status_is_a_502_not_an_unreachable(tmp_path):
+    # The first capacity rehearsal: the provider's rate limit made the
+    # agent answer 500s, and the seam called them 504 (HTTPError is a
+    # URLError subclass). A reachable-but-failing agent is a 502 —
+    # "the agent did not answer", never "the agent is unreachable".
+    from urllib.error import HTTPError
+    from io import BytesIO
+
+    upstream, base, server, original = with_agent(
+        tmp_path,
+        [HTTPError("http://agent", 500, "upstream refused", {}, BytesIO(b"{}"))],
+    )
+    try:
+        status, _ = ask_agent(base, {"query": "پرسش؟"})
+    finally:
+        stop_gate(server, original)
+    assert status == 502
+    assert question_window.questions_in_window(PHONE) == 0
+
+
 def test_the_thread_is_stable_and_the_selection_rides_the_seam(tmp_path):
     upstream, base, server, original = with_agent(
         tmp_path, [agent_ok("یک"), agent_ok("دو")]

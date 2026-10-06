@@ -1807,6 +1807,14 @@ def check_embedding_pin() -> None:
         )
 
 
+class SheetServer(ThreadingHTTPServer):
+    # The capacity bar is 100 concurrent chat asks (ADR-0017) — now 100
+    # concurrent agent answers (ADR-0018). The default listen backlog of
+    # 5 resets simultaneous connects outright; the first capacity
+    # rehearsal caught exactly that (39/100 WinError 10054 resets).
+    request_queue_size = 256
+
+
 def main() -> None:
     # The drift guard runs before anything binds: a drifted stack must not
     # come up even briefly.
@@ -1814,7 +1822,7 @@ def main() -> None:
     # The true-page resolver (ADR-0011): kept quotes' labels name the
     # passage's actual page, not the locator's drifted estimate.
     install_page_resolver()
-    server = ThreadingHTTPServer((HOST, PORT), SessionHandler)
+    server = SheetServer((HOST, PORT), SessionHandler)
     print(f"Session sheet http://{HOST}:{PORT}", flush=True)
     print(f"Proxying /api/v1/recall and /health to {COGNEE_URL}", flush=True)
     print(f"Relaying /next-tier-recall to {NEXT_TIER_URL}", flush=True)
