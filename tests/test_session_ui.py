@@ -70,14 +70,17 @@ def test_readme_records_session_ui_command():
 
 
 def test_session_ui_asks_with_retrieval_only_no_stream():
-    # Re-recorded for ADR-0018: the chat is one JSON POST to
-    # /agent/chat and the agent's answer rides back complete — no SSE
-    # reader on the sheet, no TTFT chip (the elapsed clock times the
-    # agent's whole turn: the model call and its tool rounds).
+    # Re-recorded for #26: the PM's 2026-10-06 streamed decision
+    # (parent #21) reverses ADR-0014's non-streamed posture on the
+    # AGENT surface only — /agent/chat is an SSE stream consumer now
+    # (getReader + TextDecoder over the seam's unbuffered relay), while
+    # the retired retrieval ask keeps ADR-0014's shape: plain JSON
+    # fetches, answers complete. No TTFT chip anywhere (the elapsed
+    # clock still times the agent's whole turn: the model call and its
+    # tool rounds).
     html = UI.read_text(encoding="utf-8")
     assert 'fetch("/agent/chat"' in html
-    assert "stream: true" not in html
-    assert "TextDecoder" not in html
+    assert "res.body.getReader()" in html
     assert 'id="ttft"' not in html
     # The Research Mode switch stays in the markup (hidden at launch,
     # ADR-0017 — the surface intact, not offered).
@@ -313,9 +316,91 @@ def test_session_ui_renders_the_guaranteed_outside_the_book_marking():
     # beside the seam's guarantee (#24): only http(s) becomes an anchor.
     assert "agentLink(source.url" in html
     assert "/^https?:\\/\\//i.test(source.url)" in html
-    # Both feeders pass the structured fields: the reply payload...
-    assert "payload.web_sourced === true" in html
-    assert "Array.isArray(payload.sources)" in html
+    # Both feeders pass the structured fields: the live stream's
+    # finalize frame (#26)...
+    assert "finalized.web_sourced === true" in html
+    assert "Array.isArray(finalized.sources)" in html
     # ...and the restore read's stored per-message form.
     assert "message.web_sourced === true" in html
     assert "Array.isArray(message.sources)" in html
+
+
+def test_session_ui_streams_the_agent_answer_progressively():
+    # Ticket #26 (ADR-0018): the composer's fetch becomes a stream
+    # consumer — the answer grows in the bubble as the agent composes it
+    # (the seam relays the Mastra text-delta frames unbuffered), the
+    # seam's OWN finalize frame replaces the bubble with the full-chrome
+    # agentAnswerNode plus the window counter, and the error frame (or a
+    # dead stream, or the gates' non-OK JSON) lands the honest notice
+    # with the composer re-enabled. Progressive rendering touches ONLY
+    # the streaming bubble — never the whole transcript per delta.
+    html = UI.read_text(encoding="utf-8")
+    # The stream consumer: the body rides getReader(), the SSE events
+    # split on the blank line, and the three frame kinds dispatch.
+    assert "res.body.getReader()" in html
+    assert 'buffer.indexOf("\\n\\n")' in html
+    assert 'event.startsWith("data: ")' in html
+    assert 'frame.type === "text-delta"' in html
+    assert 'frame.type === "chat-answer-finalized"' in html
+    assert 'frame.type === "chat-answer-error"' in html
+    # The delta appends into a growing plain-text bubble — the same
+    # paragraph split the finalized renderer uses (agentAnswerNode's
+    # /\n{2,}/), and only that bubble's own paragraphs re-render.
+    assert "function agentStreamingNode()" in html
+    assert "accumulated.split(/\\n{2,}/)" in html
+    # The finalize frame carries the full chrome: the answer, the
+    # guaranteed marking, the sources, and the window counter (issue
+    # #23's one renderer on the streamed path).
+    assert "renderWindowState(finalized.window);" in html
+    assert "finalized.web_sourced === true" in html
+    assert "Array.isArray(finalized.sources)" in html
+    # The finalize replaces the STREAMING bubble (not the waiting line —
+    # the waiting line was already replaced when the stream opened).
+    assert "streaming.node.replaceWith(agentAnswerNode(" in html
+    # A failed/stalled/dead stream lands the honest notice on the
+    # streaming bubble and the composer's finally re-enables + clears.
+    assert "streaming.node.replaceWith(agentNoticeNode(" in html
+    submit = html[html.index('form.addEventListener("submit"') : html.index(
+        "questionEl.addEventListener(\"keydown\""
+    )]
+    assert "agentBusy = false;" in submit
+    assert "questionEl.value = \"\";" in submit
+
+
+def test_session_ui_server_relays_the_streamed_agent_answer_unbuffered():
+    # Ticket #26's server side: /agent/chat past its gates is an SSE
+    # endpoint — close-delimited (no Content-Length), each relayed line
+    # written as it arrives — and the metering is completion-anchored:
+    # record_question and record_agent_exchange run only on the
+    # completed answer, after the relay loop, never on the error path.
+    # The abandoned branch (a Learner whose connection died mid-stream)
+    # aborts the upstream and returns BEFORE any metering — the browser
+    # gate exercises the disconnect itself; this pin holds the ordering.
+    text = SERVE.read_text(encoding="utf-8")
+    handler = text[
+        text.index("def _agent_chat(self, phone: str)") : text.index(
+            "def _agent_chat_history(self)"
+        )
+    ]
+    assert 'self.send_header("Content-Type", "text/event-stream' in handler
+    assert "AgentStream(" in handler
+    # The unbuffered relay: one line at a time onto the socket, the
+    # _relay close-delimited pattern.
+    assert "self.wfile.write(line)" in handler
+    # Completion-anchored metering: both writes sit AFTER the relay loop
+    # and behind the completed-reply guard, never on the error path; the
+    # finalize frame rides the seam's own line builder and terminal
+    # frame name (the error frame's name and text are pinned on the
+    # seam tests' wire assertions).
+    assert "record_question(phone)" in handler
+    assert "record_agent_exchange(" in handler
+    assert "sse_frame(" in handler
+    assert "CHAT_ANSWER_FINALIZED" in handler
+    assert handler.index("self.wfile.write(line)") < handler.index(
+        "record_question(phone)"
+    )
+    # The abandoned branch: abort and return, meter nothing.
+    abort_branch = handler[
+        handler.index("stream.abort()") : handler.index("record_question(phone)")
+    ]
+    assert "return" in abort_branch

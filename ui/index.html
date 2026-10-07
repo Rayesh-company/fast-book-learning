@@ -917,6 +917,18 @@
          web-sourced flag the server derived from the reply's tool-call
          record — the platform's guarantee, present even when the
          model's own prose omits the mark. */
+      /* The streaming bubble (#26): the answer grows here plain — a
+         pulsing block cursor after the last paragraph keeps the
+         composition visibly alive until the finalize frame replaces
+         the bubble with the full chrome. */
+      .agent-msg.assistant.streaming p:last-child::after {
+        content: "▍";
+        display: inline-block;
+        margin-right: 0.15rem;
+        color: var(--clay);
+        animation: composer-pulse 1.2s ease-in-out infinite;
+      }
+
       .agent-msg.assistant .web-mark {
         display: inline-block;
         margin: 0 0 0.55rem;
@@ -2893,6 +2905,36 @@
         return div;
       }
 
+      // The STREAMING bubble (#26): the answer grows here as the agent
+      // composes it — plain escaped paragraphs only, the same paragraph
+      // split the finalized renderer uses, re-rendered per delta into
+      // this bubble ALONE (never the whole transcript). No chrome while
+      // streaming: links, the «بیرون از کتاب» marking, and live
+      // citations land at finalize, when the seam's own terminal frame
+      // carries the completed answer and its guarantee.
+      function agentStreamingNode() {
+        const node = document.createElement("div");
+        node.className = "agent-msg assistant streaming";
+        let rendered = null;
+        return {
+          node,
+          update(accumulated) {
+            const text = String(accumulated || "");
+            if (text === rendered) return;
+            rendered = text;
+            node.replaceChildren();
+            for (const chunk of accumulated.split(/\n{2,}/)) {
+              if (chunk.trim()) {
+                const p = document.createElement("p");
+                p.textContent = chunk.trim();
+                node.append(p);
+              }
+            }
+            agentScroll();
+          },
+        };
+      }
+
       function agentAnswerNode(answer, webSourced, sources) {
         // The answer and its GUARANTEED marking (#24, ADR-0018): when
         // the structured web-sourced flag is set (the server derived it
@@ -2976,17 +3018,24 @@
           elapsedEl.textContent = `${seconds} ثانیه`;
         };
 
-        // The message rides the production seam (ADR-0018): one POST —
-        // the server owns the Question window, the abort of this
-        // Account's in-flight work (issue #26), and the persistence.
-        // A waiting line stands in until the agent's answer replaces
-        // it; a failure (or a full window's 429) lands as the notice
-        // and never clears the question.
+        // The message rides the production seam (ADR-0018), STREAMED
+        // (#26): one POST whose body is the SSE relay — the server
+        // owns the Question window, the abort of this Account's
+        // in-flight work (issue #26), and the completion-anchored
+        // persistence. A waiting line stands in until the first delta
+        // replaces it with the growing bubble; the seam's own terminal
+        // frame finalizes (full chrome + the window counter) or fails
+        // honestly (a failure, a stall past the leash, or a gate's
+        // non-OK JSON lands as the notice and never clears the
+        // question).
         answerEl.hidden = true;
         agentChatEl.append(agentQuestionNode(query));
         const waiting = agentNoticeNode("waiting", "عامل گفت‌وگو در حال پاسخ…");
         agentChatEl.append(waiting);
         agentScroll();
+        // The live bubble: whatever this turn ends as — finalized
+        // answer or honest notice — replaces whatever is showing here.
+        const streaming = { node: waiting, bubble: null };
         try {
           refreshUsageLive();
           const res = await fetch("/agent/chat", {
@@ -3000,42 +3049,92 @@
               datasets: selectedDatasets(),
             }),
           });
-          const payload = await res.json().catch(() => ({}));
-          // Every reply on this seam carries the window (issue #23) —
-          // the 200 with the answer, the 429 with its refusal — so the
-          // counter updates before this turn's outcome is even read;
-          // the 502/504 shapes carry none and the render no-ops.
-          renderWindowState(payload.window);
           if (!res.ok) {
+            // The gates' JSON errors (401/402/429/400) — every refusal
+            // on this seam carries the window (issue #23), so the
+            // counter updates before the notice lands; the 502/504
+            // shapes carry none and the render no-ops.
+            const payload = await res.json().catch(() => ({}));
+            renderWindowState(payload.window);
             const detail = Array.isArray(payload.detail)
               ? payload.detail.join(" ")
               : payload.detail;
             throw new Error(detail || "پاسخ نیامد.");
           }
-          const answer =
-            typeof payload.answer === "string" ? payload.answer : "";
-          if (!answer) {
-            throw new Error("عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید.");
+          if (!res.body || !res.body.getReader) {
+            throw new Error("ارتباط با عامل گفت‌وگو قطع شد.");
           }
-          // The marking guarantee rides the reply (#24): the flag and
-          // sources the server derived from the tool-call record, so
-          // the marking renders whatever the prose says.
-          waiting.replaceWith(
-            agentAnswerNode(
-              answer,
-              payload.web_sourced === true,
-              Array.isArray(payload.sources) ? payload.sources : [],
-            ),
-          );
+          // The SSE consumer: frames are `data: <json>` lines; the
+          // relay is unbuffered, so each read carries whatever has
+          // arrived — deltas grow the bubble, the seam's terminal
+          // frame ends the turn.
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let finalized = null;
+          for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            for (;;) {
+              const at = buffer.indexOf("\n\n");
+              if (at === -1) break;
+              const event = buffer.slice(0, at);
+              buffer = buffer.slice(at + 2);
+              if (!event.startsWith("data: ")) continue;
+              let frame = null;
+              try {
+                frame = JSON.parse(event.slice("data: ".length));
+              } catch {
+                continue;
+              }
+              if (!frame || typeof frame.type !== "string") continue;
+              if (frame.type === "text-delta") {
+                const text = frame.payload && frame.payload.text;
+                if (typeof text !== "string") continue;
+                if (!streaming.bubble) {
+                  streaming.bubble = agentStreamingNode();
+                  streaming.node.replaceWith(streaming.bubble.node);
+                  streaming.node = streaming.bubble.node;
+                }
+                streaming.bubble.update(
+                  (streaming.text = (streaming.text || "") + text),
+                );
+              } else if (frame.type === "chat-answer-finalized") {
+                finalized = frame;
+                break;
+              } else if (frame.type === "chat-answer-error") {
+                throw new Error(frame.detail || "عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید.");
+              }
+              // Every other relayed frame (start, step, tool rounds,
+              // the upstream's finish and [DONE]) rides for the
+              // network trace alone — the sheet renders text only.
+            }
+            if (finalized) break;
+          }
+          if (!finalized) {
+            // The stream died without its terminal frame — a broken
+            // answer never poses as a complete one.
+            throw new Error("ارتباط با عامل گفت‌وگو قطع شد.");
+          }
+          // The finalize frame (#26) carries the completed answer with
+          // the marking guarantee (#24 — the flag and sources derived
+          // server-side from the tool-call record) and the window AFTER
+          // this Question landed (#23 — the counter renders here).
+          renderWindowState(finalized.window);
+          streaming.node.replaceWith(agentAnswerNode(finalized.answer,
+              finalized.web_sourced === true,
+              Array.isArray(finalized.sources) ? finalized.sources : [],
+            ));
         } catch (err) {
-          waiting.replaceWith(
-            agentNoticeNode(
-              "error",
-              err.message === "Failed to fetch"
-                ? "ارتباط با عامل گفت‌وگو قطع شد."
-                : String(err.message || err)
-            )
-          );
+          if (streaming.node.isConnected) {
+            streaming.node.replaceWith(agentNoticeNode(
+                "error",
+                err.message === "Failed to fetch"
+                  ? "ارتباط با عامل گفت‌وگو قطع شد."
+                  : String(err.message || err)
+              ));
+          }
         } finally {
           stopTimer();
           agentBusy = false;

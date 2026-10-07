@@ -105,7 +105,7 @@ try:
     from ui import chat_store
     from ui.chat_store import latest_chat
     from ui.ask import ask_pool
-    from ui.agent_client import AgentError, agent_answer
+    from ui.agent_client import CHAT_ANSWER_FINALIZED, AgentStream, sse_frame
     from ui.question_window import (
         QUESTION_WINDOW_LIMIT,
         questions_in_window,
@@ -193,7 +193,7 @@ except ImportError:  # the container runs this file as a script beside the modul
     from ask import ask_pool
     from chat_store import latest_chat
     import chat_store
-    from agent_client import AgentError, agent_answer
+    from agent_client import CHAT_ANSWER_FINALIZED, AgentStream, sse_frame
     from question_window import (
         QUESTION_WINDOW_LIMIT,
         questions_in_window,
@@ -1226,16 +1226,25 @@ class SessionHandler(SimpleHTTPRequestHandler):
         )
 
     def _agent_chat(self, phone: str) -> None:
-        """The Learner-facing seam (ADR-0018): the sheet's chat surface —
-        the Learner's message goes to the Mastra agent (its tools are
-        the Book pool through /agent/recall and web search), the agent's
-        free prose IS the first answer, and the exchange persists for
-        the reload's restore (ADR-0014's persistence leg: a reload
-        re-reads, never re-bills). One ANSWERED message meters one
-        Question; an agent failure meters nothing and answers the honest
-        Farsi error. The thread is stable per phone, so the agent's own
-        memory carries the conversation even though the sheet renders
-        from this store."""
+        """The Learner-facing seam (ADR-0018), STREAMED (issue #26): the
+        sheet's chat surface — the Learner's message goes to the Mastra
+        agent's stream route (its tools are the Book pool through
+        /agent/recall and web search), the agent's answer relays to the
+        sheet UNBUFFERED as it is composed (the _relay close-delimited
+        pattern: one readline at a time onto the socket), and the seam's
+        own terminal frame ends the stream — chat-answer-finalized when
+        an answer completed, chat-answer-error when it failed, stalled
+        past its leash, or carried no answer. Metering and persistence
+        stay COMPLETION-ANCHORED: one ANSWERED message records one
+        Question and persists one exchange (the guaranteed-marked form
+        #24 built, identical in shape to the non-streamed persistence,
+        so the reload restores the same transcript); a failed, stalled,
+        or abandoned stream records and persists nothing. The gates
+        before this handler (identity, Balance, window, the research
+        abort, the size estimate) keep today's JSON error shapes. The
+        thread is stable per phone, so the agent's own memory carries
+        the conversation even though the sheet renders from this
+        store."""
         length = int(self.headers.get("Content-Length", "0") or "0")
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
@@ -1248,25 +1257,40 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"detail": "پرسش را بنویسید."})
             return
         thread_id = f"learner-{phone}"
-        try:
-            reply = agent_answer(query.strip(), datasets, thread_id)
-        except AgentError:
-            # The body is already read above, so _send_json is safe (the
-            # _json_error drain would block re-reading consumed bytes).
-            self._send_json(502, {"detail": "عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید."})
+        stream = AgentStream(query.strip(), datasets, thread_id)
+        # Close-delimited SSE (HTTP/1.0): no Content-Length, lines hit
+        # the socket as they arrive — the sheet reads the body with
+        # getReader() and renders progressively.
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.end_headers()
+        for line in stream:
+            try:
+                self.wfile.write(line)
+            except OSError:
+                # ABANDONED: the Learner's connection died mid-stream —
+                # abort the upstream and answer nothing; this Question
+                # was never answered, so nothing is metered and nothing
+                # persists (the browser gate exercises the disconnect;
+                # this branch's ordering is pinned statically in
+                # test_session_ui).
+                stream.abort()
+                stream.close()
+                return
+        stream.close()
+        reply = stream.reply
+        if reply is None:
+            # The stream already ended with the honest-error frame — no
+            # Question, no exchange.
             return
-        except (URLError, TimeoutError, OSError):
-            self._send_json(
-                504, {"detail": "ارتباط با عامل گفت‌وگو قطع شد؛ دوباره بپرسید."}
-            )
-            return
-        # The answer landed: this message is one Question (ADR-0018).
+        # The answer COMPLETED: this message is one Question (ADR-0018)
+        # — metered here, once, only on completion.
         record_question(phone)
         # The persisted exchange carries the guaranteed-marked form
         # (#24, ADR-0018): the answer text plus the web-sourced flag and
-        # sources the seam derived from the tool-call record — a reload
-        # re-renders the «بیرون از کتاب» marking from this stored form
-        # with no agent call and no re-billing.
+        # sources the seam derived from the streamed tool-result frames
+        # — a reload re-renders the «بیرون از کتاب» marking from this
+        # stored form with no agent call and no re-billing.
         chat_store.record_agent_exchange(
             phone,
             thread_id,
@@ -1275,21 +1299,31 @@ class SessionHandler(SimpleHTTPRequestHandler):
             reply["web_sourced"],
             reply["sources"],
         )
-        # The window AFTER this Question landed (issue #23): the reply
-        # itself carries the state, so the sheet's counter renders with
-        # the answer — the first answered message shows 29 remaining.
-        self._send_json(
-            200,
-            {
-                "answer": reply["text"],
-                "thread_id": thread_id,
-                "window": window_state(phone),
-                # The marking guarantee (#24): rendering truth only —
-                # this flag never meters or gates anything.
-                "web_sourced": reply["web_sourced"],
-                "sources": reply["sources"],
-            },
-        )
+        # The finalize frame (issue #26): the full answer with the
+        # marking guarantee and the window AFTER this Question landed
+        # (issue #23 — the sheet's counter renders from this frame; the
+        # first answered message shows 29 remaining). The flag is
+        # rendering truth only, never a gate.
+        try:
+            self.wfile.write(
+                sse_frame(
+                    {
+                        "type": CHAT_ANSWER_FINALIZED,
+                        "answer": reply["text"],
+                        "web_sourced": reply["web_sourced"],
+                        "sources": reply["sources"],
+                        "window": window_state(phone),
+                    }
+                )
+            )
+        except OSError:
+            # The answer completed and persisted — only its delivery
+            # failed (the Learner went away between the last delta and
+            # the finalize); the reload restores the exchange.
+            sys.stderr.write(
+                "%s - agent stream client went away at finalize\n"
+                % self.address_string()
+            )
 
     def _agent_chat_history(self) -> None:
         """The agent conversation's restore read (ADR-0014/0018): the
