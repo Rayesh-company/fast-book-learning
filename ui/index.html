@@ -485,6 +485,19 @@
         z-index: 1;
       }
 
+      /* An agent answer's Book reference (#25): the quote span's click
+         and hover affordances, reading as a reference rather than a
+         quote — dotted underline, no resting tint. */
+      .cite-sent.agent-cite {
+        background: transparent;
+        border-bottom-style: dotted;
+      }
+
+      .cite-sent.agent-cite:hover,
+      .cite-sent.agent-cite:focus-visible {
+        background: rgba(196, 92, 38, 0.12);
+      }
+
       .empty {
         color: var(--mute);
       }
@@ -2795,10 +2808,54 @@
         return a;
       }
 
+      // A Book citation inside the agent's prose (#25): the Evidence
+      // locator's machine form the agent is instructed to copy verbatim
+      // — parseReference's exact two page shapes, ASCII digits (the
+      // seam formats them so). A reference with no page markers
+      // ("document X" alone) does NOT match and stays plain text: the
+      // pages are unknown and the sheet never invents a page
+      // (CONTEXT.md's Citation rule) — opening nothing beats opening
+      // page 1 blind.
+      const AGENT_CITATION =
+        /document ([A-Za-z0-9._-]+) \((?:pages \d+-\d+|page \d+)\)/g;
+
+      // One interactive citation span. Resolved through the EXISTING
+      // machinery (parseReference — never a second parser) and wired
+      // with the data attributes the delegated reader handlers read,
+      // the Farsi click hint included. Deliberately NOT wireQuoteSpan:
+      // its locatorPassages memory exists so a «منابع» line's click can
+      // look up a real quote passage (ADR-0010), and a reference string
+      // is not a passage — registering it would send that fallback
+      // hunting for text no Book page holds. The tooltip's ref line
+      // keeps citationRef's shape (Book title — first page, ASCII
+      // digits like the server's own labels).
+      function agentCiteNode(reference) {
+        const located = parseReference(reference);
+        const span = document.createElement("span");
+        span.className = "cite-sent agent-cite";
+        span.tabIndex = 0;
+        span.textContent = reference;
+        span.dataset.doc = located.doc;
+        span.dataset.pages =
+          located.first === located.last
+            ? String(located.first)
+            : `${located.first}-${located.last}`;
+        span.dataset.ref = `${
+          READER_BOOK_TITLES[located.doc] || located.doc
+        } — صفحه ${located.first}`;
+        span.dataset.hint = "برای دیدن در کتاب کلیک کنید";
+        return span;
+      }
+
       function agentParagraphNode(text) {
         // One paragraph of the agent's prose: escaped text in which
         // markdown and bare links become real anchors — a web citation
-        // is always a visible, clickable link.
+        // is always a visible, clickable link — and Book references in
+        // the locator's machine form become interactive citations that
+        // open the reader (#25). The citation pass runs ONLY on the
+        // plain-text parts left after the link splitter, so a citation
+        // can never swallow a URL or a markdown link label, and a link
+        // never eats a citation — one paragraph may carry both.
         const p = document.createElement("p");
         const parts = String(text).split(
           /(\[[^\]]+\]\([^)\s]+\)|https?:\/\/[^\s)<>"']+)/g
@@ -2811,7 +2868,17 @@
           } else if (/^https?:\/\//.test(part)) {
             p.append(agentLink(part, part));
           } else {
-            p.append(document.createTextNode(part));
+            let at = 0;
+            for (const match of part.matchAll(AGENT_CITATION)) {
+              if (match.index > at) {
+                p.append(document.createTextNode(part.slice(at, match.index)));
+              }
+              p.append(agentCiteNode(match[0]));
+              at = match.index + match[0].length;
+            }
+            if (at < part.length) {
+              p.append(document.createTextNode(part.slice(at)));
+            }
           }
         }
         return p;
@@ -3151,6 +3218,18 @@
         openCitation(doc, first || 0, last || 0, el.textContent);
       }
 
+      // An agent answer's citation (#25): parseReference resolves the
+      // span's own text (the machine form copied verbatim from the
+      // tool), and the reader opens the cited page with NO highlight
+      // attempt — empty text, openCitation's clean-open branch —
+      // because a reference names a locator, not a passage.
+      function openAgentCitation(el) {
+        const located = parseReference(el.textContent || "");
+        if (located.doc && located.first) {
+          openCitation(located.doc, located.first, located.last, "");
+        }
+      }
+
       function splitLocator(line) {
         const at = line.indexOf(': "');
         if (at === -1) {
@@ -3163,6 +3242,16 @@
       }
 
       document.addEventListener("click", (event) => {
+        // An agent citation opens its page with no highlight attempt
+        // (#25). Checked BEFORE the quote-span branch: an agent
+        // citation carries cite-sent too (the shared affordances), so
+        // the generic branch would otherwise treat its reference text
+        // as a passage to locate.
+        const agentCite = event.target.closest("span.agent-cite");
+        if (agentCite) {
+          openAgentCitation(agentCite);
+          return;
+        }
         const sent = event.target.closest("span.cite-sent");
         if (sent) {
           openCitationFromElement(sent);
@@ -3193,6 +3282,12 @@
           event.target.classList?.contains("cite-sent")
         ) {
           event.preventDefault();
+          // Keyboard parity with the click order (#25): the agent
+          // branch first for the same reason — no highlight attempt.
+          if (event.target.classList.contains("agent-cite")) {
+            openAgentCitation(event.target);
+            return;
+          }
           openCitationFromElement(event.target);
         }
       });

@@ -179,6 +179,84 @@ def test_session_ui_shows_the_question_window_count_beside_the_composer():
     assert "renderWindowState(payload.window)" in html
 
 
+def test_session_ui_agent_answers_render_live_book_citations():
+    # Ticket #25 (ADR-0018): a Book reference inside an agent answer
+    # renders interactive and opens the reader on the cited Book's page
+    # beside the chat. The agent is instructed to copy the search
+    # tool's reference verbatim, so the machine form it cites in is
+    # parseReference's own — and the detection rides agentParagraphNode,
+    # the ONE paragraph renderer both the live reply and the reload's
+    # restore feed (agentAnswerNode calls it on both paths), so the
+    # restored answers keep the same live citations with no server
+    # change and no re-billing.
+    html = UI.read_text(encoding="utf-8")
+    # The detection regex: parseReference's exact two page shapes —
+    # "(pages N-M)" and "(page N)", ASCII digits (the seam formats
+    # them so). A reference with no page markers ("document X" alone)
+    # does NOT match and stays plain text: the pages are unknown and
+    # the sheet never invents a page (CONTEXT.md's Citation rule) —
+    # opening nothing beats opening page 1 blind.
+    assert (
+        "/document ([A-Za-z0-9._-]+) \\((?:pages \\d+-\\d+|page \\d+)\\)/g" in html
+    )
+    # The citation pass runs ONLY on the plain-text parts left after
+    # the link splitter (the markdown/bare-URL split agentParagraphNode
+    # already performs), so a citation can never swallow a URL or a
+    # markdown link label, and a link never eats a citation — a
+    # paragraph may carry both.
+    assert "for (const match of part.matchAll(AGENT_CITATION))" in html
+    assert "p.append(agentCiteNode(match[0]));" in html
+    # The interactive span: the quote span's cite-sent affordances plus
+    # the agent variant, resolved through the EXISTING machinery
+    # (parseReference — never a second parser) and wired with the data
+    # attributes the delegated reader handlers read, Farsi hint
+    # included. Deliberately NOT wireQuoteSpan: its locatorPassages
+    # memory exists so a «منابع» line's click can look up a real quote
+    # passage (ADR-0010), and a reference string is not a passage —
+    # registering it would send that fallback hunting for text no Book
+    # page holds.
+    assert 'span.className = "cite-sent agent-cite";' in html
+    assert "const located = parseReference(reference);" in html
+    assert "span.dataset.doc = located.doc;" in html
+    builder = html[
+        html.index("function agentCiteNode") : html.index(
+            "function agentParagraphNode"
+        )
+    ]
+    assert "span.tabIndex = 0;" in builder
+    assert "span.dataset.pages =" in builder
+    assert 'span.dataset.hint = "برای دیدن در کتاب کلیک کنید";' in builder
+    assert "wireQuoteSpan" not in builder
+    # The visual language: the quote span's hover/focus affordances,
+    # reading as a reference rather than a quote (dotted underline, no
+    # resting tint).
+    assert ".cite-sent.agent-cite {" in html
+
+
+def test_session_ui_agent_citations_open_the_reader_without_a_highlight():
+    # Ticket #25: activating an agent citation (click or keyboard — the
+    # quote span's own parity) opens the cited Book's page through the
+    # same openCitation, but with EMPTY text: the reference names a
+    # locator, not a passage, so the reader must never try to highlight
+    # it — openCitation's clean-open branch (no pending, no note). The
+    # agent branch precedes the quote-span branch in both delegated
+    # handlers because an agent citation carries cite-sent too.
+    html = UI.read_text(encoding="utf-8")
+    assert "function openAgentCitation(el)" in html
+    assert "openCitation(located.doc, located.first, located.last, \"\")" in html
+    # The delegated click: the agent branch first, then the quote span.
+    assert 'closest("span.agent-cite")' in html
+    assert html.index('closest("span.agent-cite")') < html.index(
+        'closest("span.cite-sent")'
+    )
+    # The keyboard parity: same branch order inside the Enter/Space
+    # handler.
+    assert 'classList.contains("agent-cite")' in html
+    assert html.index('classList.contains("agent-cite")') < html.index(
+        "openCitationFromElement(event.target)"
+    )
+
+
 def test_session_ui_never_serves_from_stale_cache():
     # A browser that heuristically cached the page kept rendering the
     # pre-tab sheet after the container switchover (2026-09-11): every
