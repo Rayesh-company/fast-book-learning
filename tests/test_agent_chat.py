@@ -405,6 +405,41 @@ def test_the_web_sources_list_is_capped_at_eight(tmp_path):
     assert payload["sources"][7] == {"title": "منبع 8", "url": "https://example.ir/8"}
 
 
+def test_sources_with_unsafe_url_schemes_are_dropped_entirely(tmp_path):
+    # #24 fixup (spec #21 story 17 — links inside answers open safely):
+    # the sheet renders each source as a REAL anchor (a.href verbatim),
+    # so a javascript:/ftp:/empty url from a malicious or buggy web
+    # upstream would be a live clickable link inside the answer — the
+    # prose path (agentParagraphNode) only linkifies https?://, and the
+    # structured path must be at least as strict. The seam owns the
+    # guarantee: an unsafe url drops the source entirely (honest absence
+    # beats a dead or dangerous link) — on the reply AND the stored
+    # history message alike.
+    mixed = [
+        {"title": "منبع امن", "url": "https://example.ir/safe", "snippet": "خلاصه"},
+        {"title": "منبع خطرناک", "url": "javascript:alert(1)"},
+        {"title": "منبع ftp", "url": "ftp://files.example/x"},
+        {"title": "منبع خالی", "url": ""},
+    ]
+    upstream, base, server, original = with_agent(
+        tmp_path, [agent_tool_reply("پاسخ وب", "webSearchTool", mixed)]
+    )
+    try:
+        status, payload = ask_agent(base, {"query": "پرسش؟"})
+        history_status, history = get(base, "/agent/chat/history", phone=PHONE)
+    finally:
+        stop_gate(server, original)
+    assert status == 200
+    assert payload["web_sourced"] is True
+    assert payload["sources"] == [
+        {"title": "منبع امن", "url": "https://example.ir/safe"}
+    ]
+    assert history_status == 200
+    assert len(history["messages"]) == 1
+    assert history["messages"][0]["web_sourced"] is True
+    assert history["messages"][0]["sources"] == payload["sources"]
+
+
 def test_the_store_migrates_a_deployed_agent_chats_table(tmp_path):
     # The pre-#24 deployed DB predates the marking columns: the store's
     # own connect migrates it (guarded ALTER per missing column), old

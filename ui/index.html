@@ -2851,7 +2851,14 @@
           head.textContent = "منابع بیرون از کتاب:";
           list.append(head);
           for (const source of Array.isArray(sources) ? sources : []) {
-            if (source && typeof source.url === "string" && source.url) {
+            // Defense-in-depth beside the seam's own scheme guarantee
+            // (#24): only http(s) becomes an anchor, matching the prose
+            // path's linkify rule.
+            if (
+              source &&
+              typeof source.url === "string" &&
+              /^https?:\/\//i.test(source.url)
+            ) {
               const p = document.createElement("p");
               const label =
                 typeof source.title === "string" && source.title

@@ -205,8 +205,11 @@ def test_session_ui_renders_the_guaranteed_outside_the_book_marking():
     # The marking chrome: a distinct badge named in Farsi.
     assert 'mark.textContent = "«بیرون از کتاب»"' in html
     assert 'className = "web-mark"' in html
-    # The sources render as real safe anchors (agentLink), not prose.
+    # The sources render as real safe anchors (agentLink), not prose —
+    # and the renderer's own filter is scheme-guarded as defense-in-depth
+    # beside the seam's guarantee (#24): only http(s) becomes an anchor.
     assert "agentLink(source.url" in html
+    assert "/^https?:\\/\\//i.test(source.url)" in html
     # Both feeders pass the structured fields: the reply payload...
     assert "payload.web_sourced === true" in html
     assert "Array.isArray(payload.sources)" in html

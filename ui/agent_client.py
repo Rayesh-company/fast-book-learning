@@ -74,6 +74,15 @@ def _web_guarantee(payload: dict) -> tuple[bool, list]:
                     isinstance(item, dict)
                     and isinstance(item.get("title"), str)
                     and isinstance(item.get("url"), str)
+                    # The seam owns the safe-links rule (#24 fixup, spec
+                    # #21 story 17): the sheet renders each source as a
+                    # real anchor with a.href set verbatim, so only an
+                    # http(s) url may survive — a javascript:/ftp:/empty
+                    # url drops the source entirely. Honest absence
+                    # beats a dead or dangerous link.
+                    and item["url"].lower().startswith(
+                        ("http://", "https://")
+                    )
                 ):
                     sources.append({"title": item["title"], "url": item["url"]})
     return sourced, sources[:MAX_WEB_SOURCES]
