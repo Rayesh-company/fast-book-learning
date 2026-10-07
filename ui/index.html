@@ -2853,6 +2853,21 @@
         }
       });
 
+      // Enter sends (Shift+Enter breaks a line) — a chat box, not a
+      // document editor: the research input's pattern, now the
+      // composer's too (ADR-0018 — the Learner types and sends without
+      // the mouse). requestSubmit rides the real submit path, so an
+      // Enter mid-flight dies on the composer's own two latches — the
+      // disabled ask-btn (the form's default submit button; a disabled
+      // submitter makes requestSubmit a no-op) and the handler's
+      // agentBusy guard — and appends nothing.
+      questionEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          form.requestSubmit();
+        }
+      });
+
       // ===== Book reader (ADR-0007) =====
       // The original PDFs, served from serve.py's /books routes and
       // rendered here with the vendored pdf.js. A click on any quote on

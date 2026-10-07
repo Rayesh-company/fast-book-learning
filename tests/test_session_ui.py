@@ -143,6 +143,22 @@ def test_readme_records_the_missing_key_fallbacks_truthfully():
     assert "falls back to the Evidence list" not in text
 
 
+def test_session_ui_composer_sends_on_enter():
+    # Ticket #22 (ADR-0018): the composer is a chat box, not a document
+    # editor — Enter sends the Question, Shift+Enter breaks a line (the
+    # research input's established pattern). The keydown routes through
+    # form.requestSubmit(), the real submit path, so mid-flight Enter
+    # dies on the composer's own two latches: the disabled ask-btn (the
+    # form's default submit button — requestSubmit no-ops on a disabled
+    # submitter) and the submit handler's agentBusy guard — appending
+    # nothing; both unlock in the handler's finally.
+    html = UI.read_text(encoding="utf-8")
+    assert 'questionEl.addEventListener("keydown"' in html
+    assert 'event.key === "Enter" && !event.shiftKey' in html
+    assert "form.requestSubmit()" in html
+    assert "if (agentBusy) return;" in html
+
+
 def test_session_ui_never_serves_from_stale_cache():
     # A browser that heuristically cached the page kept rendering the
     # pre-tab sheet after the container switchover (2026-09-11): every
