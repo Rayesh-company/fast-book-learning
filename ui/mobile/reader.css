@@ -1,0 +1,30 @@
+.phone[data-type="reader"] .reader-page {
+  padding: 0;
+  overflow: auto;
+  background: #dedfd9;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+.pdf-surface { margin: 0 auto 190px; background: white; }
+.reader-floating[hidden], .reader-selection-actions[hidden] { display: none; }
+.reader-selection-actions { position: absolute; bottom: 48px; left: 24px; right: 24px; z-index: 2; display: flex; justify-content: center; }
+.reader-selection-actions button { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 20px; border-radius: 24px; background: var(--float); color: var(--accent); border: 1px solid var(--line); box-shadow: 0 5px 22px var(--shadow); }
+.question-selection { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; background: var(--float); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 5px 22px var(--shadow); }
+.question-context { flex: 1; min-width: 0; margin: 0; padding: 4px 8px; border-right: 3px solid var(--accent); font-size: 13px; line-height: 1.8; max-height: 100px; overflow: auto; white-space: pre-wrap; }
+.pdf-placeholder { padding: 40px 24px; text-align: center; color: #626965; font-size: 14px; }
+.phone[data-type="reader"] .topbar h3 { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.phone[data-type="reader"] .topbar p { cursor: pointer; }
+.pdf-pagination, .pdf-audio-buttons { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.pdf-pagination button, .pdf-audio-buttons button, [data-pdf-clear-selection] { min-height: 44px; padding: 0 12px; border-radius: 12px; background: var(--soft); }
+.pdf-audio-buttons select { max-width: 84px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); padding: 0 10px; }
+.pdf-audio-sheet [data-reader-seek] { margin-top: 12px; padding: 0; height: 44px; }
+.pdf-audio-sheet [data-reader-audio-status], [data-pdf-error], [data-pdf-page-count] { font-size: 12px; line-height: 1.8; margin: 8px 0; color: var(--muted); }
+.pdf-audio-sheet button:disabled { opacity: .5; cursor: default; }
+.mobile-auth { position: fixed; inset: 0; z-index: 20; background: var(--scrim); display: grid; place-items: center; padding: 20px; }
+.mobile-auth[hidden] { display: none; }
+.mobile-auth form { width: 340px; max-width: 100%; background: var(--surface); color: var(--ink); border-radius: 26px; padding: 24px; }
+.mobile-auth h2 { font-size: 19px; margin-bottom: 16px; }
+.mobile-auth label { display: block; margin-top: 12px; font-size: 14px; }
+.mobile-auth input { width: 100%; min-height: 48px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 12px; margin: 6px 0; padding: 0 12px; }
+.mobile-auth [role="alert"] { min-height: 24px; font-size: 12px; line-height: 1.8; margin: 8px 0; }

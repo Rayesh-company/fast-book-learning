@@ -212,7 +212,8 @@ def test_compose_runs_the_session_sheet_in_a_container():
     # the Cognee containers.
     compose = _load_compose()
     session = compose["services"]["session"]
-    assert session["build"] == "./ui"
+    assert session["build"]["context"] == "./ui"
+    assert session["build"]["args"]["NARRATION_WITH_ALIGNMENT"] == "${NARRATION_WITH_ALIGNMENT:-0}"
     assert session["container_name"] == "chat-with-books-session"
     assert "session" in session["profiles"]
     assert "8765:8765" in [str(item) for item in session["ports"]]

@@ -150,7 +150,10 @@ services:
       - cognee-network
 
   session:
-    build: ./ui
+    build:
+      context: ./ui
+      args:
+        NARRATION_WITH_ALIGNMENT: ${NARRATION_WITH_ALIGNMENT:-0}
     image: chat-with-books-session:latest
     container_name: chat-with-books-session
     profiles:
@@ -169,6 +172,11 @@ services:
       # composer.py stays the Z.AI coding endpoint.
       LLM_ENDPOINT: https://api.avalai.ir/v1
       LLM_MODEL: ${LLM_MODEL:-openai/glm-5.3-flash}
+      # Independent Book narration: credentials remain server-side.
+      AVALAI_TTS_API_KEY: ${AVALAI_TTS_API_KEY:-}
+      AVALAI_API_KEY: ${AVALAI_API_KEY:-}
+      AVALAI_API_BASE_URL: ${AVALAI_API_BASE_URL:-}
+      NARRATION_ALIGNMENT_MODEL: /models/alignment/model_quantized.onnx
       COGNEE_URL: http://cognee:8000
       # The next-tier service listens on its CONTAINER port 8000 — 8001 is
       # only the host publish.
@@ -230,6 +238,8 @@ services:
       # serve.py's /books routes. Default BOOKS_DIR resolves to /books —
       # ui/serve.py's parent — so the mount point matches the dev layout.
       - ./books:/books:ro
+      # Optional Persian wav2vec2 artifact for exact audio focus.
+      - ./models:/models:ro
       # The page rasters' disk cache (ADR-0017): the render-cache bind
       # sits beside the books mount exactly where serve.py's default
       # BOOKS_DIR/../render-cache resolves, so a rebuild never re-renders

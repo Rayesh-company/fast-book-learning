@@ -1,0 +1,26 @@
+/* Motion expresses navigation and feedback; the Book itself stays still. */
+#app{--motion-fast:120ms;--motion-normal:200ms;--motion-ease:cubic-bezier(.22,1,.36,1)}
+.motion-enabled .product-shell .drawer,.motion-enabled .product-shell .app-sheet{animation:none}
+.motion-overlay-exit{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+.motion-overlay-exit *{pointer-events:none!important}
+.motion-overlay-exit .sheet{max-height:80%;overflow:auto;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.motion-enabled .note-tabs{position:relative}
+.motion-enabled .note-tabs button[aria-selected="true"]{border-bottom-color:transparent}
+.motion-tab-indicator{position:absolute;bottom:0;height:2px;background:var(--accent);transform-origin:left center;border-radius:2px;pointer-events:none}
+.motion-enabled button{transition:background-color var(--motion-fast) var(--motion-ease),color var(--motion-fast) var(--motion-ease),border-color var(--motion-fast) var(--motion-ease),opacity var(--motion-fast) var(--motion-ease)}
+.motion-enabled :is(.icon-button,.primary-action,.starter,.pages-button,.restore-response,.minimise){transition:transform var(--motion-fast) var(--motion-ease),background-color var(--motion-fast) var(--motion-ease),color var(--motion-fast) var(--motion-ease),border-color var(--motion-fast) var(--motion-ease),opacity var(--motion-fast) var(--motion-ease)}
+.motion-enabled :is(.icon-button,.primary-action,.starter,.pages-button,.restore-response,.minimise):active:not(:disabled){transform:scale(.97)}
+.motion-enabled :is(input,textarea,select){transition:border-color 150ms var(--motion-ease),background-color 150ms var(--motion-ease),box-shadow 150ms var(--motion-ease)}
+.motion-enabled .floating-bar textarea{border-radius:10px}
+.motion-enabled :is(.note-search,.floating-bar,.chat-composer){transition:border-color 150ms var(--motion-ease)}
+.motion-enabled :is(.note-search,.floating-bar,.chat-composer):focus-within{border-color:var(--accent)}
+@media(hover:hover) and (pointer:fine){
+ .motion-enabled :is(.nav-item,.starter,.book-choice,.history-name,.text-action):hover{background-color:var(--accent-soft)}
+ .motion-enabled .icon-button:hover:not(:disabled){background-color:var(--accent-soft)}
+ .motion-enabled .primary-action:hover:not(:disabled){transform:translateY(-1px)}
+}
+@media(prefers-reduced-motion:reduce){
+ .motion-enabled *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+ .motion-enabled :is(.icon-button,.primary-action,.starter,.pages-button,.restore-response,.minimise):active{transform:none}
+ .motion-enabled .primary-action:hover{transform:none}
+}

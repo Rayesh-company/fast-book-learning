@@ -1,0 +1,7 @@
+{
+  "name": "book-reader-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test *.test.mjs" },
+  "devDependencies": { "jsdom": "30.0.1" }
+}

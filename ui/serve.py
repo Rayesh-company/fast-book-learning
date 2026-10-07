@@ -700,6 +700,22 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
+        # The designed mobile UI now hosts the independent Book reader.
+        if path.startswith("/docs/design/mobile-preview/"):
+            self.path = self.path.replace("/docs/design/mobile-preview/", "/mobile/", 1)
+            path = self.path.split("?", 1)[0]
+            if path in ("/mobile/", "/mobile/index.html"):
+                self.path = self.path.replace(path, "/mobile/preview.html", 1)
+                path = "/mobile/preview.html"
+        if path == "/reader/narration/status":
+            if resolve_identity(self) is None:
+                return
+            try:
+                from ui.narration import narration_status
+            except ImportError:
+                from narration import narration_status
+            self._send_json(200, narration_status())
+            return
         if path.startswith("/books/") and "/page/" in path:
             self._book_page_image(path)
             return
@@ -1343,6 +1359,10 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+        narration_route = re.fullmatch(r"/books/([A-Za-z0-9_-]+)/narration", path)
+        if narration_route:
+            self._reader_narration(narration_route.group(1))
+            return
         if path == "/auth/login":
             # The one door (ADR-0013): email + password in, the
             # HttpOnly cookie out. Open by design — there is no other
@@ -1506,6 +1526,43 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         self._drain_request_body()
         self.send_error(404, "Not found")
+
+    def _reader_narration(self, document: str) -> None:
+        """Book-only generation; the reader uses this app's Account identity."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        if document not in BOOK_DATASETS:
+            self._json_error(404, "کتاب پیدا نشد.")
+            return
+        if not self._balance_gate(account):
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+        except ValueError:
+            self.close_connection = True
+            self._send_json(400, {"detail": "درخواست نادرست است."})
+            return
+        if length <= 0 or length > 300_000:
+            self._json_error(413, "متن این درخواست بیش از حد بلند است.")
+            return
+        try:
+            body = json.loads(self.rfile.read(length))
+            if not isinstance(body, dict):
+                raise ValueError
+        except (ValueError, UnicodeError):
+            self._send_json(400, {"detail": "درخواست نادرست است."})
+            return
+        try:
+            from ui.narration import generate_narration, NarrationError
+        except ImportError:
+            from narration import generate_narration, NarrationError
+        try:
+            result = generate_narration(document, body, books_dir=BOOKS_DIR)
+        except NarrationError as error:
+            self._send_json(error.status, {"code": error.code, "detail": error.messageFa})
+            return
+        self._send_json(200, result)
 
     def _quoted_answer(self, account: str) -> None:
         """Compose the Quoted answer; empty blocks = fallback.

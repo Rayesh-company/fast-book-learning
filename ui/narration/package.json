@@ -1,0 +1,9 @@
+{
+  "name": "book-narration",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22.13.0"},
+  "description": "Portable Book authority extraction and narration; optional model runtime is isolated in alignment/.",
+  "dependencies": {"pdfjs-dist": "6.3.289", "@napi-rs/canvas": "1.0.8"}
+}

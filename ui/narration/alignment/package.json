@@ -1,0 +1,9 @@
+{
+  "name": "book-narration-alignment",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22.13.0"},
+  "description": "Optional native ONNX runtime only; no model download.",
+  "dependencies": {"onnxruntime-node": "1.22.0"}
+}

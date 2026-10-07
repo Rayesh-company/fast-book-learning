@@ -1,0 +1,13 @@
+{
+  "source": "Tuba-merge-27-29/src/narration",
+  "extractedOn": "2026-10-06",
+  "sourceSha256": {
+    "provider.ts": "5241b23669d7e47e93d90a98d42d7867b15b98c1bd34a6d5ee1fe55b1afc0c24",
+    "aligner.ts": "aa83ff5c19a5c35356c3cbf0ad0d29a7e488d22db692166c42614e3a505ec625",
+    "diacritizer.ts": "c312294a78cda8a6e4190bcdf627287b1d3d183bf6cbb5eb059bdb50eaafb94c",
+    "segmenter.ts": "b969580e21a54995647673ec03edecc90ce755c4765644e71e49645b66f26b40",
+    "speech-variant.ts": "e1d922413623ececfcae3635dfe557fa3e8f2c1df07a3c28a2e82576e439443b",
+    "identity.ts": "cf41b1d18d34e97503390c8d7bf1494bda388f480278a0405095bca759dfd9e6",
+    "contracts.ts": "ecc30269d656dc36f381072f530ab544f468b73f47423a1de7abc9b533ff0a2d"
+  }
+}

@@ -20,6 +20,10 @@ ui/wheels/*.whl
 .claude/
 .zcode/
 .playwright-mcp/
+tests/reader/node_modules/
+ui/narration/node_modules/
+ui/narration/alignment/node_modules/
+models/
 .scratch/
 *.dump
 *.tar

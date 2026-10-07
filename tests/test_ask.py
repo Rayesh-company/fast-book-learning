@@ -177,10 +177,10 @@ def test_ask_gates_and_records_exactly_one_chat(tmp_path):
     assert status == 200
     assert payload["pool_size"] == len(payload["sources"]) == 2
     assert isinstance(payload["chat_id"], str) and payload["chat_id"]
-    # The ask is the ask: ONE chat recorded for the asking phone, one
+    # The ask is the ask: ONE chat recorded for the asking Account, one
     # for the second asker, and no upstream call for the rejected one.
-    assert serve.chats_today(PHONE) == 1
-    assert serve.chats_today(OTHER_PHONE) == 1
+    assert serve.chats_today(account_email_for_phone(PHONE)) == 1
+    assert serve.chats_today(account_email_for_phone(OTHER_PHONE)) == 1
     assert len(upstream.search_bodies) == 4  # two per ask
 
 
@@ -313,7 +313,7 @@ def test_the_phases_persist_their_replies_under_the_ask_row(tmp_path):
     assert ask_status == 200
     assert pick_status == 200
     assert quoted_status == 200
-    row = chat_store.latest_chat(PHONE)
+    row = chat_store.latest_chat(account_email_for_phone(PHONE))
     # An empty selection and an empty document are the honest shapes —
     # the row records them as they landed, never invents content.
     assert row["selections"] == []
