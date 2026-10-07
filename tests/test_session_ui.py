@@ -257,6 +257,31 @@ def test_session_ui_agent_citations_open_the_reader_without_a_highlight():
     )
 
 
+def test_session_ui_page_jumps_are_instant_not_css_smooth():
+    # Ticket #25 fixup: gotoPage asked scrollTo for behavior:"auto"
+    # under a comment claiming "Instant, not smooth" — but the sheet's
+    # own CSS pins .reader-pages { scroll-behavior: smooth }, and the
+    # CSSOM overrides the call's "auto" with an animated smooth scroll
+    # (the browser gate measured ~1.3s compositor animations on every
+    # citation jump; page 1 to 400+ would glide for seconds).
+    # "instant" is the one value that beats the CSS rule, so the jump
+    # site must state it explicitly AND name the trap in the comment.
+    # The CSS rule itself stays pinned — other reader scrolling keeps
+    # its smooth.
+    html = UI.read_text(encoding="utf-8")
+    goto = html[
+        html.index("async function gotoPage") : html.index(
+            "function sweepFarPages"
+        )
+    ]
+    assert 'behavior: "instant",' in goto
+    assert 'behavior: "auto"' not in goto
+    assert "scroll-behavior: smooth" in goto
+    assert 'overrides behavior:"auto"' in goto
+    # The CSS rule the jump must coexist with, not remove.
+    assert "scroll-behavior: smooth;" in html
+
+
 def test_session_ui_never_serves_from_stale_cache():
     # A browser that heuristically cached the page kept rendering the
     # pre-tab sheet after the container switchover (2026-09-11): every

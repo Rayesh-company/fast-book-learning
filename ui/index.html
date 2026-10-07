@@ -3641,11 +3641,15 @@
         // The sweep anchors here while the scroll is en route —
         // mid-flight the visible page is still far away, and sweeping
         // on that would evict the very page this jump is heading to.
-        // Instant, not smooth: a citation can be 700 pages away.
+        // Instant, and explicitly so: the .reader-pages rule
+        // scroll-behavior: smooth overrides behavior:"auto" (the
+        // CSSOM wins over the call's "auto"), so only "instant"
+        // makes this jump truly immediate — a citation can be 700
+        // pages away.
         reader.stick = n;
         readerPagesEl.scrollTo({
           top: rec.el.offsetTop - 12,
-          behavior: "auto",
+          behavior: "instant",
         });
         await ensureRendered(n);
       }
