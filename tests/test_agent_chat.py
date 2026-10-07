@@ -9,6 +9,7 @@ own arithmetic is pinned in test_question_window.py."""
 
 import json
 import sys
+import time
 from urllib.error import URLError
 
 from tests.conftest import REPO_ROOT
@@ -183,6 +184,82 @@ def test_the_reload_restores_without_the_agent_or_metering(tmp_path):
     # The restore re-read the store: one agent call total, one Question.
     assert len(upstream.urls) == 1
     assert question_window.questions_in_window(PHONE) == 1
+
+
+# --- the window state on the seam (issue #23): every reply carries it
+# so the sheet's counter never needs a second shape -----------------------
+
+
+def _persian_clock(epoch: float) -> str:
+    """The reopen time the way the server renders it: the local clock's
+    hour and minute, in Farsi digits."""
+    reopen = time.localtime(epoch)
+    return f"{reopen.tm_hour:02d}:{reopen.tm_min:02d}".translate(
+        str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+    )
+
+
+def test_the_reply_carries_the_window_state_after_the_question_lands(tmp_path):
+    upstream, base, server, original = with_agent(tmp_path, [agent_ok("پاسخ")])
+    try:
+        status, payload = ask_agent(base, {"query": "پرسش؟"})
+    finally:
+        stop_gate(server, original)
+    assert status == 200
+    # Computed AFTER record_question: the first answered message leaves
+    # 29, with this Question's own aging-out as the reopen moment.
+    assert payload["window"]["remaining"] == question_window.QUESTION_WINDOW_LIMIT - 1
+    assert isinstance(payload["window"]["reopens_at"], float)
+
+
+def test_the_history_read_carries_the_window_state_recomputed_fresh(tmp_path):
+    upstream, base, server, original = with_agent(tmp_path, [agent_ok("پاسخ")])
+    try:
+        _, reply = ask_agent(base, {"query": "پرسش؟"})
+        history_status, history = get(base, "/agent/chat/history", phone=PHONE)
+    finally:
+        stop_gate(server, original)
+    assert history_status == 200
+    # Recomputed from the store, not echoed from the reply — but over
+    # the same one recorded Question, so the two reads agree exactly.
+    assert history["window"] == reply["window"]
+    assert history["window"]["remaining"] == question_window.QUESTION_WINDOW_LIMIT - 1
+
+
+def test_the_full_window_refusal_names_when_the_window_reopens(tmp_path):
+    upstream, base, server, original = with_agent(tmp_path, [])
+    try:
+        now = time.time()
+        # Explicit seed moments, not wall-clock drift: the oldest
+        # Question sits one hour back, so the window reopens four hours
+        # from the test's own now.
+        for i in range(question_window.QUESTION_WINDOW_LIMIT):
+            question_window.record_question(PHONE, now=now - 3600 + i)
+        status, payload = ask_agent(base, {"query": "پرسش؟"})
+    finally:
+        stop_gate(server, original)
+    assert status == 429
+    expected_reopens = (now - 3600) + question_window.QUESTION_WINDOW_HOURS * 3600
+    # The payload carries the same structured window the 200s do, so
+    # the counter renders from the refusal itself.
+    assert payload["window"] == {"remaining": 0, "reopens_at": expected_reopens}
+    # And the prose names the reopen time on the server's own clock,
+    # in Farsi digits — the same reopens_at the counter will show then.
+    assert _persian_clock(expected_reopens) in payload["detail"]
+
+
+def test_an_empty_window_history_read_carries_a_full_count(tmp_path):
+    upstream, base, server, original = with_agent(tmp_path, [])
+    try:
+        history_status, history = get(base, "/agent/chat/history", phone=PHONE)
+    finally:
+        stop_gate(server, original)
+    assert history_status == 200
+    # A fresh Account: the whole window remains and nothing ages out.
+    assert history["window"] == {
+        "remaining": question_window.QUESTION_WINDOW_LIMIT,
+        "reopens_at": None,
+    }
 
 
 def test_an_anonymous_call_never_reaches_the_agent(tmp_path):

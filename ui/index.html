@@ -1285,6 +1285,10 @@
         </label>
         <div class="actions">
           <button type="submit" id="ask-btn">بپرس</button>
+          <!-- The Question window at a glance (issue #23, ADR-0017/0018):
+               how many Questions remain in the rolling five hours —
+               seeded by the restore read, re-rendered by every reply. -->
+          <span class="elapsed" id="window-count" hidden></span>
           <span class="elapsed" id="elapsed" hidden></span>
         </div>
       </form>
@@ -1463,6 +1467,7 @@
       const questionEl = document.getElementById("question");
       const buttonEl = document.getElementById("ask-btn");
       const elapsedEl = document.getElementById("elapsed");
+      const windowCountEl = document.getElementById("window-count");
       const researchModeEl = document.getElementById("research-mode");
       const agentChatEl = document.getElementById("agent-chat");
       const answerEl = document.getElementById("answer");
@@ -2537,6 +2542,30 @@
       // the chat surface (ADR-0018): no stored research session
       // reconnects here — the chat conversation below is the surface.
 
+      // The Question window at a glance (issue #23, ADR-0017/0018): the
+      // count beside the composer — how many Questions remain in the
+      // rolling five hours. The server owns the value (the reply, the
+      // restore read, and the 429 refusal all carry the same window
+      // field, so this one renderer never meets a second shape); the
+      // client renders its own clock — the server sends the machine
+      // epoch, and a full window trades the count for the moment the
+      // oldest Question ages the window open.
+      function renderWindowState(state) {
+        if (!state || typeof state.remaining !== "number") return;
+        if (state.remaining > 0) {
+          windowCountEl.hidden = false;
+          windowCountEl.textContent = `${toPersianDigits(state.remaining)} پرسش مانده`;
+        } else if (typeof state.reopens_at === "number") {
+          windowCountEl.hidden = false;
+          windowCountEl.textContent = `پنجره ساعت ${new Date(
+            state.reopens_at * 1000
+          ).toLocaleTimeString("fa-IR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })} باز می‌شود`;
+        }
+      }
+
       // The chat's reload restore (ADR-0014/0018): the persisted
       // transcript — every Question and its agent answer — is re-fetched
       // from the server's chat store. No LLM call, no metering: a
@@ -2557,6 +2586,9 @@
           } catch {
             return;
           }
+          // The counter seeds from the restore read even for an empty
+          // transcript — a fresh Learner still sees a full window.
+          renderWindowState(payload && payload.window);
           const messages =
             payload && Array.isArray(payload.messages) ? payload.messages : [];
           if (!messages.length) return;
@@ -2823,6 +2855,11 @@
             }),
           });
           const payload = await res.json().catch(() => ({}));
+          // Every reply on this seam carries the window (issue #23) —
+          // the 200 with the answer, the 429 with its refusal — so the
+          // counter updates before this turn's outcome is even read;
+          // the 502/504 shapes carry none and the render no-ops.
+          renderWindowState(payload.window);
           if (!res.ok) {
             const detail = Array.isArray(payload.detail)
               ? payload.detail.join(" ")

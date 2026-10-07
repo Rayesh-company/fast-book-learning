@@ -159,6 +159,26 @@ def test_session_ui_composer_sends_on_enter():
     assert "if (agentBusy) return;" in html
 
 
+def test_session_ui_shows_the_question_window_count_beside_the_composer():
+    # Ticket #23 (ADR-0017/0018): the Learner sees the Question window
+    # at a glance — a Farsi-digit count beside the composer in the
+    # actions row. One renderer, one shape: the restore read initializes
+    # it (even for an empty transcript — a fresh Learner still sees a
+    # full window) and every reply payload re-renders it, the 200 and
+    # the 429 alike; a full window trades the count for the reopen
+    # time, clocked client-side from the machine epoch the server sends
+    # (the browser renders its own clock, in Farsi digits).
+    html = UI.read_text(encoding="utf-8")
+    assert 'id="window-count"' in html
+    assert "renderWindowState" in html
+    assert "پرسش مانده" in html
+    assert 'toLocaleTimeString("fa-IR"' in html
+    # Both feeders call the one renderer: the restore read and every
+    # reply payload (before the !res.ok throw, so the 429 renders too).
+    assert "renderWindowState(payload && payload.window)" in html
+    assert "renderWindowState(payload.window)" in html
+
+
 def test_session_ui_never_serves_from_stale_cache():
     # A browser that heuristically cached the page kept rendering the
     # pre-tab sheet after the container switchover (2026-09-11): every

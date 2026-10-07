@@ -110,6 +110,7 @@ try:
         QUESTION_WINDOW_LIMIT,
         questions_in_window,
         record_question,
+        window_state,
     )
     from ui.research import (
         COMMAND_AUDIT,
@@ -197,6 +198,7 @@ except ImportError:  # the container runs this file as a script beside the modul
         QUESTION_WINDOW_LIMIT,
         questions_in_window,
         record_question,
+        window_state,
     )
     from composer import (
         COMPOSER_MAX_TOKENS,
@@ -357,6 +359,11 @@ AUTH_EMAIL_TAKEN_DETAIL = "این ایمیل پیش‌تر حساب گرفته �
 AUTH_BAD_ACCOUNT_BODY_DETAIL = (
     "ایمیل و گذرواژهٔ حساب را بفرستید (گذرواژه خالی نباشد)."
 )
+
+# The 429 refusal names the reopen time in Farsi digits (issue #23) —
+# the server-side twin of the sheet's toPersianDigits, so the prose and
+# the counter render the same clock.
+_PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
 
 # The generated-once-per-process secret lives here; auth_secret() reads
 # the env on every call so a test (or an operator) that pins
@@ -770,9 +777,15 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 break
             length -= len(chunk)
 
-    def _json_error(self, status: int, detail: str) -> None:
+    def _json_error(self, status: int, detail: str, extra: dict = None) -> None:
+        # extra merges into the error body (issue #23: the 429 refusal
+        # carries the window's structured state beside its Farsi prose)
+        # without touching the drain every caller relies on.
         self._drain_request_body()
-        self._send_json(status, {"detail": detail})
+        payload = {"detail": detail}
+        if extra:
+            payload.update(extra)
+        self._send_json(status, payload)
 
     def _send_json(self, status: int, payload: dict, extra_headers=()) -> None:
         """One JSON reply. The caller must have consumed the request body
@@ -1015,10 +1028,21 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # per rolling 5 hours. A full window stops the next message;
             # an answer already in flight finishes and meters on landing.
             if questions_in_window(phone) >= QUESTION_WINDOW_LIMIT:
+                # The refusal names when the window reopens (issue #23),
+                # from the store's own read — the same reopens_at the
+                # sheet's counter will render then, never a bare "try
+                # later". The clock is the server's local time, the
+                # Learner's clock, in Farsi digits.
+                state = window_state(phone)
+                reopen = time.localtime(state["reopens_at"])
+                clock = f"{reopen.tm_hour:02d}:{reopen.tm_min:02d}".translate(
+                    _PERSIAN_DIGITS
+                )
                 self._json_error(
                     429,
                     "پنجرهٔ پرسش‌های این حساب در پنج ساعت گذشته پر شده است؛"
-                    " کمی بعد دوباره بپرسید.",
+                    f" ساعت {clock} دوباره باز می‌شود.",
+                    extra={"window": state},
                 )
                 return
             # A new ask owns the sheet exactly like /ask (issue #26): the
@@ -1239,7 +1263,13 @@ class SessionHandler(SimpleHTTPRequestHandler):
         # The answer landed: this message is one Question (ADR-0018).
         record_question(phone)
         chat_store.record_agent_exchange(phone, thread_id, query.strip(), answer)
-        self._send_json(200, {"answer": answer, "thread_id": thread_id})
+        # The window AFTER this Question landed (issue #23): the reply
+        # itself carries the state, so the sheet's counter renders with
+        # the answer — the first answered message shows 29 remaining.
+        self._send_json(
+            200,
+            {"answer": answer, "thread_id": thread_id, "window": window_state(phone)},
+        )
 
     def _agent_chat_history(self) -> None:
         """The agent conversation's restore read (ADR-0014/0018): the
@@ -1255,6 +1285,10 @@ class SessionHandler(SimpleHTTPRequestHandler):
             {
                 "thread_id": f"learner-{phone}",
                 "messages": chat_store.agent_conversation(phone),
+                # The window recomputed fresh (issue #23): the restore
+                # read initializes the sheet's counter from the store,
+                # never from a reply an earlier visit cached.
+                "window": window_state(phone),
             },
         )
 

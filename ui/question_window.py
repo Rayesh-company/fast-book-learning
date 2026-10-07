@@ -65,3 +65,30 @@ def record_question(phone: str, now: float = None) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def window_state(phone: str, now: float = None) -> dict:
+    """The window at a glance (issue #23): how many Questions remain in
+    the rolling five hours, and when the oldest in-window Question ages
+    out — the moment a full window reopens. One read feeds every
+    Learner-facing surface (the seam's reply, the restore read, and the
+    429 refusal's named reopen time), so the sheet's counter and the
+    refusal can never disagree. remaining is clamped at 0 — a store may
+    honestly hold more than the limit (the refusal stops the write, it
+    cannot un-write); reopens_at is None when no Question is aging out."""
+    moment = time.time() if now is None else now
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*), MIN(at) FROM questions WHERE phone = ? AND at > ?",
+            (phone, moment - QUESTION_WINDOW_HOURS * 3600),
+        ).fetchone()
+    finally:
+        conn.close()
+    count, oldest = row
+    return {
+        "remaining": max(QUESTION_WINDOW_LIMIT - count, 0),
+        "reopens_at": (
+            oldest + QUESTION_WINDOW_HOURS * 3600 if oldest is not None else None
+        ),
+    }
