@@ -190,3 +190,26 @@ def test_session_ui_never_serves_from_stale_cache():
     assert "Cache-Control" in text
     assert 'getattr(self, "_cache_policy", None) or "no-cache"' in text
     assert '"max-age=604800, immutable"' in text
+
+
+def test_session_ui_renders_the_guaranteed_outside_the_book_marking():
+    # Ticket #24 (ADR-0018): the «بیرون از کتاب» marking is the sheet's
+    # guarantee, not the model's memory — the answer renderer takes the
+    # structured web-sourced flag and sources (derived server-side from
+    # the reply's tool-call record, never parsed from the prose), so the
+    # marking chrome and the source links render even when the model's
+    # own text carries no mark. The live reply and the reload's stored
+    # form feed the SAME renderer.
+    html = UI.read_text(encoding="utf-8")
+    assert "function agentAnswerNode(answer, webSourced, sources)" in html
+    # The marking chrome: a distinct badge named in Farsi.
+    assert 'mark.textContent = "«بیرون از کتاب»"' in html
+    assert 'className = "web-mark"' in html
+    # The sources render as real safe anchors (agentLink), not prose.
+    assert "agentLink(source.url" in html
+    # Both feeders pass the structured fields: the reply payload...
+    assert "payload.web_sourced === true" in html
+    assert "Array.isArray(payload.sources)" in html
+    # ...and the restore read's stored per-message form.
+    assert "message.web_sourced === true" in html
+    assert "Array.isArray(message.sources)" in html

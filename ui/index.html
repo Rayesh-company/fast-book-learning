@@ -899,6 +899,35 @@
         color: #a33a1f;
       }
 
+      /* The guaranteed «بیرون از کتاب» marking (issue #24, ADR-0018):
+         the badge and the source list render from the structured
+         web-sourced flag the server derived from the reply's tool-call
+         record — the platform's guarantee, present even when the
+         model's own prose omits the mark. */
+      .agent-msg.assistant .web-mark {
+        display: inline-block;
+        margin: 0 0 0.55rem;
+        padding: 0.05rem 0.6rem;
+        border: 1px solid var(--clay);
+        border-radius: 999px;
+        color: var(--clay);
+        font-size: 0.85em;
+        line-height: 1.7;
+      }
+
+      .agent-msg.assistant .web-sources {
+        margin-top: 0.35rem;
+        padding-top: 0.5rem;
+        border-top: 1px dashed rgba(196, 92, 38, 0.35);
+        font-size: 0.9em;
+      }
+
+      .agent-msg.assistant .web-sources p {
+        margin: 0 0 0.3rem;
+        color: var(--mute);
+        line-height: 1.7;
+      }
+
       .research-msg.user {
         align-self: flex-start;
         max-width: 85%;
@@ -2596,7 +2625,16 @@
           agentChatEl.replaceChildren();
           for (const message of messages) {
             agentChatEl.append(agentQuestionNode(String(message.question || "")));
-            agentChatEl.append(agentAnswerNode(String(message.answer || "")));
+            // The stored per-message guarantee rides the same renderer
+            // (#24): the reload's marking comes from the persisted form,
+            // never re-derived, never re-billed.
+            agentChatEl.append(
+              agentAnswerNode(
+                String(message.answer || ""),
+                message.web_sourced === true,
+                Array.isArray(message.sources) ? message.sources : [],
+              ),
+            );
           }
           agentScroll();
         })();
@@ -2738,8 +2776,11 @@
       // the server owns the Question window (30 answered messages per
       // 5 hours), the persistence, and the abort of this Account's
       // in-flight work. The agent's free prose IS the chat's answer —
-      // Book citations inline, web-sourced parts marked «بیرون از کتاب»
-      // with visible links (Avalai's display requirement). The retired
+      // Book citations inline, and the sheet's own guaranteed marking:
+      // when the web tool ran, the answer renders the «بیرون از کتاب»
+      // badge with visible source links from the structured flag
+      // (issue #24; ADR-0018 — the marking is the sheet's, not the
+      // model's). The retired
       // pipeline's phases stay defined for the provenance machinery but
       // nothing on this surface arms them anymore.
 
@@ -2785,11 +2826,42 @@
         return div;
       }
 
-      function agentAnswerNode(answer) {
+      function agentAnswerNode(answer, webSourced, sources) {
+        // The answer and its GUARANTEED marking (#24, ADR-0018): when
+        // the structured web-sourced flag is set (the server derived it
+        // from the reply's tool-call record — never from the prose),
+        // the answer renders the «بیرون از کتاب» badge and its source
+        // links even if the model's own text carries no mark; the flag
+        // is rendering truth only, never a gate.
         const div = document.createElement("div");
         div.className = "agent-msg assistant";
+        if (webSourced) {
+          const mark = document.createElement("p");
+          mark.className = "web-mark";
+          mark.textContent = "«بیرون از کتاب»";
+          div.append(mark);
+        }
         for (const chunk of String(answer).split(/\n{2,}/)) {
           if (chunk.trim()) div.append(agentParagraphNode(chunk.trim()));
+        }
+        if (webSourced) {
+          const list = document.createElement("div");
+          list.className = "web-sources";
+          const head = document.createElement("p");
+          head.textContent = "منابع بیرون از کتاب:";
+          list.append(head);
+          for (const source of Array.isArray(sources) ? sources : []) {
+            if (source && typeof source.url === "string" && source.url) {
+              const p = document.createElement("p");
+              const label =
+                typeof source.title === "string" && source.title
+                  ? source.title
+                  : source.url;
+              p.append(agentLink(source.url, label));
+              list.append(p);
+            }
+          }
+          div.append(list);
         }
         return div;
       }
@@ -2871,7 +2943,16 @@
           if (!answer) {
             throw new Error("عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید.");
           }
-          waiting.replaceWith(agentAnswerNode(answer));
+          // The marking guarantee rides the reply (#24): the flag and
+          // sources the server derived from the tool-call record, so
+          // the marking renders whatever the prose says.
+          waiting.replaceWith(
+            agentAnswerNode(
+              answer,
+              payload.web_sourced === true,
+              Array.isArray(payload.sources) ? payload.sources : [],
+            ),
+          );
         } catch (err) {
           waiting.replaceWith(
             agentNoticeNode(

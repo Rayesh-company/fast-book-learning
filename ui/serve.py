@@ -1249,7 +1249,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         thread_id = f"learner-{phone}"
         try:
-            answer = agent_answer(query.strip(), datasets, thread_id)
+            reply = agent_answer(query.strip(), datasets, thread_id)
         except AgentError:
             # The body is already read above, so _send_json is safe (the
             # _json_error drain would block re-reading consumed bytes).
@@ -1262,13 +1262,33 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         # The answer landed: this message is one Question (ADR-0018).
         record_question(phone)
-        chat_store.record_agent_exchange(phone, thread_id, query.strip(), answer)
+        # The persisted exchange carries the guaranteed-marked form
+        # (#24, ADR-0018): the answer text plus the web-sourced flag and
+        # sources the seam derived from the tool-call record — a reload
+        # re-renders the «بیرون از کتاب» marking from this stored form
+        # with no agent call and no re-billing.
+        chat_store.record_agent_exchange(
+            phone,
+            thread_id,
+            query.strip(),
+            reply["text"],
+            reply["web_sourced"],
+            reply["sources"],
+        )
         # The window AFTER this Question landed (issue #23): the reply
         # itself carries the state, so the sheet's counter renders with
         # the answer — the first answered message shows 29 remaining.
         self._send_json(
             200,
-            {"answer": answer, "thread_id": thread_id, "window": window_state(phone)},
+            {
+                "answer": reply["text"],
+                "thread_id": thread_id,
+                "window": window_state(phone),
+                # The marking guarantee (#24): rendering truth only —
+                # this flag never meters or gates anything.
+                "web_sourced": reply["web_sourced"],
+                "sources": reply["sources"],
+            },
         )
 
     def _agent_chat_history(self) -> None:

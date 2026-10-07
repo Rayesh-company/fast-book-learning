@@ -5,11 +5,15 @@ persists for the reload's no-rebilling restore (ADR-0014's leg), and the
 sheet's Book selection rides the seam's requestContext to the agent's
 search-books tool. The Mastra upstream is canned (scripted replies at
 ui.agent_client's urlopen seam — the tests.helpers rule); the window's
-own arithmetic is pinned in test_question_window.py."""
+own arithmetic is pinned in test_question_window.py. The «بیرون از کتاب»
+guarantee (issue #24) is the seam's too: the canned web replies carry the
+REAL tool-call record shape probed against the agent
+(agent/src/mastra/generate-shape.test.ts pins it on the TS side)."""
 
 import json
 import sys
 import time
+import sqlite3
 from urllib.error import URLError
 
 from tests.conftest import REPO_ROOT
@@ -46,6 +50,38 @@ class AgentUpstream:
 
 def agent_ok(text):
     return json.dumps({"text": text}, ensure_ascii=False).encode("utf-8")
+
+
+def agent_tool_reply(text, tool_name, results):
+    """The canned Mastra reply carrying an EXECUTED tool's record — the
+    shape generate-shape.test.ts probed against the real agent (#24):
+    the reply's top-level toolResults[] entries hold
+    payload {toolCallId, toolName, args, result}; the web tool's own
+    result is {results: [{title, url, snippet}]}."""
+    return json.dumps(
+        {
+            "text": text,
+            "toolResults": [
+                {
+                    "type": "tool-result",
+                    "from": "AGENT",
+                    "payload": {
+                        "toolCallId": "call_web_1",
+                        "toolName": tool_name,
+                        "args": {"query": "رویداد روز", "maxResults": 3},
+                        "result": {"results": results},
+                    },
+                }
+            ],
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+
+WEB_RESULTS = [
+    {"title": "منبع اول", "url": "https://example.ir/one", "snippet": "خلاصهٔ اول"},
+    {"title": "منبع دوم", "url": "https://example.ir/two", "snippet": "خلاصهٔ دوم"},
+]
 
 
 def with_agent(tmp_path, replies):
@@ -270,3 +306,145 @@ def test_an_anonymous_call_never_reaches_the_agent(tmp_path):
         stop_gate(server, original)
     assert status == 401
     assert upstream.urls == []
+
+
+# --- the guaranteed «بیرون از کتاب» marking (issue #24, ADR-0018):
+# the marking is the sheet's guarantee, not the model's memory — the
+# flag rides the tool-call record, never the answer text -------------------
+
+
+def test_the_web_tool_record_guarantees_the_marking_the_prose_omits(tmp_path):
+    # AC-1/AC-2/AC-3 in one: a reply whose prose carries NO «بیرون از
+    # کتاب» but whose tool-call record shows the web tool EXECUTED is
+    # web-sourced anyway — the 200 carries the flag and the sources, and
+    # the persisted history message carries them for the reload.
+    upstream, base, server, original = with_agent(
+        tmp_path,
+        [agent_tool_reply("پاسخ بدون هیچ نشان", "webSearchTool", WEB_RESULTS)],
+    )
+    try:
+        status, payload = ask_agent(base, {"query": "پرسش؟"})
+        history_status, history = get(base, "/agent/chat/history", phone=PHONE)
+    finally:
+        stop_gate(server, original)
+    assert status == 200
+    assert payload["answer"] == "پاسخ بدون هیچ نشان"
+    assert "بیرون از کتاب" not in payload["answer"]
+    assert payload["web_sourced"] is True
+    assert payload["sources"] == [
+        {"title": "منبع اول", "url": "https://example.ir/one"},
+        {"title": "منبع دوم", "url": "https://example.ir/two"},
+    ]
+    # The reload's stored form carries the same guarantee — one agent
+    # call total, the restore never re-billed.
+    assert history_status == 200
+    assert len(history["messages"]) == 1
+    assert history["messages"][0]["web_sourced"] is True
+    assert history["messages"][0]["sources"] == payload["sources"]
+    assert len(upstream.urls) == 1
+
+
+def test_a_reply_without_tool_records_is_not_web_sourced(tmp_path):
+    # The minimal reply (today's canned shape) carries no tool record
+    # and the prose carries no mark: no guarantee, no sources — on the
+    # reply and on the stored history message alike.
+    upstream, base, server, original = with_agent(
+        tmp_path, [agent_ok("پاسخ از کتاب‌ها")]
+    )
+    try:
+        status, payload = ask_agent(base, {"query": "پرسش؟"})
+        _, history = get(base, "/agent/chat/history", phone=PHONE)
+    finally:
+        stop_gate(server, original)
+    assert status == 200
+    assert payload["web_sourced"] is False
+    assert payload["sources"] == []
+    assert history["messages"][0]["web_sourced"] is False
+    assert history["messages"][0]["sources"] == []
+
+
+def test_a_book_tool_record_alone_is_not_web_sourced(tmp_path):
+    # The search-books tool executing is NOT the web: the flag is
+    # name-scoped to the web tool's own record, not "any tool ran".
+    upstream, base, server, original = with_agent(
+        tmp_path,
+        [
+            agent_tool_reply(
+                "پاسخ از متن کتاب", "searchBooksTool",
+                [{"reference": "document tarhe-kolli (pages 10-11)",
+                  "passage": "متن"}],
+            )
+        ],
+    )
+    try:
+        status, payload = ask_agent(base, {"query": "پرسش؟"})
+    finally:
+        stop_gate(server, original)
+    assert status == 200
+    assert payload["web_sourced"] is False
+    assert payload["sources"] == []
+
+
+def test_the_web_sources_list_is_capped_at_eight(tmp_path):
+    # A long web result list renders sanely: the seam keeps the first
+    # eight (title+url only — the snippet is the tool's own detail).
+    many = [
+        {"title": f"منبع {i}", "url": f"https://example.ir/{i}", "snippet": "خلاصه"}
+        for i in range(1, 13)
+    ]
+    upstream, base, server, original = with_agent(
+        tmp_path, [agent_tool_reply("پاسخ وب", "webSearchTool", many)]
+    )
+    try:
+        status, payload = ask_agent(base, {"query": "پرسش؟"})
+    finally:
+        stop_gate(server, original)
+    assert status == 200
+    assert len(payload["sources"]) == 8
+    assert payload["sources"][0] == {"title": "منبع 1", "url": "https://example.ir/1"}
+    assert payload["sources"][7] == {"title": "منبع 8", "url": "https://example.ir/8"}
+
+
+def test_the_store_migrates_a_deployed_agent_chats_table(tmp_path):
+    # The pre-#24 deployed DB predates the marking columns: the store's
+    # own connect migrates it (guarded ALTER per missing column), old
+    # rows read with the honest defaults, and new writes carry the
+    # guarantee.
+    from ui import chat_store
+
+    original_db = chat_store.CHAT_DB
+    db = tmp_path / "chats.sqlite3"
+    chat_store.CHAT_DB = db
+    try:
+        conn = sqlite3.connect(str(db))
+        conn.execute(
+            "CREATE TABLE agent_chats (id TEXT PRIMARY KEY, phone TEXT NOT NULL,"
+            " thread_id TEXT NOT NULL, question TEXT NOT NULL, answer TEXT NOT NULL,"
+            " created_at TEXT NOT NULL)"
+        )
+        conn.execute(
+            "INSERT INTO agent_chats (id, phone, thread_id, question, answer,"
+            " created_at) VALUES ('old', ?, 'learner-old', 'پرسش قدیمی',"
+            " 'پاسخ قدیمی', '2026-01-01T00:00:00')",
+            (PHONE,),
+        )
+        conn.commit()
+        conn.close()
+        # The old row reads with the defaults applied...
+        old = chat_store.agent_conversation(PHONE)
+        assert old[0]["answer"] == "پاسخ قدیمی"
+        assert old[0]["web_sourced"] is False
+        assert old[0]["sources"] == []
+        # ...and a new exchange persists the guarantee through the
+        # migrated columns.
+        chat_store.record_agent_exchange(
+            PHONE, "learner-new", "پرسش جدید", "پاسخ وب", True, WEB_RESULTS
+        )
+        fresh = chat_store.agent_conversation(PHONE)
+        assert fresh[-1]["web_sourced"] is True
+        assert fresh[-1]["sources"] == [
+            {"title": "منبع اول", "url": "https://example.ir/one"},
+            {"title": "منبع دوم", "url": "https://example.ir/two"},
+        ]
+    finally:
+        chat_store.CHAT_DB = original_db
