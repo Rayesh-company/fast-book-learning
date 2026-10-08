@@ -367,6 +367,65 @@ def test_session_ui_streams_the_agent_answer_progressively():
     assert "questionEl.value = \"\";" in submit
 
 
+def test_session_ui_pins_the_phone_width_responsive_base():
+    # Ticket #27: the chat environment is usable on a phone (~375px) —
+    # the responsive base ONLY (the full mobile conversation-home
+    # design stays with #20). One media block owns it: the root stays
+    # single-column (the chat IS the page; the reader is the
+    # sub-1024px full-screen layer it already was, so closing it
+    # recovers the chat — AC-3), the composer's rows fold instead of
+    # overflowing (AC-1), and long unbreakable strings — the URLs the
+    # agent relays in prose and the «بیرون از کتاب» source list
+    # labels verbatim — wrap INSIDE the message, the RTL sheet's
+    # likeliest horizontal-scroll source (AC-2). The browser gate at
+    # 375px is the ACs' evidence; these pins hold the block's
+    # load-bearing rules so a refactor cannot silently unfold them.
+    html = UI.read_text(encoding="utf-8")
+    assert "@media (max-width: 480px)" in html
+    phone = html[
+        html.index("@media (max-width: 480px)") : html.index("</style>")
+    ]
+    # The single-column root: even with the reader open the body stays
+    # ONE column — a future grid must not creep under 480px. The chat
+    # recovers by closing the reader, whose overlay rule stays pinned
+    # below (the same fixed inset-0 layer it already was before #27).
+    assert "body.reader-open {" in phone
+    assert "display: block;" in phone[: phone.index("main {")]
+    overlay = html[
+        html.index("@media (max-width: 1023.98px)") : html.index(
+            ".reader-head {"
+        )
+    ]
+    assert "#reader:not([hidden]) {" in overlay
+    assert "position: fixed;" in overlay
+    assert "inset: 0;" in overlay
+    # The composer folds: the header's status row and the ask's actions
+    # row (send + window count + elapsed) wrap instead of overflowing.
+    assert ".status-row {" in phone
+    assert ".actions {" in phone
+    rows = phone[phone.index(".status-row {") : phone.index(".agent-msg {")]
+    assert rows.count("flex-wrap: wrap;") == 2
+    # Long unbreakable strings wrap inside the message contents —
+    # inherited by the anchors and citation spans inside, so a relayed
+    # URL or reference never pushes the sheet past the viewport.
+    assert ".agent-msg {" in phone
+    assert "overflow-wrap: anywhere;" in phone[
+        phone.index(".agent-msg {") : phone.index(".reader-head {")
+    ]
+    # The reader's head folds at phone width: the Book pills take their
+    # own wrapped row (order after the close, full-width basis) so the
+    # title, both pills, and the close stay reachable — no overflow
+    # inside the fixed overlay.
+    assert ".reader-head {" in phone
+    assert "flex-wrap: wrap;" in phone[
+        phone.index(".reader-head {") : phone.index(".reader-books {")
+    ]
+    books = phone[phone.index(".reader-books {") :]
+    assert "order: 3;" in books
+    assert "flex-basis: 100%;" in books
+    assert "flex-wrap: wrap;" in books
+
+
 def test_session_ui_server_relays_the_streamed_agent_answer_unbuffered():
     # Ticket #26's server side: /agent/chat past its gates is an SSE
     # endpoint — close-delimited (no Content-Length), each relayed line

@@ -1143,6 +1143,68 @@
         flex-shrink: 0;
       }
 
+      /* ===== Phone width (#27) =====
+         The responsive base at ~375px: the chat is the page — one
+         column, the reader the sub-1024px full-screen layer it
+         already is (its own close recovers the chat), the composer's
+         rows folding instead of overflowing, and long unbreakable
+         strings — the URLs the agent relays in prose and the source
+         list labels verbatim — wrapping INSIDE the message so the
+         RTL sheet never grows a horizontal scrollbar. The full mobile
+         conversation-home design stays with #20; nothing here
+         redesigns, it only folds. */
+      @media (max-width: 480px) {
+        /* The single-column root: even with the reader open the body
+           stays one column — a future grid must not creep under
+           480px. */
+        body.reader-open {
+          display: block;
+        }
+
+        /* A hair more room for the composer and the transcript: the
+           sheet's side padding yields to a phone margin. */
+        main {
+          padding: 1.5rem 1rem 1.75rem;
+        }
+
+        /* The header's status row folds instead of squeezing its
+           three chips into one cramped line. */
+        .status-row {
+          flex-wrap: wrap;
+        }
+
+        /* The composer's actions row — send, the window count, the
+           elapsed clock — one line when they fit, folded when they
+           do not. */
+        .actions {
+          flex-wrap: wrap;
+        }
+
+        /* The RTL sheet's likeliest horizontal-scroll source: long
+           unbreakable URLs (the prose's bare links and the «بیرون از
+           کتاب» source list label them verbatim) and reference
+           tokens wrap INSIDE the message, never past it.
+           overflow-wrap inherits, so the anchors and citation spans
+           inside the paragraphs fold with them. */
+        .agent-msg {
+          overflow-wrap: anywhere;
+        }
+
+        /* The reader's head folds: the close rides the title's line,
+           the two Book pills take their own wrapped row beneath —
+           every control reachable at phone width, nothing spilling
+           past the fixed overlay's edge. */
+        .reader-head {
+          flex-wrap: wrap;
+        }
+
+        .reader-books {
+          order: 3;
+          flex-basis: 100%;
+          flex-wrap: wrap;
+        }
+      }
+
     </style>
   </head>
   <body>
