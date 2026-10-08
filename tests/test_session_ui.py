@@ -338,35 +338,57 @@ def test_session_ui_streams_the_agent_answer_progressively():
     # dead stream, or the gates' non-OK JSON) lands the honest notice
     # with the composer re-enabled. Progressive rendering touches ONLY
     # the streaming bubble — never the whole transcript per delta.
+    # Re-recorded by the architecture pass: the consumption is a NAMED
+    # unit now (readChatStream, beside agentStreamingNode) and the frame
+    # names a NAMED contract (CHAT_FRAME) — the pins anchor the named
+    # wiring, not the submit handler's retired inline shape.
     html = UI.read_text(encoding="utf-8")
-    # The stream consumer: the body rides getReader(), the SSE events
-    # split on the blank line, and the three frame kinds dispatch.
-    assert "res.body.getReader()" in html
-    assert 'buffer.indexOf("\\n\\n")' in html
-    assert 'event.startsWith("data: ")' in html
-    assert 'frame.type === "text-delta"' in html
-    assert 'frame.type === "chat-answer-finalized"' in html
-    assert 'frame.type === "chat-answer-error"' in html
+    # The named stream consumer: the body rides getReader(), the SSE
+    # events split on the blank line, and the three frame kinds
+    # dispatch on the CHAT_FRAME contract — each frame literal appears
+    # exactly ONCE, in the contract's own definition (the sheet's twin
+    # of ui/agent_client's frame names), never at a dispatch site.
+    consumer = html[
+        html.index("async function readChatStream") : html.index(
+            'form.addEventListener("submit"'
+        )
+    ]
+    assert "res.body.getReader()" in consumer
+    assert 'buffer.indexOf("\\n\\n")' in consumer
+    assert 'event.startsWith("data: ")' in consumer
+    assert "frame.type === CHAT_FRAME.delta" in consumer
+    assert "frame.type === CHAT_FRAME.finalized" in consumer
+    assert "frame.type === CHAT_FRAME.error" in consumer
+    assert html.count('"text-delta"') == 1
+    assert html.count('"chat-answer-finalized"') == 1
+    assert html.count('"chat-answer-error"') == 1
     # The delta appends into a growing plain-text bubble — the same
     # paragraph split the finalized renderer uses (agentAnswerNode's
     # /\n{2,}/), and only that bubble's own paragraphs re-render.
     assert "function agentStreamingNode()" in html
     assert "accumulated.split(/\\n{2,}/)" in html
-    # The finalize frame carries the full chrome: the answer, the
-    # guaranteed marking, the sources, and the window counter (issue
-    # #23's one renderer on the streamed path).
-    assert "renderWindowState(finalized.window);" in html
-    assert "finalized.web_sourced === true" in html
-    assert "Array.isArray(finalized.sources)" in html
-    # The finalize replaces the STREAMING bubble (not the waiting line —
-    # the waiting line was already replaced when the stream opened).
-    assert "streaming.node.replaceWith(agentAnswerNode(" in html
-    # A failed/stalled/dead stream lands the honest notice on the
-    # streaming bubble and the composer's finally re-enables + clears.
-    assert "streaming.node.replaceWith(agentNoticeNode(" in html
+    # The submit handler's composition (the architecture pass): fetch,
+    # the gates' non-OK branch, readChatStream, then the finalize
+    # rendering — the SSE mechanics live in the named unit, the turn's
+    # rendering stays in the handler.
     submit = html[html.index('form.addEventListener("submit"') : html.index(
         "questionEl.addEventListener(\"keydown\""
     )]
+    assert 'fetch("/agent/chat"' in submit
+    assert "await readChatStream(res, streaming)" in submit
+    assert "res.body.getReader()" not in submit
+    # The finalize frame carries the full chrome: the answer, the
+    # guaranteed marking, the sources, and the window counter (issue
+    # #23's one renderer on the streamed path).
+    assert "renderWindowState(finalized.window);" in submit
+    assert "finalized.web_sourced === true" in submit
+    assert "Array.isArray(finalized.sources)" in submit
+    # The finalize replaces the STREAMING bubble (not the waiting line —
+    # the waiting line was already replaced when the stream opened).
+    assert "streaming.node.replaceWith(agentAnswerNode(" in submit
+    # A failed/stalled/dead stream lands the honest notice on the
+    # streaming bubble and the composer's finally re-enables + clears.
+    assert "streaming.node.replaceWith(agentNoticeNode(" in submit
     assert "agentBusy = false;" in submit
     assert "questionEl.value = \"\";" in submit
     # The honest failure texts are SINGLE-SOURCED (#21 fixup): the two

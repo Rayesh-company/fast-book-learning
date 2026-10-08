@@ -2884,6 +2884,19 @@
       const AGENT_UNREACHABLE_DETAIL =
         "ارتباط با عامل گفت‌وگو قطع شد؛ دوباره بپرسید.";
 
+      // The stream's frame-type contract, named ONCE (the architecture
+      // pass): the sheet's twin of ui/agent_client's own frame names
+      // (CHAT_ANSWER_FINALIZED / CHAT_ANSWER_ERROR in Python, the
+      // upstream's own text-delta) — the seam's relay and this sheet
+      // are the wire's two ends, so every dispatch site below reads
+      // these consts and no bare literal can drift from the seam's
+      // vocabulary.
+      const CHAT_FRAME = {
+        delta: "text-delta",
+        finalized: "chat-answer-finalized",
+        error: "chat-answer-error",
+      };
+
       function agentLink(href, label) {
         const a = document.createElement("a");
         a.href = href;
@@ -3068,6 +3081,77 @@
         agentChatEl.scrollTop = agentChatEl.scrollHeight;
       }
 
+      // The sheet's stream consumer (#26, named by the architecture
+      // pass): ONE function owns the turn's SSE reading — open the
+      // reader on the response body, split the relay's unbuffered
+      // events on the blank line, dispatch the frame types on the
+      // CHAT_FRAME contract, and return the seam's finalize frame.
+      // Every failure THROWS the honest error for the submit handler's
+      // one catch to render: the error frame's own detail (with the
+      // failed-agent fallback text), no readable body, or a stream
+      // that died before its terminal frame. The bubble state rides
+      // the shared ``streaming`` object — readChatStream grows it,
+      // the handler replaces it with the finalized answer or notice.
+      async function readChatStream(res, streaming) {
+        if (!res.body || !res.body.getReader) {
+          throw new Error(AGENT_UNREACHABLE_DETAIL);
+        }
+        // The SSE consumer: frames are `data: <json>` lines; the
+        // relay is unbuffered, so each read carries whatever has
+        // arrived — deltas grow the bubble, the seam's terminal
+        // frame ends the turn.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let finalized = null;
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          for (;;) {
+            const at = buffer.indexOf("\n\n");
+            if (at === -1) break;
+            const event = buffer.slice(0, at);
+            buffer = buffer.slice(at + 2);
+            if (!event.startsWith("data: ")) continue;
+            let frame = null;
+            try {
+              frame = JSON.parse(event.slice("data: ".length));
+            } catch {
+              continue;
+            }
+            if (!frame || typeof frame.type !== "string") continue;
+            if (frame.type === CHAT_FRAME.delta) {
+              const text = frame.payload && frame.payload.text;
+              if (typeof text !== "string") continue;
+              if (!streaming.bubble) {
+                streaming.bubble = agentStreamingNode();
+                streaming.node.replaceWith(streaming.bubble.node);
+                streaming.node = streaming.bubble.node;
+              }
+              streaming.bubble.update(
+                (streaming.text = (streaming.text || "") + text),
+              );
+            } else if (frame.type === CHAT_FRAME.finalized) {
+              finalized = frame;
+              break;
+            } else if (frame.type === CHAT_FRAME.error) {
+              throw new Error(frame.detail || AGENT_FAILED_DETAIL);
+            }
+            // Every other relayed frame (start, step, tool rounds,
+            // the upstream's finish and [DONE]) rides for the
+            // network trace alone — the sheet renders text only.
+          }
+          if (finalized) break;
+        }
+        if (!finalized) {
+          // The stream died without its terminal frame — a broken
+          // answer never poses as a complete one.
+          throw new Error(AGENT_UNREACHABLE_DETAIL);
+        }
+        return finalized;
+      }
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const query = questionEl.value.trim();
@@ -3136,62 +3220,11 @@
               : payload.detail;
             throw new Error(detail || "پاسخ نیامد.");
           }
-          if (!res.body || !res.body.getReader) {
-            throw new Error(AGENT_UNREACHABLE_DETAIL);
-          }
-          // The SSE consumer: frames are `data: <json>` lines; the
-          // relay is unbuffered, so each read carries whatever has
-          // arrived — deltas grow the bubble, the seam's terminal
-          // frame ends the turn.
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-          let finalized = null;
-          for (;;) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            for (;;) {
-              const at = buffer.indexOf("\n\n");
-              if (at === -1) break;
-              const event = buffer.slice(0, at);
-              buffer = buffer.slice(at + 2);
-              if (!event.startsWith("data: ")) continue;
-              let frame = null;
-              try {
-                frame = JSON.parse(event.slice("data: ".length));
-              } catch {
-                continue;
-              }
-              if (!frame || typeof frame.type !== "string") continue;
-              if (frame.type === "text-delta") {
-                const text = frame.payload && frame.payload.text;
-                if (typeof text !== "string") continue;
-                if (!streaming.bubble) {
-                  streaming.bubble = agentStreamingNode();
-                  streaming.node.replaceWith(streaming.bubble.node);
-                  streaming.node = streaming.bubble.node;
-                }
-                streaming.bubble.update(
-                  (streaming.text = (streaming.text || "") + text),
-                );
-              } else if (frame.type === "chat-answer-finalized") {
-                finalized = frame;
-                break;
-              } else if (frame.type === "chat-answer-error") {
-                throw new Error(frame.detail || AGENT_FAILED_DETAIL);
-              }
-              // Every other relayed frame (start, step, tool rounds,
-              // the upstream's finish and [DONE]) rides for the
-              // network trace alone — the sheet renders text only.
-            }
-            if (finalized) break;
-          }
-          if (!finalized) {
-            // The stream died without its terminal frame — a broken
-            // answer never poses as a complete one.
-            throw new Error(AGENT_UNREACHABLE_DETAIL);
-          }
+          // The turn's SSE reading is readChatStream's (the
+          // architecture pass): it returns the seam's finalize frame
+          // or throws the honest error into the catch below — the
+          // handler keeps only the turn's rendering.
+          const finalized = await readChatStream(res, streaming);
           // The finalize frame (#26) carries the completed answer with
           // the marking guarantee (#24 — the flag and sources derived
           // server-side from the tool-call record) and the window AFTER
