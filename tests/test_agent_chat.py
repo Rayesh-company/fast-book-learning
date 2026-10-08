@@ -299,7 +299,10 @@ def test_the_answer_streams_and_finalizes_with_one_question_and_one_exchange(
     assert frames[-1]["type"] == "chat-answer-finalized"
     assert frames[-1]["answer"] == "پاسخ عامل با استناد"
     # The window rides the finalize frame, computed AFTER the Question
-    # landed (issue #23's counter contract on the streamed path).
+    # landed (issue #23's counter contract on the streamed path — the
+    # ONE home for the finalize frame's full window assertions): the
+    # first answered message leaves 29, with this Question's own
+    # aging-out as the reopen moment.
     assert frames[-1]["window"]["remaining"] == (
         question_window.QUESTION_WINDOW_LIMIT - 1
     )
@@ -532,6 +535,10 @@ def test_the_reload_restores_without_the_agent_or_metering(tmp_path):
 
 # --- the window state on the seam (issue #23): the finalize frame
 # carries it so the sheet's counter never needs a second shape ---------
+# (The finalize frame's own window assertions live in the big stream
+# test above — the #21 fixup retired the test that repeated them; the
+# ones here pin what that test did not: the fresh recompute and the
+# refusal's named reopen time.)
 
 
 def _persian_clock(epoch: float) -> str:
@@ -541,27 +548,6 @@ def _persian_clock(epoch: float) -> str:
     return f"{reopen.tm_hour:02d}:{reopen.tm_min:02d}".translate(
         str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
     )
-
-
-def test_the_finalize_frame_carries_the_window_state_after_the_question_lands(
-    tmp_path,
-):
-    upstream, base, server, original = with_agent(
-        tmp_path, [agent_stream_ok("پاسخ")]
-    )
-    try:
-        status, _, frames = ask_agent(base, {"query": "پرسش؟"})
-    finally:
-        stop_gate(server, original)
-    assert status == 200
-    finalize = frames[-1]
-    assert finalize["type"] == "chat-answer-finalized"
-    # Computed AFTER record_question: the first answered message leaves
-    # 29, with this Question's own aging-out as the reopen moment.
-    assert finalize["window"]["remaining"] == (
-        question_window.QUESTION_WINDOW_LIMIT - 1
-    )
-    assert isinstance(finalize["window"]["reopens_at"], float)
 
 
 def test_the_history_read_carries_the_window_state_recomputed_fresh(tmp_path):

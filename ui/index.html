@@ -2873,6 +2873,17 @@
 
       let agentBusy = false;
 
+      // The honest failure texts (#21 fixup): the sheet's twins of the
+      // server's own constants (AGENT_FAILED_DETAIL /
+      // AGENT_UNREACHABLE_DETAIL in ui/agent_client.py, the words the
+      // error frame itself carries) — ONE definition feeds every
+      // failure branch the stream consumer has, retry clause
+      // («دوباره بپرسید.») included, so no branch can drift from the
+      // frame's own wording.
+      const AGENT_FAILED_DETAIL = "عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید.";
+      const AGENT_UNREACHABLE_DETAIL =
+        "ارتباط با عامل گفت‌وگو قطع شد؛ دوباره بپرسید.";
+
       function agentLink(href, label) {
         const a = document.createElement("a");
         a.href = href;
@@ -3112,10 +3123,12 @@
             }),
           });
           if (!res.ok) {
-            // The gates' JSON errors (401/402/429/400) — every refusal
-            // on this seam carries the window (issue #23), so the
-            // counter updates before the notice lands; the 502/504
-            // shapes carry none and the render no-ops.
+            // Only the GATES' JSON errors (401/402/429/400) reach this
+            // branch — #26 made the answer itself a 200 SSE stream, so
+            // an upstream failure rides the error frame inside it,
+            // never a 502/504 reply. The window rides the 429's payload
+            // (issue #23); the other gate errors carry none and the
+            // render no-ops.
             const payload = await res.json().catch(() => ({}));
             renderWindowState(payload.window);
             const detail = Array.isArray(payload.detail)
@@ -3124,7 +3137,7 @@
             throw new Error(detail || "پاسخ نیامد.");
           }
           if (!res.body || !res.body.getReader) {
-            throw new Error("ارتباط با عامل گفت‌وگو قطع شد.");
+            throw new Error(AGENT_UNREACHABLE_DETAIL);
           }
           // The SSE consumer: frames are `data: <json>` lines; the
           // relay is unbuffered, so each read carries whatever has
@@ -3166,7 +3179,7 @@
                 finalized = frame;
                 break;
               } else if (frame.type === "chat-answer-error") {
-                throw new Error(frame.detail || "عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید.");
+                throw new Error(frame.detail || AGENT_FAILED_DETAIL);
               }
               // Every other relayed frame (start, step, tool rounds,
               // the upstream's finish and [DONE]) rides for the
@@ -3177,7 +3190,7 @@
           if (!finalized) {
             // The stream died without its terminal frame — a broken
             // answer never poses as a complete one.
-            throw new Error("ارتباط با عامل گفت‌وگو قطع شد.");
+            throw new Error(AGENT_UNREACHABLE_DETAIL);
           }
           // The finalize frame (#26) carries the completed answer with
           // the marking guarantee (#24 — the flag and sources derived
@@ -3193,7 +3206,7 @@
             streaming.node.replaceWith(agentNoticeNode(
                 "error",
                 err.message === "Failed to fetch"
-                  ? "ارتباط با عامل گفت‌وگو قطع شد."
+                  ? AGENT_UNREACHABLE_DETAIL
                   : String(err.message || err)
               ));
           }

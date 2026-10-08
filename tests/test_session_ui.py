@@ -165,21 +165,25 @@ def test_session_ui_composer_sends_on_enter():
 def test_session_ui_shows_the_question_window_count_beside_the_composer():
     # Ticket #23 (ADR-0017/0018): the Learner sees the Question window
     # at a glance — a Farsi-digit count beside the composer in the
-    # actions row. One renderer, one shape: the restore read initializes
-    # it (even for an empty transcript — a fresh Learner still sees a
-    # full window) and every reply payload re-renders it, the 200 and
-    # the 429 alike; a full window trades the count for the reopen
-    # time, clocked client-side from the machine epoch the server sends
-    # (the browser renders its own clock, in Farsi digits).
+    # actions row. One renderer, one shape. Since #26 the feeders are
+    # three: the history read initializes the counter (even for an
+    # empty transcript — a fresh Learner still sees a full window), the
+    # finalize frame re-renders it after each answered Question, and
+    # the 429's payload re-renders it on the refusal itself; a full
+    # window trades the count for the reopen time, clocked client-side
+    # from the machine epoch the server sends (the browser renders its
+    # own clock, in Farsi digits).
     html = UI.read_text(encoding="utf-8")
     assert 'id="window-count"' in html
     assert "renderWindowState" in html
     assert "پرسش مانده" in html
     assert 'toLocaleTimeString("fa-IR"' in html
-    # Both feeders call the one renderer: the restore read and every
-    # reply payload (before the !res.ok throw, so the 429 renders too).
+    # All three feeders call the one renderer: the restore read, the
+    # gate branch (before the !res.ok throw, so the 429 renders too),
+    # and the finalize frame.
     assert "renderWindowState(payload && payload.window)" in html
     assert "renderWindowState(payload.window)" in html
+    assert "renderWindowState(finalized.window);" in html
 
 
 def test_session_ui_agent_answers_render_live_book_citations():
@@ -365,6 +369,26 @@ def test_session_ui_streams_the_agent_answer_progressively():
     )]
     assert "agentBusy = false;" in submit
     assert "questionEl.value = \"\";" in submit
+    # The honest failure texts are SINGLE-SOURCED (#21 fixup): the two
+    # constants at the top of the chat-agent section — the sheet's
+    # twins of ui/agent_client's own AGENT_FAILED_DETAIL /
+    # AGENT_UNREACHABLE_DETAIL, the words the error frame itself
+    # carries. Each full wording (retry clause «دوباره بپرسید.»
+    # included) appears exactly ONCE — the definition — and every
+    # failure branch reads the constants: the error frame's fallback,
+    # the no-body branch, the dead stream, and the catch's
+    # Failed-to-fetch mapping (the dead-stream and no-body branches
+    # once dropped the retry clause with no pin to catch the drift).
+    assert "const AGENT_FAILED_DETAIL" in html
+    assert "const AGENT_UNREACHABLE_DETAIL" in html
+    assert html.count("عامل گفت‌وگو پاسخ نداد؛ دوباره بپرسید.") == 1
+    assert html.count("ارتباط با عامل گفت‌وگو قطع شد؛ دوباره بپرسید.") == 1
+    assert "frame.detail || AGENT_FAILED_DETAIL" in html
+    # 3 = the definition, the frame-fallback site, and the comment
+    # naming the twin; 5 = the definition, the three sites, and the
+    # comment — any inline copy that creeps back moves the count.
+    assert html.count("AGENT_FAILED_DETAIL") == 3
+    assert html.count("AGENT_UNREACHABLE_DETAIL") == 5
 
 
 def test_session_ui_pins_the_phone_width_responsive_base():

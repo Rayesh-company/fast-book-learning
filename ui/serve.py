@@ -107,8 +107,6 @@ try:
     from ui.ask import ask_pool
     from ui.agent_client import CHAT_ANSWER_FINALIZED, AgentStream, sse_frame
     from ui.question_window import (
-        QUESTION_WINDOW_LIMIT,
-        questions_in_window,
         record_question,
         window_state,
     )
@@ -195,8 +193,6 @@ except ImportError:  # the container runs this file as a script beside the modul
     import chat_store
     from agent_client import CHAT_ANSWER_FINALIZED, AgentStream, sse_frame
     from question_window import (
-        QUESTION_WINDOW_LIMIT,
-        questions_in_window,
         record_question,
         window_state,
     )
@@ -1027,13 +1023,19 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # that RECEIVES an agent answer is one Question, inside 30
             # per rolling 5 hours. A full window stops the next message;
             # an answer already in flight finishes and meters on landing.
-            if questions_in_window(phone) >= QUESTION_WINDOW_LIMIT:
+            # ONE store read feeds both the gate and the refusal (#21
+            # fixup): window_state clamps remaining at
+            # max(LIMIT - count, 0), so remaining <= 0 holds exactly
+            # when questions_in_window(phone) >= QUESTION_WINDOW_LIMIT —
+            # the gate's old count compare, equivalent by construction —
+            # and the refusal's prose and extra draw from the same state.
+            state = window_state(phone)
+            if state["remaining"] <= 0:
                 # The refusal names when the window reopens (issue #23),
                 # from the store's own read — the same reopens_at the
                 # sheet's counter will render then, never a bare "try
                 # later". The clock is the server's local time, the
                 # Learner's clock, in Farsi digits.
-                state = window_state(phone)
                 reopen = time.localtime(state["reopens_at"])
                 clock = f"{reopen.tm_hour:02d}:{reopen.tm_min:02d}".translate(
                     _PERSIAN_DIGITS

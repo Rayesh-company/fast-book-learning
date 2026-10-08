@@ -145,7 +145,7 @@ One of the product's two modes (settled 2026-10-03, Wayfinder #5): the Learner r
 _Avoid_: PDF viewer chrome (the panel is a provenance surface, not a generic viewer), book preview, using the word for the panel alone (the panel belongs to the mode now)
 
 **Chat agent (عامل گفت‌وگو)**:
-کتاب‌خوان's conversational answerer (ADR-0018): a free Mastra agent whose tools are the Book pool (Cognee's hybrid retrieval through the Python seam) and web search — it composes its answer freely, cites best-effort, and marks web-sourced parts of the answer «بیرون از کتاب». Its answer is the chat's first answer; each Learner message that receives one is a Question.
+کتاب‌خوان's conversational answerer (ADR-0018): a free Mastra agent whose tools are the Book pool (Cognee's hybrid retrieval through the Python seam) and web search — it composes its answer freely and cites best-effort. The «بیرون از کتاب» marking is the platform's guarantee, never the model's memory: when the web tool ran, the sheet renders the badge and the source list on the WHOLE answer, derived from the tool-call record; marking only parts of the prose stays the model's own habit. Its answer is the chat's first answer; each Learner message that receives one is a Question.
 _Avoid_: Research Mode (the hidden guided-research surface is not this), quote picker (the superseded first answer), chatbot
 
 **Learning mode (حالت یادگیری)**:
