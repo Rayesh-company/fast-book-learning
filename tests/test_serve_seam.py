@@ -108,7 +108,12 @@ def test_script_mode_boots_and_answers_the_routes():
                             + err.decode("utf-8", "replace")[-2000:]
                         )
                     time.sleep(0.3)
-            assert livez == 200
+            assert livez == 200, (
+                "script-mode serve never answered /livez; stderr:\n"
+                + proc.communicate(timeout=5)[1].decode("utf-8", "replace")[-2000:]
+                if livez is None
+                else livez
+            )
             request = urllib.request.Request(
                 f"http://127.0.0.1:{port}/agent/chat",
                 data=json.dumps({"query": "پرسش؟"}).encode("utf-8"),
