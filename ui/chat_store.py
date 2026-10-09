@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import secrets
 import sqlite3
 from pathlib import Path
 
@@ -38,6 +39,30 @@ def _connect() -> sqlite3.Connection:
         "blocks_json TEXT NOT NULL, truncated INTEGER NOT NULL DEFAULT 0, "
         "created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS agent_chats ("
+        "id TEXT PRIMARY KEY, phone TEXT NOT NULL, thread_id TEXT NOT NULL, "
+        "question TEXT NOT NULL, answer TEXT NOT NULL, "
+        "web_sourced INTEGER NOT NULL DEFAULT 0, "
+        "sources TEXT NOT NULL DEFAULT '[]', "
+        "created_at TEXT NOT NULL)"
+    )
+    # The deployed DB's pre-#24 table predates the marking columns — the
+    # store migrates itself on connect (guarded ALTER per missing
+    # column), so a deployed DB reads old rows with the honest defaults
+    # and takes the guarantee on new writes without a manual step.
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(agent_chats)")
+    }
+    if "web_sourced" not in columns:
+        conn.execute(
+            "ALTER TABLE agent_chats ADD COLUMN web_sourced"
+            " INTEGER NOT NULL DEFAULT 0"
+        )
+    if "sources" not in columns:
+        conn.execute(
+            "ALTER TABLE agent_chats ADD COLUMN sources TEXT NOT NULL DEFAULT '[]'"
+        )
     return conn
 
 
@@ -137,6 +162,81 @@ def update_quoted(chat_id: str, phone: str, blocks, truncated: bool = False) -> 
         conn.commit()
     finally:
         conn.close()
+
+
+def record_agent_exchange(
+    phone: str,
+    thread_id: str,
+    question: str,
+    answer: str,
+    web_sourced: bool = False,
+    sources=None,
+) -> str:
+    """One Question's row in the agent conversation (ADR-0018): the
+    Learner's message, the agent's answer, and the guaranteed «بیرون از
+    کتاب» marking (#24) — the web-sourced flag and its sources as the
+    seam derived them from the tool-call record, kept for the reload's
+    restore so the marking re-renders from the stored form with no agent
+    call. A malformed source never corrupts the row (title+url kept,
+    the rest dropped). Returns the minted row id."""
+    exchange_id = secrets.token_hex(8)
+    clean_sources = [
+        {"title": source["title"], "url": source["url"]}
+        for source in (sources or [])
+        if isinstance(source, dict)
+        and isinstance(source.get("title"), str)
+        and isinstance(source.get("url"), str)
+    ]
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO agent_chats (id, phone, thread_id, question, answer,"
+            " web_sourced, sources, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                exchange_id,
+                phone,
+                thread_id,
+                question,
+                answer,
+                1 if web_sourced else 0,
+                json.dumps(clean_sources, ensure_ascii=False),
+                _now(),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return exchange_id
+
+
+def agent_conversation(phone: str, limit: int = 50) -> list:
+    """The phone's agent-chat transcript — the newest ``limit``
+    exchanges, oldest first: the reload's restore payload (ADR-0014's
+    persistence leg), each message carrying its stored «بیرون از کتاب»
+    guarantee (#24) so the marking renders without re-deriving it. No
+    LLM call, no metering; one phone's reload never reads another's
+    conversation."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, question, answer, web_sourced, sources, created_at"
+            " FROM agent_chats WHERE phone = ?"
+            " ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (phone, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "id": row[0],
+            "question": row[1],
+            "answer": row[2],
+            "web_sourced": bool(row[3]),
+            "sources": json.loads(row[4]),
+            "created_at": row[5],
+        }
+        for row in reversed(rows)
+    ]
 
 
 def latest_chat(phone: str):

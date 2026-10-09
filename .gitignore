@@ -40,3 +40,16 @@ ui/sessions.sqlite3
 benchmark/pilot/accounts.json
 # The pilot's run outputs (per-run JSON/CSV, the reports) — data, not code.
 benchmark/pilot/runs/
+
+# The Mastra chat agent service (ADR-0018)
+agent/node_modules/
+agent/.mastra/
+agent/dist/
+agent/src/mastra/public/data/
+
+# Reticle browser-test artifacts
+.reticle/
+
+# Local e2e scratch
+e2e-tmp/
+agent-dev.log

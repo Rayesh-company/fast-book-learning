@@ -428,3 +428,43 @@ def test_the_cost_chip_speaks_credit():
     assert "balance_toman" in html
     # The pinned credit note and its DRAFT row travel together.
     assert "از اعتبار" in html
+
+
+def test_session_ui_server_relays_the_streamed_agent_answer_unbuffered():
+    # Ticket #26's server side: /agent/chat past its gates is an SSE
+    # endpoint — close-delimited (no Content-Length), each relayed line
+    # written as it arrives — and the metering is completion-anchored:
+    # record_question and record_agent_exchange run only on the
+    # completed answer, after the relay loop, never on the error path.
+    # The abandoned branch (a Learner whose connection died mid-stream)
+    # aborts the upstream and returns BEFORE any metering — the browser
+    # gate exercises the disconnect itself; this pin holds the ordering.
+    text = SERVE.read_text(encoding="utf-8")
+    handler = text[
+        text.index("def _agent_chat(self, phone: str)") : text.index(
+            "def _agent_chat_history(self)"
+        )
+    ]
+    assert 'self.send_header("Content-Type", "text/event-stream' in handler
+    assert "AgentStream(" in handler
+    # The unbuffered relay: one line at a time onto the socket, the
+    # _relay close-delimited pattern.
+    assert "self.wfile.write(line)" in handler
+    # Completion-anchored metering: both writes sit AFTER the relay loop
+    # and behind the completed-reply guard, never on the error path; the
+    # finalize frame rides the seam's own line builder and terminal
+    # frame name (the error frame's name and text are pinned on the
+    # seam tests' wire assertions).
+    assert "record_question(phone)" in handler
+    assert "record_agent_exchange(" in handler
+    assert "sse_frame(" in handler
+    assert "CHAT_ANSWER_FINALIZED" in handler
+    assert handler.index("self.wfile.write(line)") < handler.index(
+        "record_question(phone)"
+    )
+    # The abandoned branch: abort and return, meter nothing.
+    abort_branch = handler[
+        handler.index("stream.abort()") : handler.index("record_question(phone)")
+    ]
+    assert "return" in abort_branch
+
