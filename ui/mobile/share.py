@@ -9,9 +9,15 @@ import argparse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import re
+import sys
 from urllib.parse import unquote, urlsplit
 
 UI_DIR = Path(__file__).resolve().parents[1]
+try:
+    from ui import lectures
+except ImportError:  # run as a script: python ui/mobile/share.py
+    sys.path.insert(0, str(UI_DIR))
+    import lectures
 BOOK_IDS = {"tarhe-kolli", "70143-336"}
 STATIC_TYPES = {".html", ".css", ".mjs", ".js", ".woff2", ".woff", ".ttf", ".svg", ".png", ".jpg"}
 
@@ -36,6 +42,12 @@ def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR):
                 return
             if path == "/mobile/":
                 path = "/mobile/index.html"
+            if path.startswith("/books/") and "/lectures" in path:
+                # Recorded lecture read-along: static timings and audio
+                # (LECTURE_AUDIO_DIR), no provider or account involved.
+                if not lectures.handle(self, path, books_dir, BOOK_IDS, head):
+                    self.send_error(404)
+                return
             book = re.fullmatch(r"/books/([A-Za-z0-9_-]+)(/book|\.pdf|\.pages\.json)", path)
             if book and book[1] in BOOK_IDS:
                 suffix = ".pages.json" if book[2] == ".pages.json" else ".pdf"
@@ -118,7 +130,12 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--books-dir", type=Path, required=True)
+    parser.add_argument("--lecture-audio-dir", type=Path,
+                        help="session audio for the lecture read-along (sets LECTURE_AUDIO_DIR)")
     args = parser.parse_args()
+    if args.lecture_audio_dir:
+        import os
+        os.environ["LECTURE_AUDIO_DIR"] = str(args.lecture_audio_dir.resolve())
     server = ThreadingHTTPServer((args.host, args.port), preview_handler(args.books_dir))
     print(f"Book preview http://{args.host}:{args.port}/mobile/?demo=1", flush=True)
     try:

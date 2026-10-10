@@ -232,6 +232,12 @@ services:
       # this the notes land in /app inside the container and every
       # image rebuild throws them away.
       NOTES_DB: /data/notes.sqlite3
+      # Lecture read-along (books/<id>.lectures.json): the session audio
+      # never rides git. Either mount the files (LECTURE_AUDIO_HOST_DIR,
+      # served with Range at /books/<id>/lectures/<n>/audio) or point
+      # LECTURE_AUDIO_BASE_URL at a CDN/object-store prefix.
+      LECTURE_AUDIO_DIR: /lecture-audio
+      LECTURE_AUDIO_BASE_URL: ${LECTURE_AUDIO_BASE_URL:-}
     volumes:
       - session_quota:/data
       # The Book set's PDFs + page indexes (ADR-0007), served by
@@ -240,6 +246,8 @@ services:
       - ./books:/books:ro
       # Optional Persian wav2vec2 artifact for exact audio focus.
       - ./models:/models:ro
+      # Lecture audio (<dir>/<book-id>/session_NN.mp3 or <dir>/session_NN.mp3).
+      - ${LECTURE_AUDIO_HOST_DIR:-./lecture-audio}:/lecture-audio:ro
       # The page rasters' disk cache (ADR-0017): the render-cache bind
       # sits beside the books mount exactly where serve.py's default
       # BOOKS_DIR/../render-cache resolves, so a rebuild never re-renders

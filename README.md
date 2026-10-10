@@ -173,6 +173,36 @@ One timestamped archive holds everything git does not — **the memory layer's `
   ```
 - **Restore** — T15 (#21) ships `scripts/restore.sh` and the drill is rehearsed: the newest archive is restored into a throwaway Postgres on port `5433` (never the live stack) and verified — the rehearsal transcript and the ritual live in `docs/restore-drill.md`. The raw path stays HANDOFF.md's: `pg_restore -U cognee -d cognee_db --clean --if-exists` (prefix `MSYS_NO_PATHCONV=1` on Git Bash), unpack the stores and books into the tree.
 
+## Lecture read-along (درس‌گفتار)
+
+خواننده می‌تواند صوت درس‌گفتارِ هر جلسه را پخش کند و جملهٔ در حال خوانده‌شدن روی همان صفحهٔ PDF کتاب، جمله‌به‌جمله، هایلایت می‌شود؛ صفحه خودکار ورق می‌خورد و با لمس یک جمله صوت به همان‌جا می‌رود.
+
+The product reader (`/mobile/`) shows a headphones button when the open Book has a lecture index. It opens a bar with the session (جلسه) picker, play/pause, ±10 s, a seek bar, «بدون مقدمه» (start at the lecture's `lecture_start`, skipping the recorded intro) and a caption of the current sentence. While the audio plays, the spoken sentence is highlighted **on the rendered PDF page** (an overlay drawn from precomputed line boxes, not the text layer); the reader turns to the sentence's page — a sentence that crosses a page break moves to the next page part-way through, in proportion to its lines — and scrolls it into view. Clicking a sentence on the page seeks the audio to it. Sentences with rough timing (Quran passages, garbled PDF glyphs, interpolated times) or an approximate box use a quieter underlined highlight; between sentences (lecturer commentary not in the Book) the last sentence stays faintly highlighted. Starting the lecture pauses the TTS narration and vice versa.
+
+**Data.** `books/<id>.lectures.json` (committed, like `.pages.json`) holds per session the audio file name, duration, intro/outro marks, coverage and the Book's sentences with `start`/`end` seconds, `page`/`page_end`, `confidence`, flags (`quran`, `garbled_pdf_text`, `interpolated`, `rough_timing`, `low_confidence`, `out_of_order`, `fuzzy_boxes`) and `boxes` — `[page, x0, y0, x1, y1]` in PDF points, top-left origin, one per text line. Build it once per Book from the aligner's `reader_alignment.json` and the same PDF edition the reader serves:
+
+```bash
+uv run --with pymupdf python tools/build_lecture_index.py \
+    --alignment path/to/reader_alignment.json --pdf books/tarhe-kolli.pdf --book tarhe-kolli
+# → books/tarhe-kolli.lectures.json: 28 sessions, 7052 sentences, 7013 with boxes (5890 exact, 1123 fuzzy)
+```
+
+The builder matches each sentence against the page's body words (running header and footnote zone excluded) on a letters-only normalisation, so the PDF's lam-alef encoding, ZWNJ/space differences, tatweel, diacritics, footnote digits and unmapped Quran glyphs (▯) don't break it; sentences are matched in book order and may span two pages. It also orders timings by start and clips overlaps. A sentence it cannot place keeps its timing and shows in the caption only. `tests/fixtures/lectures-sample.json` is a small sample of the format.
+
+**Audio** never goes in git (`*.mp3`/`*.flac` are ignored). Either:
+
+- set `LECTURE_AUDIO_DIR` to a folder holding `<id>/session_NN.mp3` (or `session_NN.mp3` directly, for a single Book); the server streams it with HTTP Range at `/books/<id>/lectures/<n>/audio`. In compose, put the files in `./lecture-audio/` or point `LECTURE_AUDIO_HOST_DIR` at them — it is mounted read-only at `/lecture-audio`; or
+- set `LECTURE_AUDIO_BASE_URL` (e.g. `https://cdn.example/lectures/{book}/`) and the browser fetches `<base>/session_NN.mp3` from there.
+
+**Routes** (Account-gated on `ui/serve.py`, like the narration status; open on the LAN preview host like its PDFs): `GET /books/<id>/lectures` (session list, `audio_available`), `GET /books/<id>/lectures/<n>` (timings, boxes, `page_sizes`, `audio_url`), `GET /books/<id>/lectures/<n>/audio`. Try it without the stack:
+
+```bash
+python ui/mobile/share.py --host 127.0.0.1 --port 8766 --books-dir books --lecture-audio-dir /path/to/mp3
+# open http://127.0.0.1:8766/mobile/?demo=1 and tap the headphones button
+```
+
+Code: `tools/build_lecture_index.py`, `ui/lectures.py`, `ui/book-reader/lecture-sync.mjs` (binary-search lookup, page split, hit test), `ui/book-reader/lecture-player.mjs` (controls), box painting in `ui/book-reader/index.mjs`. Tests: `tests/test_lectures.py`, `tests/reader/lecture.test.mjs`.
+
 ## Tests
 
 ```powershell

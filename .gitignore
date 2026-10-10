@@ -40,3 +40,8 @@ ui/sessions.sqlite3
 benchmark/pilot/accounts.json
 # The pilot's run outputs (per-run JSON/CSV, the reports) — data, not code.
 benchmark/pilot/runs/
+
+# Lecture audio stays out of git (served from LECTURE_AUDIO_DIR or a CDN).
+lecture-audio/
+*.mp3
+*.flac

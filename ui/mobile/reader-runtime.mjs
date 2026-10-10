@@ -2,6 +2,7 @@ import { createBookReader, PDF_RENDER_OPTIONS } from '../book-reader/index.mjs';
 import { installNarrationControls } from '../book-reader/audio-controls.mjs';
 import { createPanelFocus } from './panel-focus.mjs';
 import { installContinuousAudio } from '../book-reader/continuous-audio.mjs';
+import { installLecturePlayer } from '../book-reader/lecture-player.mjs';
 import { pdfParagraphs } from '../book-reader/paragraphs.mjs';
 import { readPdfText } from '../book-reader/pdf-text.mjs';
 import { buildPdfTextIndex } from '../book-reader/pdf-content.mjs';
@@ -194,6 +195,13 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
         state.controls=installContinuousAudio({element:phone,fetchImpl:audioFetch,reader:state.reader,
           getContext:()=>({doc:state.book,page:state.page,numPages:state.pdf.numPages}),getPageData:pageData,
           showPage:async page=>{if(page===state.page){await state.ready;return;}await render(state,page,false,{audio:true});}});
+        // Lecture read-along: recorded session audio is static (no provider
+        // spend), so it also plays in the loginless preview.
+        state.lecture=installLecturePlayer({element:phone,reader:state.reader,book:state.book,fetchImpl,
+          getPage:()=>state.page,showPage:async page=>{if(page===state.page){await state.ready;return;}state.ready=render(state,page,false,{audio:true});await state.ready;},
+          onActivate:()=>state.controls?.pause()});
+        phone.querySelector('[data-audio-play]')?.addEventListener('click',()=>state.lecture?.pause(),{signal:listeners.signal});
+        phone.lecturePlayer=state.lecture;
         state.chrome=installReaderChrome({phone,getPage:()=>state.page,getCount:()=>state.pdf.numPages,goToPage:changePage});
         state.gestures=installReaderGestures({viewport:state.viewport,surface:state.surface,getZoom:()=>state.zoom,
           hasSelection:()=>!!state.reader.captureSelection()||!doc.getSelection()?.isCollapsed,
@@ -228,8 +236,8 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
 
   function remove(state) {
     state.phone.dataset.pdfScroll = String(state.viewport.scrollTop);
-    state.revision++; state.panelFocus.dispose(); state.chrome?.dispose();state.gestures?.dispose();state.controls?.dispose(); state.reader?.clear(); state.observer?.disconnect();
-    delete state.phone.bookReader; records.delete(state.phone);
+    state.revision++; state.panelFocus.dispose(); state.chrome?.dispose();state.gestures?.dispose();state.controls?.dispose(); state.lecture?.dispose(); state.reader?.clear(); state.observer?.disconnect();
+    delete state.phone.bookReader; delete state.phone.lecturePlayer; records.delete(state.phone);
   }
 
   function reconcile() {
