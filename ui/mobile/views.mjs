@@ -21,9 +21,22 @@ function quotePart(part,p){
  const text=part.quote??part.text;
  return `<button class="cite-sent" data-action="citation" data-book="${esc(book)}" data-page="${page}" data-reference="${esc(reference)}" data-text="${esc(text)}" title="${esc(part.pages_label||pageLabel([page]))}">${esc(text)}</button>`;
 }
+function formatAgentParagraph(text, p) {
+ const paragraphs = String(text || '').split(/\n{2,}/).map(x => x.trim()).filter(Boolean);
+ if (!paragraphs.length) return `<p>${esc(text)}</p>`;
+ return paragraphs.map(para => {
+  let escaped = esc(para);
+  escaped = escaped.replace(/\bdocument\s+([\w.-]+)\s*\((pages?\s+(\d+)(?:-(\d+))?)\)/g, (m, doc, label, first, last) => {
+   const page = Number(first) || 0;
+   const book = doc || p.book || '';
+   return `<button type="button" class="cite-sent agent-cite" data-action="citation" data-book="${esc(book)}" data-page="${page}" data-reference="${esc(m)}" data-text="${esc(m)}">${esc(m)}</button>`;
+  });
+  return `<p>${escaped}</p>`;
+ }).join('');
+}
 function answerBody(p){
  if(p.blocks?.length)return p.blocks.map(b=>b.type==='heading'?`<h3>${esc(b.text)}</h3>`:b.type==='references'?`<h3>منابع</h3>${(b.items||[]).map(x=>`<p>${esc(x)}</p>`).join('')}`:`<p>${b.parts?.length?b.parts.map(part=>part.quote!=null||part.type==='quote'?quotePart(part,p):esc(part.text)).join(' '):esc(b.text)}</p>`).join('');
- return `<p>${esc(p.text)}</p>`;
+ return formatAgentParagraph(p.text, p);
 }
 export function answer(p,index){return `<article class="assistant" data-message="${index}">${answerBody(p)}${(p.citations||[]).filter(c=>c.doc&&c.page).map(c=>`<p><button class="cite-sent" data-action="citation" data-book="${esc(c.doc)}" data-page="${c.page}" data-text="${esc(c.text)}">${esc(c.text)}</button><button class="cite-pages" data-action="citation" data-book="${esc(c.doc)}" data-page="${c.page}" data-text="${esc(c.text)}">${esc(bookInfo(c.doc).title)} · ${pageLabel([c.page])}</button></p>`).join('')}${p.outside?.length?`<section class="outside-book"><h4>بیرون از کتاب</h4>${p.outside.map(x=>`<p>${esc(x.text)}</p>${/^https?:\/\//.test(x.url||'')?`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title||'منبع وب')} ↗</a>`:''}`).join('')}</section>`:''}<div class="answer-actions">${ib('copy','کپی پاسخ','copy-answer',`data-index="${index}"`)}${ib('save',p.saved?'ذخیره شد':'ذخیره در یادداشت','save-answer',`data-index="${index}" ${p.saved?'disabled':''}`)}${ib('more','بیشتر','answer-more',`data-index="${index}"`)}</div>${p.study?`<div class="study-card"><div class="study-head">${icon('book')}<span>${esc(bookInfo(p.study.doc).title)} · ${pageLabel([p.study.page])}</span></div><p>${esc(p.study.text)}</p>${action('بازکردن کتاب '+icon('book'),'study',`data-book="${esc(p.study.doc)}" data-page="${p.study.page}"`)}</div>`:''}</article>`;}
 function message(m,i){const p=m.payload||{};return m.role==='user'?`<div class="user-turn"><div class="user-message">${esc(p.text)}</div><p class="message-context">${esc(bookInfo(p.book).title)}${p.pages?.length?' · '+pageLabel(p.pages):''}</p>${p.selection?.text?`<details class="sent-selection"><summary>متن انتخاب‌شده</summary><p>${esc(p.selection.text)}</p></details>`:''}${p.failure?`<p class="inline-error" role="alert">${esc(p.failure)}</p>`:''}${p.failed?`<button class="send-failure" data-action="retry" data-index="${i}">ارسال نشد · تلاش دوباره</button>`:''}</div>`:answer(p,i);}
