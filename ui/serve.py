@@ -521,6 +521,7 @@ def ensure_first_admin_from_env() -> None:
     if not email or not password:
         return
     if ensure_admin(email, password):
+        credit_balance(email, 999_999_999_999)
         audit_quiet(audit.ADMIN_SEEDED, actor_email=email, detail={"email": email})
         sys.stderr.write(
             f"مدیر نخستین از ADMIN_EMAIL ساخته شد ({email}) و در "
@@ -1211,6 +1212,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
         that cannot be paid for never starts. A turn or phase already
         running finishes; only the NEXT spend is stopped. The daily
         quota still applies on top of the Balance, never instead."""
+        acc = account_by_email(account)
+        if acc and acc.get("role") == "admin":
+            return True
         if get_balance(account) <= 0:
             self._json_error(
                 402,

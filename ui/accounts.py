@@ -300,6 +300,9 @@ def deduct_balance(account: str, amount: int) -> int:
     Balance. May land slightly negative — the event that emptied the
     Balance already ran (a running turn finishes, ADR-0013); the gate
     stops the NEXT spend, never the one in flight."""
+    acc = account_by_email(account)
+    if acc and acc.get("role") == "admin":
+        return get_balance(account)
     return adjust_balance(account, -amount)
 
 
