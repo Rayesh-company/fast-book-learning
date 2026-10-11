@@ -232,7 +232,7 @@ services:
       # this the notes land in /app inside the container and every
       # image rebuild throws them away.
       NOTES_DB: /data/notes.sqlite3
-      # Lecture read-along (books/<id>.lectures.json): the session audio (.m4a) is
+      # Lecture read-along (books/<id>.lectures.json): the session audio (.mp3) is
       # committed under books/<id>/lectures/ and arrive with the ./books
       # mount below, served with Range at /books/<id>/lectures/<n>/audio.
       # Optional overrides: LECTURE_AUDIO_DIR (a container path) or
@@ -242,7 +242,7 @@ services:
     volumes:
       - session_quota:/data
       # The Book set's PDFs + page indexes (ADR-0007) and the committed
-      # lecture audio (books/<id>/lectures/session_NN.m4a), served by
+      # lecture audio (books/<id>/lectures/session_NN.mp3), served by
       # serve.py's /books routes. Default BOOKS_DIR resolves to /books —
       # ui/serve.py's parent — so the mount point matches the dev layout.
       - ./books:/books:ro

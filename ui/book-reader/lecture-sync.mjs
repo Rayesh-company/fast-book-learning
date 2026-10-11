@@ -5,8 +5,6 @@
  * [page, x0, y0, x1, y1] in PDF points (top-left origin).
  */
 
-const ROUGH = new Set(['rough_timing', 'interpolated', 'fuzzy_boxes']);
-
 /** Index the sentences for lookup; defensive about order and overlaps. */
 export function createLectureTrack(session) {
   const sentences = [...(session?.sentences ?? [])]
@@ -31,10 +29,9 @@ export function sentenceIndexAt(track, time) {
   return { index: found, active: found >= 0 && time < ends[found] };
 }
 
-/** Highlight style: 'exact', 'rough' (interpolated / Quran / fuzzy box), or 'held'. */
+/** Highlight style: 'exact' while the sentence is being spoken, 'held' in gaps between sentences. */
 export function toneFor(sentence, active = true) {
-  if (!active) return 'held';
-  return sentence.flags?.some(flag => ROUGH.has(flag)) ? 'rough' : 'exact';
+  return active ? 'exact' : 'held';
 }
 
 /** Pages the sentence's boxes lie on, in order. */

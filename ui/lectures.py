@@ -7,7 +7,7 @@ carries its ``start``/``end`` seconds in the session's audio and its line
 ``boxes`` ([page, x0, y0, x1, y1], PDF points) on the PDF pages.
 
 The session audio is committed beside the index, at
-``<books dir>/<dataset>/lectures/<file>`` (the fixed AAC-LC .m4a files), and served
+``<books dir>/<dataset>/lectures/<file>`` (the 32 kbps mono .mp3 files), and served
 with HTTP Range. Optional overrides: ``LECTURE_AUDIO_DIR`` (another local
 folder) or ``LECTURE_AUDIO_BASE_URL`` (a CDN/object store the browser
 fetches from directly; never touched here).

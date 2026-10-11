@@ -22,7 +22,7 @@
  "sessions": [
   {
    "session": 1,
-   "audio": "session_01.m4a",
+   "audio": "session_01.mp3",
    "duration": 2484.2,
    "lecture_start": 20.0,
    "lecture_end": 2472.22,
@@ -209,7 +209,7 @@
   },
   {
    "session": 2,
-   "audio": "session_02.m4a",
+   "audio": "session_02.mp3",
    "duration": 3800.7,
    "lecture_start": 20.0,
    "lecture_end": 3790.66,

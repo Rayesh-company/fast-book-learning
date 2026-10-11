@@ -23,13 +23,22 @@ export function installLecturePlayer({ element, reader, book, getPage, showPage,
   const audio = createAudio ? createAudio() : doc.createElement('audio');
   audio.preload = 'metadata';
   let sessions = [], session = null, track = null, last = '', turning = null, loadToken = 0, owning = false;
-  let listReady = null;
+  let listReady = null, ticker = null;
 
   const say = text => { if (status) status.textContent = text || ''; };
+  function stopTicker() {
+    if (ticker !== null) { clearInterval(ticker); ticker = null; }
+  }
   function setPlayState() {
     const playing = !audio.paused && !audio.ended;
     play.dataset.state = playing ? 'playing' : 'paused';
     play.setAttribute('aria-label', playing ? 'مکث درس‌گفتار' : 'پخش درس‌گفتار');
+    if (playing && ticker === null) {
+      ticker = setInterval(() => { sync(); }, 60);
+      ticker?.unref?.();
+    } else if (!playing) {
+      stopTicker();
+    }
   }
 
   async function loadList() {
@@ -156,6 +165,6 @@ export function installLecturePlayer({ element, reader, book, getPage, showPage,
     get track() { return track; },
     get audio() { return audio; },
     get ready() { return listReady; },
-    dispose() { audio.pause(); clearFocus(); life.abort(); audio.removeAttribute('src'); },
+    dispose() { stopTicker(); audio.pause(); clearFocus(); life.abort(); audio.removeAttribute('src'); },
   };
 }

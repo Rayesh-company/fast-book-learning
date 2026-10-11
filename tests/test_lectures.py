@@ -113,17 +113,22 @@ def test_the_committed_index_is_monotonic_and_boxed():
     assert index["format"] == 1 and len(index["sessions"]) == 28
     total = boxed = 0
     for session in index["sessions"]:
+        assert session["audio"].endswith(".mp3")
         starts = [s["start"] for s in session["sentences"]]
         assert starts == sorted(starts)
         for a, b in zip(session["sentences"], session["sentences"][1:]):
             assert a["end"] <= b["start"] + 1e-9
+            for ba in a.get("boxes", []):
+                for bb in b.get("boxes", []):
+                    if ba[0] == bb[0] and abs(ba[2] - bb[2]) < 8 and abs(ba[4] - bb[4]) < 8:
+                        assert min(ba[3], bb[3]) - max(ba[1], bb[1]) <= 5.0
         for s in session["sentences"]:
             total += 1
             boxed += bool(s.get("boxes"))
             for page, x0, y0, x1, y1 in s.get("boxes", []):
                 width, height = index["page_sizes"][str(page)]
                 assert 0 <= x0 < x1 <= width and 0 <= y0 < y1 <= height
-    assert boxed / total > 0.99
+    assert total > 11000 and boxed / total > 0.999
 
 
 # ------------------------------------------------------------ the routes
@@ -135,7 +140,7 @@ def lecture_books(tmp_path, monkeypatch):
     shutil.copy(SAMPLE, books / "tarhe-kolli.lectures.json")
     audio = books / "tarhe-kolli" / "lectures"  # the in-repo default layout
     audio.mkdir(parents=True)
-    (audio / "session_01.m4a").write_bytes(bytes(range(256)) * 4)
+    (audio / "session_01.mp3").write_bytes(bytes(range(256)) * 4)
     monkeypatch.setattr(serve, "BOOKS_DIR", books)
     monkeypatch.delenv("LECTURE_AUDIO_DIR", raising=False)
     monkeypatch.delenv("LECTURE_AUDIO_BASE_URL", raising=False)
@@ -168,7 +173,7 @@ def test_lecture_routes_serve_timings_boxes_and_ranged_audio_to_an_account(tmp_p
         cookie = {"Cookie": _login_cookie(base, PHONE)}
         status, headers, body = fetch(base, "/books/tarhe-kolli/lectures/1/audio", {**cookie, "Range": "bytes=10-19"})
         assert status == 206 and body == bytes(range(10, 20))
-        assert headers["Content-Range"] == "bytes 10-19/1024" and headers["Content-Type"] == "audio/mp4"
+        assert headers["Content-Range"] == "bytes 10-19/1024" and headers["Content-Type"] == "audio/mpeg"
         status, headers, body = fetch(base, "/books/tarhe-kolli/lectures/1/audio", cookie)
         assert status == 200 and len(body) == 1024 and headers["Accept-Ranges"] == "bytes"
         assert fetch(base, "/books/tarhe-kolli/lectures/1/audio", {**cookie, "Range": "bytes=5000-"})[0] == 416
@@ -185,11 +190,11 @@ def test_lecture_routes_serve_timings_boxes_and_ranged_audio_to_an_account(tmp_p
 def test_lecture_audio_dir_overrides_the_in_repo_files(lecture_books, tmp_path, monkeypatch):
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    (elsewhere / "session_02.m4a").write_bytes(b"\0\0\0\x20ftypM4A ")
+    (elsewhere / "session_02.mp3").write_bytes(b"ID3\x03\x00\x00\x00\x00\x00\x00")
     assert lectures.audio_file(lecture_books, "tarhe-kolli", 1).parent == lecture_books / "tarhe-kolli" / "lectures"
     assert lectures.audio_file(lecture_books, "tarhe-kolli", 2) is None
     monkeypatch.setenv("LECTURE_AUDIO_DIR", str(elsewhere))
-    assert lectures.audio_file(lecture_books, "tarhe-kolli", 2) == elsewhere / "session_02.m4a"
+    assert lectures.audio_file(lecture_books, "tarhe-kolli", 2) == elsewhere / "session_02.mp3"
     assert lectures.audio_file(lecture_books, "tarhe-kolli", 1) is None  # the override is the only source
     assert lectures.audio_url(lecture_books, "tarhe-kolli", 2) == "/books/tarhe-kolli/lectures/2/audio"
 
@@ -197,7 +202,7 @@ def test_lecture_audio_dir_overrides_the_in_repo_files(lecture_books, tmp_path, 
 def test_audio_can_come_from_a_cdn_and_never_from_a_request_path(lecture_books, monkeypatch):
     monkeypatch.setenv("LECTURE_AUDIO_BASE_URL", "https://cdn.example/lectures/{book}/")
     session = lectures.lecture_session(lecture_books, "tarhe-kolli", 2)
-    assert session["audio_url"] == "https://cdn.example/lectures/tarhe-kolli/session_02.m4a"
+    assert session["audio_url"] == "https://cdn.example/lectures/tarhe-kolli/session_02.mp3"
     index = lectures.load_index(lecture_books, "tarhe-kolli")
     index["sessions"][0]["audio"] = "../../etc/passwd"
     assert lectures.audio_file(lecture_books, "tarhe-kolli", 1) is None
@@ -232,16 +237,16 @@ def test_the_lan_preview_serves_lectures_without_an_account(lecture_books):
 def test_the_image_and_compose_carry_the_lecture_module_and_the_books_mount_carries_audio():
     assert "lectures.py" in (REPO / "ui" / "Dockerfile").read_text(encoding="utf-8")
     compose = (REPO / "compose.yaml").read_text(encoding="utf-8")
-    assert "- ./books:/books:ro" in compose  # PDF, indexes and books/<id>/lectures/*.m4a
+    assert "- ./books:/books:ro" in compose  # PDF, indexes and books/<id>/lectures/*.mp3
     assert "LECTURE_AUDIO_DIR: ${LECTURE_AUDIO_DIR:-}" in compose
     assert "LECTURE_AUDIO_BASE_URL: ${LECTURE_AUDIO_BASE_URL:-}" in compose
     ignored = (REPO / ".gitignore").read_text(encoding="utf-8")
-    assert "!books/tarhe-kolli.pdf" in ignored and "*.flac" in ignored and "*.mp3" in ignored and "*.m4a" not in ignored
+    assert "!books/tarhe-kolli.pdf" in ignored and "*.flac" in ignored and "*.mp3" in ignored and "!books/*/lectures/*.mp3" in ignored
 
 
 def test_the_committed_assets_are_the_ones_the_index_was_built_from():
     """The PDF the reader serves is byte-for-byte the one the page boxes
-    were computed from, and every session's audio (AAC .m4a) ships beside the index."""
+    were computed from, and every session's audio (.mp3) ships beside the index."""
     import hashlib
     index = json.loads((REPO / "books" / "tarhe-kolli.lectures.json").read_text(encoding="utf-8"))
     pdf = REPO / "books" / "tarhe-kolli.pdf"
@@ -252,3 +257,4 @@ def test_the_committed_assets_are_the_ones_the_index_was_built_from():
         assert 0 < audio.stat().st_size < 100 * 1024 * 1024  # GitHub's per-file ceiling
         assert lectures.audio_file(REPO / "books", "tarhe-kolli", session["session"]) == audio or \
             lectures._audio_dir() is not None
+

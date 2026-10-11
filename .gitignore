@@ -44,7 +44,8 @@ benchmark/pilot/accounts.json
 # The pilot's run outputs (per-run JSON/CSV, the reports) — data, not code.
 benchmark/pilot/runs/
 
-# Lecture audio ships as AAC .m4a under books/<id>/lectures/; the FLAC masters
-# and the older MP3 encodes stay out.
+# Lecture audio ships as MP3 under books/<id>/lectures/; the FLAC masters
+# and any scratch MP3 encodes elsewhere stay out.
 *.flac
 *.mp3
+!books/*/lectures/*.mp3

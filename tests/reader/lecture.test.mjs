@@ -34,7 +34,7 @@ test('binary search finds the spoken sentence, gaps hold the previous one, overl
 
 test('tones, page split across a page break, boxes and hit testing',()=>{
  const track=createLectureTrack(SESSION);const [quran,first,spanning]=track.sentences;
- assert.equal(toneFor(quran),'rough');assert.equal(toneFor(first),'exact');assert.equal(toneFor(first,false),'held');
+ assert.equal(toneFor(quran),'exact');assert.equal(toneFor(first),'exact');assert.equal(toneFor(first,false),'held');
  assert.equal(pageForTime(spanning,10),42);assert.equal(pageForTime(spanning,16),42);assert.equal(pageForTime(spanning,19.9),43);
  assert.equal(pageForTime(first,6),42);
  assert.deepEqual(boxesOnPage(spanning,43),[{page:43,x0:10,y0:0,x1:100,y1:8}]);
@@ -74,7 +74,7 @@ test('the player opens on the page\'s session, skips the intro, follows the voic
  f.element.querySelector('[data-lecture-play]').click();await settle();
  assert.equal(f.audio.currentTime,2);assert.equal(f.activated,1);assert.equal(f.audio.paused,false);
  f.audio.at(2.5);await settle();
- assert.deepEqual(f.highlights.at(-1),{page:42,boxes:[{page:42,x0:10,y0:10,x1:100,y1:20}],tone:'rough',text:'آیه',lecture:0});
+ assert.deepEqual(f.highlights.at(-1),{page:42,boxes:[{page:42,x0:10,y0:10,x1:100,y1:20}],tone:'exact',text:'آیه',lecture:0});
  f.audio.at(6);await settle();assert.equal(f.highlights.at(-1).tone,'exact');
  assert.equal(f.element.querySelector('[data-lecture-caption]').textContent,'جملهٔ اول.');
  const count=f.highlights.length;f.audio.at(6.5);await settle();assert.equal(f.highlights.length,count); // no repaint per tick
