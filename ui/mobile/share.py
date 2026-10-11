@@ -131,7 +131,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--books-dir", type=Path, required=True)
     parser.add_argument("--lecture-audio-dir", type=Path,
-                        help="session audio for the lecture read-along (sets LECTURE_AUDIO_DIR)")
+                        help="override the in-repo lecture audio (books/<id>/lectures/) with another folder (sets LECTURE_AUDIO_DIR)")
     args = parser.parse_args()
     if args.lecture_audio_dir:
         import os

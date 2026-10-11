@@ -189,15 +189,17 @@ uv run --with pymupdf python tools/build_lecture_index.py \
 
 The builder matches each sentence against the page's body words (running header and footnote zone excluded) on a letters-only normalisation, so the PDF's lam-alef encoding, ZWNJ/space differences, tatweel, diacritics, footnote digits and unmapped Quran glyphs (▯) don't break it; sentences are matched in book order and may span two pages. It also orders timings by start and clips overlaps. A sentence it cannot place keeps its timing and shows in the caption only. `tests/fixtures/lectures-sample.json` is a small sample of the format.
 
-**Audio** never goes in git (`*.mp3`/`*.flac` are ignored). Either:
+**Assets in git.** The Book PDF and the lecture audio are fixed assets and are committed:
 
-- set `LECTURE_AUDIO_DIR` to a folder holding `<id>/session_NN.mp3` (or `session_NN.mp3` directly, for a single Book); the server streams it with HTTP Range at `/books/<id>/lectures/<n>/audio`. In compose, put the files in `./lecture-audio/` or point `LECTURE_AUDIO_HOST_DIR` at them — it is mounted read-only at `/lecture-audio`; or
-- set `LECTURE_AUDIO_BASE_URL` (e.g. `https://cdn.example/lectures/{book}/`) and the browser fetches `<base>/session_NN.mp3` from there.
+- `books/tarhe-kolli.pdf` — exactly the PDF the page boxes were computed from (Sahba interactive v1.0; its SHA-256 is recorded as `source.boxes_pdf_sha256` in the index and pinned by a test). The other Book's PDF stays out of git (ADR-0007).
+- `books/tarhe-kolli/lectures/session_01.m4a` … `session_28.m4a` — AAC-LC, 32 kbps, mono, 22.05 kHz (the masters' rate), encoded from the FLAC masters with fdk-aac (`fdkaac -p 2 -b 32000 -G 2 --moov-before-mdat`), moov first so playback and seeking start without downloading the file. The encoder delay is signalled both as an MP4 edit list and as iTunSMPB, so decoded timing equals the masters' timing (measured lag 0 samples). Total ≈ 397 MB (380 MiB) for 28 sessions (about 19 h), versus 741 MiB as 64 kbps MP3; each file is far under GitHub's 100 MB limit. AAC-LC plays in every browser, including iOS Safari before 17, where Opus does not play in MP4 or WebM. Opus at the same rate was no better here, and HE-AAC's SBR has nothing to reconstruct in speech that already ends near 5 kHz (in tests it added faint high-band noise and a 44 ms decode offset). The FLAC masters and the earlier 64 kbps MP3s stay out of git (`*.flac`, `*.mp3` are ignored).
+
+The server streams `books/<id>/lectures/<file>` with HTTP Range at `/books/<id>/lectures/<n>/audio` — no setting needed; compose's existing `./books:/books:ro` mount carries it into the container. Optional overrides: `LECTURE_AUDIO_DIR` (another folder holding `<id>/session_NN.m4a` or `session_NN.m4a`; when set it is the only local source) or `LECTURE_AUDIO_BASE_URL` (e.g. `https://cdn.example/lectures/{book}/`; the browser then fetches `<base>/session_NN.m4a` directly).
 
 **Routes** (Account-gated on `ui/serve.py`, like the narration status; open on the LAN preview host like its PDFs): `GET /books/<id>/lectures` (session list, `audio_available`), `GET /books/<id>/lectures/<n>` (timings, boxes, `page_sizes`, `audio_url`), `GET /books/<id>/lectures/<n>/audio`. Try it without the stack:
 
 ```bash
-python ui/mobile/share.py --host 127.0.0.1 --port 8766 --books-dir books --lecture-audio-dir /path/to/mp3
+python ui/mobile/share.py --host 127.0.0.1 --port 8766 --books-dir books
 # open http://127.0.0.1:8766/mobile/?demo=1 and tap the headphones button
 ```
 

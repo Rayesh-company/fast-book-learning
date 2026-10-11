@@ -6,9 +6,11 @@ Data: ``<books dir>/<dataset>.lectures.json`` built offline by
 carries its ``start``/``end`` seconds in the session's audio and its line
 ``boxes`` ([page, x0, y0, x1, y1], PDF points) on the PDF pages.
 
-Audio never rides git. It is served from ``LECTURE_AUDIO_DIR`` (local
-files, HTTP Range honored) or, when ``LECTURE_AUDIO_BASE_URL`` is set,
-linked from that origin (a CDN/object store) and never touched here.
+The session audio is committed beside the index, at
+``<books dir>/<dataset>/lectures/<file>`` (the fixed AAC-LC .m4a files), and served
+with HTTP Range. Optional overrides: ``LECTURE_AUDIO_DIR`` (another local
+folder) or ``LECTURE_AUDIO_BASE_URL`` (a CDN/object store the browser
+fetches from directly; never touched here).
 Stdlib-only, like the rest of the server.
 """
 
@@ -50,15 +52,18 @@ def _audio_dir() -> Path | None:
 
 
 def audio_file(books_dir: Path, dataset: str, session: int) -> Path | None:
-    """The session's local audio file: ``$LECTURE_AUDIO_DIR/<dataset>/<file>``
-    or, for a single-Book directory, ``$LECTURE_AUDIO_DIR/<file>``. The
-    file name comes from the committed index, never from the request."""
+    """The session's local audio file. ``$LECTURE_AUDIO_DIR/<dataset>/<file>``
+    or ``$LECTURE_AUDIO_DIR/<file>`` when that override is set, otherwise
+    the in-repo ``<books dir>/<dataset>/lectures/<file>``. The file name
+    comes from the committed index, never from the request."""
     record = find_session(load_index(books_dir, dataset), session)
-    root = _audio_dir()
     name = (record or {}).get("audio") or ""
-    if not record or root is None or not _SAFE_FILE.fullmatch(name):
+    if not record or not _SAFE_FILE.fullmatch(name) or name in {".", ".."}:
         return None
-    for candidate in (root / dataset / name, root / name):
+    root = _audio_dir()
+    candidates = ((root / dataset / name, root / name) if root is not None
+                  else (Path(books_dir) / dataset / "lectures" / name,))
+    for candidate in candidates:
         if candidate.is_file():
             return candidate
     return None

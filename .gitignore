@@ -9,7 +9,10 @@ ui/usage.sqlite3
 ui/accounts.sqlite3
 # The customer PDFs stay out of git; provision books/ from the
 # cognee storage export (see ADR-0007). The text indexes ship.
+# Exception: tarhe-kolli's PDF is a fixed asset committed with its lecture
+# audio — the read-along's page boxes were computed from exactly this file.
 books/*.pdf
+!books/tarhe-kolli.pdf
 # The page rasters' disk cache (ADR-0017) — regenerable by design.
 render-cache/
 # The offline build's planted wheels (ui/Dockerfile) — they ride the
@@ -41,7 +44,7 @@ benchmark/pilot/accounts.json
 # The pilot's run outputs (per-run JSON/CSV, the reports) — data, not code.
 benchmark/pilot/runs/
 
-# Lecture audio stays out of git (served from LECTURE_AUDIO_DIR or a CDN).
-lecture-audio/
-*.mp3
+# Lecture audio ships as AAC .m4a under books/<id>/lectures/; the FLAC masters
+# and the older MP3 encodes stay out.
 *.flac
+*.mp3

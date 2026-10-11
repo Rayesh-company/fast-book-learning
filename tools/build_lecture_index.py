@@ -200,7 +200,17 @@ def monotonic(sentences: list[dict]) -> list[dict]:
     return ordered
 
 
-def build(alignment: dict, doc, book: str, pdf_sha: str | None = None) -> tuple[dict, dict]:
+def audio_name(session: dict, suffix: str | None) -> str | None:
+    """The committed audio file for a session: the aligner's MP3 name with
+    the shipped encoding's suffix (timing is identical across encodings)."""
+    name = session.get("audio_mp3")
+    if name and suffix:
+        name = str(Path(name).with_suffix(suffix))
+    return name
+
+
+def build(alignment: dict, doc, book: str, pdf_sha: str | None = None,
+          audio_suffix: str | None = ".m4a") -> tuple[dict, dict]:
     page_cache: dict[int, list] = {}
     def words(n: int) -> list:
         if n not in page_cache:
@@ -244,7 +254,7 @@ def build(alignment: dict, doc, book: str, pdf_sha: str | None = None) -> tuple[
             out.append(entry)
         sessions.append({
             "session": session["session"],
-            "audio": session.get("audio_mp3"),
+            "audio": audio_name(session, audio_suffix),
             "duration": session.get("audio_duration_s"),
             "lecture_start": session.get("lecture_start_s", 0),
             "lecture_end": session.get("lecture_end_s"),
@@ -280,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pdf", required=True, type=Path)
     parser.add_argument("--book", required=True)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--audio-suffix", default=".m4a",
+                        help="extension of the shipped session audio (default .m4a: AAC-LC)")
     args = parser.parse_args(argv)
     try:
         import pymupdf
@@ -289,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     alignment = json.loads(args.alignment.read_text(encoding="utf-8"))
     sha = hashlib.sha256(args.pdf.read_bytes()).hexdigest()
-    index, stats = build(alignment, pymupdf.open(args.pdf), args.book, sha)
+    index, stats = build(alignment, pymupdf.open(args.pdf), args.book, sha, args.audio_suffix)
     out = args.out or REPO_ROOT / "books" / f"{args.book}.lectures.json"
     out.write_text(json.dumps(index, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{out}: {len(index['sessions'])} sessions, {stats['sentences']} sentences, "
