@@ -1,0 +1,356 @@
+{
+ "format": 1,
+ "book": "tarhe-kolli",
+ "title": "طرح کلی اندیشه اسلامی در قرآن",
+ "source": {
+  "alignment_generated": "2026-10-06T15:54:06-05:00",
+  "alignment_pdf": [
+   {
+    "file": "PROVISIONAL_mirror_of_sahba_interactive_v1.0.pdf",
+    "sha256": "a5379d3e057b8593de344183770b241a785b987af8568baa63f47ee46bbd3751"
+   }
+  ],
+  "boxes_pdf_sha256": "a5379d3e057b8593de344183770b241a785b987af8568baa63f47ee46bbd3751"
+ },
+ "notes": [
+  "times in seconds from the start of the audio file (clean/flac and clean/mp3 have identical timing)",
+  "flags: quran = Quranic/Arabic block; garbled_pdf_text = text contains ▯ (Quran-font glyphs without Unicode in the PDF); interpolated = sentence not found in speech, time spread between neighbours (rough); rough_timing = quran/garbled/interpolated; low_confidence = confidence < 0.5; out_of_order = match dropped because it broke time order",
+  "text: PDF lam-alef encoding repaired where the ASR lexicon confirms the spelling (original kept in text_pdf_raw)",
+  "boxes: [page, x0, y0, x1, y1] in PDF points, top-left origin (PDF.js viewport at scale 1); one per text line",
+  "fuzzy_boxes flag: the sentence was located approximately (garbled or edited text); its box may be off by a few words"
+ ],
+ "sessions": [
+  {
+   "session": 1,
+   "audio": "session_01.m4a",
+   "duration": 2484.2,
+   "lecture_start": 20.0,
+   "lecture_end": 2472.22,
+   "book_pages": [
+    42,
+    58
+   ],
+   "cover_page": 41,
+   "coverage": {
+    "book_prose": 0.679,
+    "speech": 0.698
+   },
+   "sentences": [
+    {
+     "id": 0,
+     "text": "َوَ اَطیعُوا اللهَ وَ الرَّسولَ لَعَلَّكُم تُرحَمون وَ سارِعوا َاِلىٰ مَغفِرَةٍ مِن رَبِّكُم وَ جَنَّةٍ عَرضُهَا السَّماواتُ و َالاَرضُ اُعِدَّت لِلمُتَّقین الَّذینَ یُنفِقونَ فِی السَّرّاء َوَالضَّرّاءِ وَ الكاظِمینَ الغَیظَ وَ العافینَ عَنِ النّاسِ و َاللهُ یُحِبُّ المُحسِنین سور ▯ م ▯ ارکه ▯ آل‌عمرا ▯،",
+     "page": 42,
+     "page_end": 42,
+     "start": 20.0,
+     "end": 21.56,
+     "confidence": 0.0,
+     "flags": [
+      "quran",
+      "garbled_pdf_text",
+      "interpolated",
+      "rough_timing",
+      "low_confidence",
+      "fuzzy_boxes"
+     ],
+     "boxes": [
+      [
+       42,
+       107.9,
+       175.7,
+       303.2,
+       197.1
+      ],
+      [
+       42,
+       107.9,
+       198.7,
+       303.1,
+       220.1
+      ],
+      [
+       42,
+       107.9,
+       221.7,
+       303.2,
+       243.1
+      ],
+      [
+       42,
+       107.9,
+       244.7,
+       303.2,
+       266.1
+      ],
+      [
+       42,
+       113.6,
+       263.3,
+       303.2,
+       289.1
+      ]
+     ]
+    },
+    {
+     "id": 1,
+     "text": "رهبانیون مسیحیت، برای اینکه دامانشان به گناهان آلوده نشود رهبانیت پیشه کردند؛ به غارها و کوه‌ها و بیغوله‌ها پناهنده شدند.",
+     "page": 42,
+     "page_end": 42,
+     "start": 21.56,
+     "end": 38.45,
+     "confidence": 0.605,
+     "flags": [],
+     "boxes": [
+      [
+       42,
+       34.0,
+       313.0,
+       377.0,
+       332.9
+      ],
+      [
+       42,
+       62.4,
+       338.0,
+       377.0,
+       357.9
+      ]
+     ]
+    },
+    {
+     "id": 2,
+     "text": "قرآن می‌فرماید: وَ رَه ▯ ا ▯ نِ ▯ يَّ ▯ ةً ا ▯ ▯ َدَعوها ما كَ ▯ تَ ▯ ▯ اها عَلَ ▯ يهِم رهبانیتی که آنان از خود درآوردند، به‌صورت بدعتی آن را ایجاد کردند؛ ما بر آنان رهبانیت را ننوشته بودیم.",
+     "page": 42,
+     "page_end": 42,
+     "start": 38.45,
+     "end": 61.24,
+     "confidence": 0.347,
+     "flags": [
+      "garbled_pdf_text",
+      "rough_timing",
+      "low_confidence"
+     ],
+     "boxes": [
+      [
+       42,
+       34.0,
+       338.0,
+       55.1,
+       357.9
+      ],
+      [
+       42,
+       34.0,
+       356.5,
+       377.0,
+       384.4
+      ],
+      [
+       42,
+       34.0,
+       388.0,
+       377.0,
+       407.9
+      ],
+      [
+       42,
+       349.7,
+       413.0,
+       377.0,
+       432.9
+      ]
+     ]
+    },
+    {
+     "id": 3,
+     "text": "اما عالِم اسلامی رهبانیت ندارد، گوشه‌گیری ندارد، فرار ندارد.",
+     "page": 42,
+     "page_end": 42,
+     "start": 61.24,
+     "end": 71.38,
+     "confidence": 0.832,
+     "flags": [],
+     "boxes": [
+      [
+       42,
+       61.9,
+       413.0,
+       342.9,
+       432.9
+      ]
+     ]
+    },
+    {
+     "id": 4,
+     "text": "عالِم اسلامی همانی است که سعی می‌کند که بگیرد غریق را.",
+     "page": 42,
+     "page_end": 42,
+     "start": 71.38,
+     "end": 79.42,
+     "confidence": 0.66,
+     "flags": [],
+     "boxes": [
+      [
+       42,
+       34.0,
+       413.0,
+       55.1,
+       432.9
+      ],
+      [
+       42,
+       104.1,
+       438.0,
+       377.0,
+       457.9
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "session": 2,
+   "audio": "session_02.m4a",
+   "duration": 3800.7,
+   "lecture_start": 20.0,
+   "lecture_end": 3790.66,
+   "book_pages": [
+    63,
+    86
+   ],
+   "cover_page": 62,
+   "coverage": {
+    "book_prose": 0.599,
+    "speech": 0.637
+   },
+   "sentences": [
+    {
+     "id": 0,
+     "text": "اِنَّمَا المُؤمِنونَ الَّذینَ اِذا ذُكِرَ اللهُ وَجِلَت قُلوبُهُم ِاَوذا تُلِیَت عَلَیهِم آیاتُهُ زادَتهُم ایمانًا وَعَلىٰ رَبِّهِم الَّذینَ یُقیمونَ الصَّلاةَ وَمِمّا رَزَقناهُم َیَتَوَكَّلون اُولٰئِكَ هُمُ المُؤمِنونَ حَقًّا لَهُم دَرَجات َیُنفِقون ٌعِندَ رَبِّهِم وَمَغفِرَةٌ وَرِزقٌ كَریم سور ▯ م ▯ بارکه ا ▯ ▯ لا",
+     "page": 63,
+     "page_end": 63,
+     "start": 20.0,
+     "end": 41.62,
+     "confidence": 0.0,
+     "flags": [
+      "quran",
+      "garbled_pdf_text",
+      "interpolated",
+      "rough_timing",
+      "low_confidence",
+      "fuzzy_boxes"
+     ],
+     "boxes": [
+      [
+       63,
+       107.9,
+       175.7,
+       303.2,
+       197.1
+      ],
+      [
+       63,
+       107.9,
+       198.7,
+       303.2,
+       220.1
+      ],
+      [
+       63,
+       107.9,
+       221.7,
+       303.2,
+       243.1
+      ],
+      [
+       63,
+       107.9,
+       244.7,
+       303.2,
+       266.1
+      ],
+      [
+       63,
+       107.9,
+       266.3,
+       303.2,
+       289.1
+      ]
+     ]
+    },
+    {
+     "id": 1,
+     "text": "▯ يَس ▯ َلو ▯ نَكَ عَ ▯ ِ الاَ ▯ ▯ لا از تو می‌پرسند ای پیامبر در مورد انفال، ًسؤال می‌کنند که انفال برای کیست و حقّ کیست.",
+     "page": 63,
+     "page_end": 63,
+     "start": 41.62,
+     "end": 42.92,
+     "confidence": 0.016,
+     "flags": [
+      "garbled_pdf_text",
+      "rough_timing",
+      "low_confidence"
+     ],
+     "boxes": [
+      [
+       63,
+       37.4,
+       306.5,
+       369.3,
+       334.4
+      ],
+      [
+       63,
+       34.0,
+       338.0,
+       377.0,
+       357.9
+      ]
+     ]
+    },
+    {
+     "id": 2,
+     "text": "انفال را مختصرا می‌توان به‌این‌صورت ترجمه کرد؛ انفال یعنی ثروت‌هایی که به عموم مسلمانان متعلق است.",
+     "page": 63,
+     "page_end": 63,
+     "start": 46.46,
+     "end": 64.18,
+     "confidence": 0.626,
+     "flags": [],
+     "boxes": [
+      [
+       63,
+       34.0,
+       338.0,
+       112.4,
+       357.9
+      ],
+      [
+       63,
+       34.0,
+       363.0,
+       377.0,
+       382.9
+      ],
+      [
+       63,
+       258.1,
+       388.0,
+       377.0,
+       407.9
+      ]
+     ]
+    }
+   ]
+  }
+ ],
+ "page_sizes": {
+  "42": [
+   411.02,
+   595.28
+  ],
+  "63": [
+   411.02,
+   595.28
+  ]
+ }
+}

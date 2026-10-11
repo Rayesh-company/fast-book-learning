@@ -716,6 +716,20 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 from narration import narration_status
             self._send_json(200, narration_status())
             return
+        if path.startswith("/books/") and "/lectures" in path:
+            # Lecture read-along (ui/lectures.py): session timings, page
+            # boxes and the recorded audio — the Account's read, like the
+            # narration status above.
+            if resolve_identity(self) is None:
+                return
+            try:
+                from ui import lectures
+            except ImportError:
+                import lectures
+            if lectures.handle(self, path, BOOKS_DIR, BOOK_DATASETS):
+                return
+            self.send_error(404, "Not found")
+            return
         if path.startswith("/books/") and "/page/" in path:
             self._book_page_image(path)
             return

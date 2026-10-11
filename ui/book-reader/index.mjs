@@ -15,7 +15,9 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
 
   function paintFocus(record) {
     record.overlay.replaceChildren();
+    if (focus?.tone) record.overlay.dataset.tone = focus.tone; else delete record.overlay.dataset.tone;
     if (!record.index || !focus || focus.page !== record.page) return;
+    if (focus.boxes) { paintBoxes(record); return; }
     const unit = { text: focus.text, range: { start: focus.start, end: focus.end },
       locatorParts: [{ locator: { kind: 'exact', page: focus.page }, segmentStart: 0,
         range: { start: focus.start, end: focus.end } }] };
@@ -25,6 +27,18 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
     for (const rect of rects) {
       const span = record.surface.ownerDocument.createElement('span');
       for (const [key, value] of Object.entries(rect)) span.style[key] = `${value}px`;
+      record.overlay.append(span);
+    }
+  }
+  // Precomputed geometry (lecture read-along): PDF-point rectangles,
+  // top-left origin, scaled to the page as currently laid out.
+  function paintBoxes(record) {
+    const scale = record.surface.getBoundingClientRect().width / record.pointWidth;
+    if (!Number.isFinite(scale) || scale <= 0) return;
+    for (const box of focus.boxes) {
+      const span = record.surface.ownerDocument.createElement('span');
+      span.style.left = `${box.x0 * scale - 2}px`; span.style.top = `${box.y0 * scale - 1}px`;
+      span.style.width = `${(box.x1 - box.x0) * scale + 4}px`; span.style.height = `${(box.y1 - box.y0) * scale + 2}px`;
       record.overlay.append(span);
     }
   }
@@ -49,7 +63,8 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
     const overlay = doc.createElement('div');
     overlay.className = 'book-reader-playback-focus';
     overlay.setAttribute('aria-hidden', 'true');
-    const record = { page: page.pageNumber, surface, layer, overlay, index: null, disposed: false };
+    const record = { page: page.pageNumber, surface, layer, overlay, index: null, disposed: false,
+      pointWidth: viewport.width / viewport.scale };
     const active = () => !record.disposed && isCurrent();
     pages.set(record.page, record);
     let renderTask;
@@ -128,6 +143,15 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
     mountPage, removePage, clear, highlight,
     pause() { player?.pause(); },
     getPageIndex: page => pages.get(page)?.index ?? null,
+    /** A client point on a mounted page as PDF points (top-left origin). */
+    pointAt(page, clientX, clientY) {
+      const record = pages.get(page);
+      if (!record || record.disposed) return null;
+      const bounds = record.surface.getBoundingClientRect();
+      const scale = bounds.width / record.pointWidth;
+      if (!(scale > 0)) return null;
+      return { x: (clientX - bounds.left) / scale, y: (clientY - bounds.top) / scale };
+    },
     captureSelection(selection = pages.values().next().value?.surface.ownerDocument.getSelection()) {
       if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
       const range = selection.getRangeAt(0);

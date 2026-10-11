@@ -271,3 +271,21 @@ test('closing the reader during generation prevents delayed autoplay', async () 
   assert.equal(element.querySelector('[data-reader-audio-status]').textContent, '');
   controls.dispose(); reader.clear();
 });
+
+test('lecture boxes in PDF points are drawn scaled onto the rendered page, and clicks map back', async () => {
+  const {p, reader, pdfPage} = renderingFixture();
+  p.surface.getBoundingClientRect = () => ({left: 0, top: 0, width: 750, height: 1050});
+  await reader.mountPage({page:pdfPage, surface:p.surface, width:750}).ready;
+  reader.highlight({page:2, tone:'rough', text:'alpha', boxes:[{page:2, x0:10, y0:20, x1:110, y1:40}]});
+  const overlay = p.surface.querySelector('.book-reader-playback-focus');
+  assert.equal(overlay.dataset.tone, 'rough');
+  const span = overlay.querySelector('span');
+  assert.deepEqual([span.style.left, span.style.top, span.style.width, span.style.height], ['13px', '29px', '154px', '32px']);
+  reader.highlight({page:3, boxes:[{page:3, x0:0, y0:0, x1:1, y1:1}]});
+  assert.equal(overlay.children.length, 0);
+  reader.highlight(null);
+  assert.equal(overlay.dataset.tone, undefined);
+  assert.deepEqual(reader.pointAt(2, 150, 75), {x:100, y:50});
+  assert.equal(reader.pointAt(9, 1, 1), null);
+  reader.clear();
+});
