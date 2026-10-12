@@ -118,7 +118,7 @@ def lecture_session(books_dir: Path, dataset: str, session: int) -> dict | None:
         return None
     pages = {str(b[0]) for s in record.get("sentences", []) for b in s.get("boxes", [])}
     sizes = index.get("page_sizes", {})
-    return {
+    payload = {
         "book": dataset,
         "session": session,
         "duration": record.get("duration"),
@@ -131,6 +131,13 @@ def lecture_session(books_dir: Path, dataset: str, session: int) -> dict | None:
         "page_sizes": {page: sizes[page] for page in sorted(pages, key=int) if page in sizes},
         "sentences": record.get("sentences", []),
     }
+    if "cues" in record:
+        payload["cues"] = record["cues"]
+    if "word_alignment" in record:
+        payload["word_alignment"] = record["word_alignment"]
+    if "sentence_focus" in record:
+        payload["sentence_focus"] = record["sentence_focus"]
+    return payload
 
 
 def parse_range(header: str | None, size: int) -> tuple[int, int] | None | bool:

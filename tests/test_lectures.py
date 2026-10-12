@@ -219,6 +219,22 @@ def test_parse_range():
     assert lectures.parse_range("items=1-2", 100) is None
 
 
+def test_session_api_preserves_word_alignment_and_exact_word_geometry(lecture_books):
+    index = lectures.load_index(lecture_books, "tarhe-kolli")
+    record = index["sessions"][0]
+    record["word_alignment"] = {"method": "local_ctc", "audio_sha256": "test-audio"}
+    record["cues"] = [{"id": 0, "start": 1, "end": 2, "words": [
+        {"text": "ایمان", "start": 1.2, "end": 1.8, "boxes": [[42, 10, 20, 30, 40]]}
+    ]}]
+    record["sentence_focus"] = [{"id":0,"text":"ایمان روشن است.","boxes":[[42,10,20,80,40]]}]
+    payload = lectures.lecture_session(lecture_books, "tarhe-kolli", 1)
+    assert payload["word_alignment"] == record["word_alignment"]
+    assert payload["sentence_focus"] == record["sentence_focus"]
+    assert payload["cues"][0]["words"][0]["start"] == 1.2
+    assert payload["cues"][0]["words"][0]["boxes"] == [[42, 10, 20, 30, 40]]
+    lectures._CACHE.clear()
+
+
 def test_the_lan_preview_serves_lectures_without_an_account(lecture_books):
     server = ThreadingHTTPServer(("127.0.0.1", 0), preview_handler(lecture_books))
     thread = Thread(target=server.serve_forever, daemon=True)
@@ -257,4 +273,59 @@ def test_the_committed_assets_are_the_ones_the_index_was_built_from():
         assert 0 < audio.stat().st_size < 100 * 1024 * 1024  # GitHub's per-file ceiling
         assert lectures.audio_file(REPO / "books", "tarhe-kolli", session["session"]) == audio or \
             lectures._audio_dir() is not None
+
+
+def test_committed_playback_data_has_acoustic_words_for_every_session():
+    """A diagnostic silence-only rebuild must not silently replace the shipped
+    word timings with proportional text cuts."""
+    index = json.loads((REPO / "books" / "tarhe-kolli.lectures.json").read_text())
+    assert index["source"]["word_alignment"]["sessions"] == [s["session"] for s in index["sessions"]]
+    scope = index["source"]["word_alignment"]["phrase_scope"]
+    assert index["source"]["word_alignment"]["display_scope"] == "sentence"
+    for session in index["sessions"]:
+        assert session["word_alignment"]["method"] == "local_ctc"
+        assert session["cues"]
+        focus = {s['id']: s for s in session['sentence_focus']}
+        previous = 0
+        for cue in session["cues"]:
+            assert cue["timing"]["text_boundary"] == "ctc_word_alignment"
+            assert cue["timing"]["requires_word_alignment"] is False
+            assert previous <= cue["start"] <= cue["speech_start"] < cue["speech_end"] <= cue["end"]
+            assert cue["words"]
+            onset=cue['timing'].get('sentence_onset')
+            if onset:
+                assert onset['method']=='measured_pause_end'
+                assert onset['start']==onset['pause'][1]
+                assert onset['pause'][1]-onset['pause'][0]>=.2-1e-6
+                assert 0<cue['speech_start']-onset['start']<=min(2.5,.6+.55*onset['prefix_words'])+1e-6
+                assert onset['anchor_start']==cue['speech_start']
+            assert cue['sentence_id'] in focus
+            assert all(b in focus[cue['sentence_id']]['boxes'] for b in cue['boxes'])
+            assert len(cue["words"]) <= scope["max_words"]
+            assert len(cue["words"]) == 1 or cue["speech_end"]-cue["speech_start"] <= scope["max_speech_seconds"]+1e-6
+            for word in cue["words"]:
+                assert cue["speech_start"] <= word["start"] < word["end"] <= cue["speech_end"]
+                assert word["boxes"]
+                if word.get("recovery_kind") == "bounded_phrase":
+                    assert word["support_threshold"] in (.03, .1)
+                    assert word["support"] >= (.5 if word["support_threshold"] == .1 else 1)
+                    if word["support_threshold"] == .03:
+                        assert word["end"]-word["start"] <= 1.2+1e-6
+                else:
+                    assert word["support"] >= (0.75 if word["context_recovery"] else 0.5)
+            previous = cue["end"]
+
+
+def test_reported_session3_words_survive_pdf_geometry_and_silence_validation():
+    index = json.loads((REPO / "books" / "tarhe-kolli.lectures.json").read_text())
+    fixture = json.loads((REPO / "tests/fixtures/lecture-ctc/session-03.json").read_text())
+    parents = {w["word_id"]: w["sentence_id"] for window in fixture["windows"] for w in window["words"]}
+    session = next(s for s in index["sessions"] if s["session"] == 3)
+    for expected in fixture["expected"]:
+        assert any(
+            cue["sentence_id"] == parents[expected["word_id"]]
+            and word["text"] == expected["text"]
+            and expected["range"][0] <= word["start"] < word["end"] <= expected["range"][1]
+            for cue in session["cues"] for word in cue["words"]
+        ), f"Reported word disappeared from playback: {expected['text']}"
 

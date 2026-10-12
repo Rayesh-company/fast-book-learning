@@ -4,7 +4,7 @@
  * scrolls to follow the voice; a click on a sentence seeks to it.
  * The host owns page rendering (showPage) and the markup (views.mjs).
  */
-import { createLectureTrack, sentenceIndexAt, toneFor, pageForTime, boxesOnPage,
+import { createLectureTrack, sentenceIndexAt, toneFor, pageForTime, lineBoxesOnPage, focusForTime,
   sentenceAtPoint, sessionForPage, formatClock } from './lecture-sync.mjs';
 
 const digits = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
@@ -34,7 +34,9 @@ export function installLecturePlayer({ element, reader, book, getPage, showPage,
     play.dataset.state = playing ? 'playing' : 'paused';
     play.setAttribute('aria-label', playing ? 'مکث درس‌گفتار' : 'پخش درس‌گفتار');
     if (playing && ticker === null) {
-      ticker = setInterval(() => { sync(); }, 60);
+      // Match the acoustic frame cadence. This timer only redraws focus;
+      // media currentTime remains the clock for pauses, speed changes and seeks.
+      ticker = setInterval(() => { sync(); }, 20);
       ticker?.unref?.();
     } else if (!playing) {
       stopTicker();
@@ -94,18 +96,19 @@ export function installLecturePlayer({ element, reader, book, getPage, showPage,
     clock.textContent = formatClock(time);
     const { index, active } = sentenceIndexAt(track, time);
     if (index < 0) { if (last) { clearFocus(); caption.textContent = ''; } return; }
-    const sentence = track.sentences[index];
+    const focus = focusForTime(track.sentences[index], time, active);
+    const sentence = focus.sentence;
     const page = pageForTime(sentence, time);
-    const key = `${index}|${page}|${active}`;
+    const key = `${sentence.sentence_focus ? sentence.sentence_id : index}|${page}|${focus.active}`;
     if (key === last) return;
     last = key;
     caption.textContent = sentence.text;
-    caption.dataset.tone = toneFor(sentence, active);
-    const boxes = boxesOnPage(sentence, page);
+    caption.dataset.tone = toneFor(sentence, focus.active);
+    const boxes = lineBoxesOnPage(sentence, page);
     if (!boxes.length) { clearFocus(); last = key; caption.dataset.unplaced = 'true'; return; }
     delete caption.dataset.unplaced;
     owning = true;
-    reader.highlight({ page, boxes, tone: toneFor(sentence, active), text: sentence.text, lecture: sentence.id });
+    reader.highlight({ page, boxes, tone: toneFor(sentence, focus.active), text: sentence.text, lecture: sentence.id });
     if (page !== getPage()) {
       const turn = turning = showPage(page);
       try { await turn; } catch { return; }

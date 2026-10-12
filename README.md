@@ -175,9 +175,20 @@ One timestamped archive holds everything git does not — **the memory layer's `
 
 ## Lecture read-along (درس‌گفتار)
 
-خواننده می‌تواند صوت درس‌گفتارِ هر جلسه را پخش کند و جملهٔ در حال خوانده‌شدن روی همان صفحهٔ PDF کتاب، جمله‌به‌جمله، هایلایت می‌شود؛ صفحه خودکار ورق می‌خورد و با لمس یک جمله صوت به همان‌جا می‌رود.
+خواننده می‌تواند صوت درس‌گفتارِ هر جلسه را پخش کند و عبارتِ در حال خوانده‌شدن روی همان صفحهٔ PDF کتاب هایلایت می‌شود؛ صفحه خودکار ورق می‌خورد و با لمس یک عبارت صوت به همان‌جا می‌رود.
 
-The product reader (`/mobile/`) shows a headphones button when the open Book has a lecture index. It opens a bar with the session (جلسه) picker, play/pause, ±10 s, a seek bar, «بدون مقدمه» (start at the lecture's `lecture_start`, skipping the recorded intro) and a caption of the current sentence. While the audio plays, the spoken sentence is highlighted **on the rendered PDF page** sentence-by-sentence (an overlay drawn from precomputed line boxes, not the text layer); the reader turns to the sentence's page — a sentence that crosses a page break moves to the next page part-way through, in proportion to its lines — and scrolls it into view. Clicking a sentence on the page seeks the audio to it. Active sentences use a unified highlight (`exact`), and during pauses or off-book commentary between sentences the last sentence stays faintly highlighted (`held`). Starting the lecture pauses the TTS narration and vice versa.
+Playback uses acoustic word timings from the shipped MP3s and exact PDF word
+boxes. A local Persian CTC model recognizes character anchors, permits omitted
+Book text and extra speech, and aligns supported words in their observed audio
+neighbourhoods. Visible focus covers the complete current sentence, using
+exact PDF geometry, from its measured speech onset through its last observed word. Internal
+pauses and missing-word gaps keep the same range and tone; focus clears when
+the sentence ends. Word timestamps still control page turns. The
+original `sentences` remain as the source record and legacy-format fallback.
+Rebuild instructions, model provenance and accuracy limits are recorded in
+[docs/lecture-checkpoints.md](docs/lecture-checkpoints.md).
+
+The product reader (`/mobile/`) shows a headphones button when the open Book has a lecture index. It opens a bar with the session (جلسه) picker, play/pause, ±10 s, a seek bar, «بدون مقدمه» (start at the lecture's `lecture_start`, skipping the recorded intro) and a caption of the current sentence. The sentence is highlighted **on the rendered PDF page**, and page changes follow observed word timestamps. Clicking a placed sentence seeks its first observed speech. Internal pauses keep the sentence highlight unchanged; it clears after the sentence ends. Starting the lecture pauses the TTS narration and vice versa. Legacy sentence-only indexes retain sentence focus and their original page timing.
 
 **Data.** `books/<id>.lectures.json` (committed, like `.pages.json`) holds per session the audio file name, duration, intro/outro marks, coverage and the Book's sentences with `start`/`end` seconds, `page`/`page_end`, `confidence`, flags (`quran`, `garbled_pdf_text`, `interpolated`, `rough_timing`, `low_confidence`, `out_of_order`, `fuzzy_boxes`) and `boxes` — `[page, x0, y0, x1, y1]` in PDF points, top-left origin, one per text line. Build it once per Book from the aligner's `reader_alignment.json` and the same PDF edition the reader serves:
 
@@ -192,7 +203,7 @@ The builder clusters PDF words by visual baseline and orders each line right-to-
 **Assets in git.** The Book PDF and the lecture audio are fixed assets and are committed:
 
 - `books/tarhe-kolli.pdf` — exactly the PDF the page boxes were computed from (Sahba interactive v1.0; its SHA-256 is recorded as `source.boxes_pdf_sha256` in the index and pinned by a test). The other Book's PDF stays out of git (ADR-0007).
-- `books/tarhe-kolli/lectures/session_01.mp3` … `session_28.mp3` — MP3, 32 kbps, mono, 22.05 kHz, ≈ 271 MB total for 28 sessions (about 19 h), each file far under GitHub's 100 MB limit, playing natively across all desktop and mobile browsers (including Linux Chromium/Opera builds that ship without proprietary AAC decoders).
+- `books/tarhe-kolli/lectures/session_01.mp3` … `session_28.mp3` — MP3, 32 kbps, mono, 22.05 kHz, ≈ 388 MB total for 28 sessions (about 27 h), each file far under GitHub's 100 MB limit, playing natively across all desktop and mobile browsers (including Linux Chromium/Opera builds that ship without proprietary AAC decoders).
 
 The server streams `books/<id>/lectures/<file>` with HTTP Range at `/books/<id>/lectures/<n>/audio` — no setting needed; compose's existing `./books:/books:ro` mount carries it into the container. Optional overrides: `LECTURE_AUDIO_DIR` (another folder holding `<id>/session_NN.mp3` or `session_NN.mp3`; when set it is the only local source) or `LECTURE_AUDIO_BASE_URL` (e.g. `https://cdn.example/lectures/{book}/`; the browser then fetches `<base>/session_NN.mp3` directly).
 

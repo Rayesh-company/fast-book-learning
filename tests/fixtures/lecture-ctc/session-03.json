@@ -1,0 +1,2352 @@
+{
+  "description": "Pinned local model emissions from the beginning of recorded session 3. Tests replay word omissions reported by the operator without audio/model inference.",
+  "model": "3d841795da90cb84a17f4cb8060d57eb690a61e3d4697292a04996772e8dab3b",
+  "audio": "40a98a52bb801235aad6f16f110270dbfd3432f4a44cd11f390ac823362e3b0d",
+  "windows": [
+    {
+      "core": 0,
+      "offset": 0,
+      "frames": 699,
+      "emissions": "session-03-0.f32.gz",
+      "words": [
+        {
+          "word_id": 40,
+          "sentence_id": 1,
+          "text": "با",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 41,
+          "sentence_id": 1,
+          "text": "توجه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 42,
+          "sentence_id": 1,
+          "text": "به",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 43,
+          "sentence_id": 1,
+          "text": "چند",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 44,
+          "sentence_id": 1,
+          "text": "آیه‌ای",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 45,
+          "sentence_id": 1,
+          "text": "که",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 46,
+          "sentence_id": 1,
+          "text": "امروز",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 47,
+          "sentence_id": 1,
+          "text": "ما",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 48,
+          "sentence_id": 1,
+          "text": "تلاوت",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 49,
+          "sentence_id": 1,
+          "text": "می‌کنیم",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 50,
+          "sentence_id": 1,
+          "text": "و",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 51,
+          "sentence_id": 1,
+          "text": "در",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 52,
+          "sentence_id": 1,
+          "text": "آن",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 53,
+          "sentence_id": 1,
+          "text": "ورقه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 54,
+          "sentence_id": 1,
+          "text": "نوشته",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 55,
+          "sentence_id": 1,
+          "text": "شده",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 56,
+          "sentence_id": 1,
+          "text": "است،",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        }
+      ]
+    },
+    {
+      "core": 12,
+      "offset": 10,
+      "frames": 799,
+      "emissions": "session-03-12.f32.gz",
+      "words": [
+        {
+          "word_id": 40,
+          "sentence_id": 1,
+          "text": "با",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 41,
+          "sentence_id": 1,
+          "text": "توجه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 42,
+          "sentence_id": 1,
+          "text": "به",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 43,
+          "sentence_id": 1,
+          "text": "چند",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 44,
+          "sentence_id": 1,
+          "text": "آیه‌ای",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 45,
+          "sentence_id": 1,
+          "text": "که",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 46,
+          "sentence_id": 1,
+          "text": "امروز",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 47,
+          "sentence_id": 1,
+          "text": "ما",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 48,
+          "sentence_id": 1,
+          "text": "تلاوت",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 49,
+          "sentence_id": 1,
+          "text": "می‌کنیم",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 50,
+          "sentence_id": 1,
+          "text": "و",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 51,
+          "sentence_id": 1,
+          "text": "در",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 52,
+          "sentence_id": 1,
+          "text": "آن",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 53,
+          "sentence_id": 1,
+          "text": "ورقه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 54,
+          "sentence_id": 1,
+          "text": "نوشته",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 55,
+          "sentence_id": 1,
+          "text": "شده",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 56,
+          "sentence_id": 1,
+          "text": "است،",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 57,
+          "sentence_id": 2,
+          "text": "دو،",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 58,
+          "sentence_id": 2,
+          "text": "سه",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 59,
+          "sentence_id": 2,
+          "text": "حقیقت",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 60,
+          "sentence_id": 2,
+          "text": "دیگر",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 61,
+          "sentence_id": 2,
+          "text": "در",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 62,
+          "sentence_id": 2,
+          "text": "زمینۀ",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 63,
+          "sentence_id": 2,
+          "text": "ایمان",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 64,
+          "sentence_id": 2,
+          "text": "به‌دست",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 65,
+          "sentence_id": 2,
+          "text": "می‌آید.",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        }
+      ]
+    },
+    {
+      "core": 24,
+      "offset": 22,
+      "frames": 799,
+      "emissions": "session-03-24.f32.gz",
+      "words": [
+        {
+          "word_id": 40,
+          "sentence_id": 1,
+          "text": "با",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 41,
+          "sentence_id": 1,
+          "text": "توجه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 42,
+          "sentence_id": 1,
+          "text": "به",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 43,
+          "sentence_id": 1,
+          "text": "چند",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 44,
+          "sentence_id": 1,
+          "text": "آیه‌ای",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 45,
+          "sentence_id": 1,
+          "text": "که",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 46,
+          "sentence_id": 1,
+          "text": "امروز",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 47,
+          "sentence_id": 1,
+          "text": "ما",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 48,
+          "sentence_id": 1,
+          "text": "تلاوت",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 49,
+          "sentence_id": 1,
+          "text": "می‌کنیم",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 50,
+          "sentence_id": 1,
+          "text": "و",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 51,
+          "sentence_id": 1,
+          "text": "در",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 52,
+          "sentence_id": 1,
+          "text": "آن",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 53,
+          "sentence_id": 1,
+          "text": "ورقه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 54,
+          "sentence_id": 1,
+          "text": "نوشته",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 55,
+          "sentence_id": 1,
+          "text": "شده",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 56,
+          "sentence_id": 1,
+          "text": "است،",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 57,
+          "sentence_id": 2,
+          "text": "دو،",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 58,
+          "sentence_id": 2,
+          "text": "سه",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 59,
+          "sentence_id": 2,
+          "text": "حقیقت",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 60,
+          "sentence_id": 2,
+          "text": "دیگر",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 61,
+          "sentence_id": 2,
+          "text": "در",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 62,
+          "sentence_id": 2,
+          "text": "زمینۀ",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 63,
+          "sentence_id": 2,
+          "text": "ایمان",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 64,
+          "sentence_id": 2,
+          "text": "به‌دست",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 65,
+          "sentence_id": 2,
+          "text": "می‌آید.",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 66,
+          "sentence_id": 3,
+          "text": "اولا",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 67,
+          "sentence_id": 3,
+          "text": "ایمان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 68,
+          "sentence_id": 3,
+          "text": "یک",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 69,
+          "sentence_id": 3,
+          "text": "خصلت",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 70,
+          "sentence_id": 3,
+          "text": "برجستۀ",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 71,
+          "sentence_id": 3,
+          "text": "پیامبران",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 72,
+          "sentence_id": 3,
+          "text": "خدا",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 73,
+          "sentence_id": 3,
+          "text": "و",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 74,
+          "sentence_id": 3,
+          "text": "مؤمنان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 75,
+          "sentence_id": 3,
+          "text": "و",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 76,
+          "sentence_id": 3,
+          "text": "دنباله‌روان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 77,
+          "sentence_id": 3,
+          "text": "آنهاست؛",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 78,
+          "sentence_id": 4,
+          "text": "ایمان",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 79,
+          "sentence_id": 4,
+          "text": "داشتن،",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 80,
+          "sentence_id": 4,
+          "text": "باور‌داشتنِ",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 81,
+          "sentence_id": 4,
+          "text": "به",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 82,
+          "sentence_id": 4,
+          "text": "رسالت",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 83,
+          "sentence_id": 4,
+          "text": "خود.",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        }
+      ]
+    },
+    {
+      "core": 36,
+      "offset": 34,
+      "frames": 799,
+      "emissions": "session-03-36.f32.gz",
+      "words": [
+        {
+          "word_id": 40,
+          "sentence_id": 1,
+          "text": "با",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 41,
+          "sentence_id": 1,
+          "text": "توجه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 42,
+          "sentence_id": 1,
+          "text": "به",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 43,
+          "sentence_id": 1,
+          "text": "چند",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 44,
+          "sentence_id": 1,
+          "text": "آیه‌ای",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 45,
+          "sentence_id": 1,
+          "text": "که",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 46,
+          "sentence_id": 1,
+          "text": "امروز",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 47,
+          "sentence_id": 1,
+          "text": "ما",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 48,
+          "sentence_id": 1,
+          "text": "تلاوت",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 49,
+          "sentence_id": 1,
+          "text": "می‌کنیم",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 50,
+          "sentence_id": 1,
+          "text": "و",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 51,
+          "sentence_id": 1,
+          "text": "در",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 52,
+          "sentence_id": 1,
+          "text": "آن",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 53,
+          "sentence_id": 1,
+          "text": "ورقه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 54,
+          "sentence_id": 1,
+          "text": "نوشته",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 55,
+          "sentence_id": 1,
+          "text": "شده",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 56,
+          "sentence_id": 1,
+          "text": "است،",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 57,
+          "sentence_id": 2,
+          "text": "دو،",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 58,
+          "sentence_id": 2,
+          "text": "سه",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 59,
+          "sentence_id": 2,
+          "text": "حقیقت",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 60,
+          "sentence_id": 2,
+          "text": "دیگر",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 61,
+          "sentence_id": 2,
+          "text": "در",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 62,
+          "sentence_id": 2,
+          "text": "زمینۀ",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 63,
+          "sentence_id": 2,
+          "text": "ایمان",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 64,
+          "sentence_id": 2,
+          "text": "به‌دست",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 65,
+          "sentence_id": 2,
+          "text": "می‌آید.",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 66,
+          "sentence_id": 3,
+          "text": "اولا",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 67,
+          "sentence_id": 3,
+          "text": "ایمان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 68,
+          "sentence_id": 3,
+          "text": "یک",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 69,
+          "sentence_id": 3,
+          "text": "خصلت",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 70,
+          "sentence_id": 3,
+          "text": "برجستۀ",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 71,
+          "sentence_id": 3,
+          "text": "پیامبران",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 72,
+          "sentence_id": 3,
+          "text": "خدا",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 73,
+          "sentence_id": 3,
+          "text": "و",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 74,
+          "sentence_id": 3,
+          "text": "مؤمنان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 75,
+          "sentence_id": 3,
+          "text": "و",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 76,
+          "sentence_id": 3,
+          "text": "دنباله‌روان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 77,
+          "sentence_id": 3,
+          "text": "آنهاست؛",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 78,
+          "sentence_id": 4,
+          "text": "ایمان",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 79,
+          "sentence_id": 4,
+          "text": "داشتن،",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 80,
+          "sentence_id": 4,
+          "text": "باور‌داشتنِ",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 81,
+          "sentence_id": 4,
+          "text": "به",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 82,
+          "sentence_id": 4,
+          "text": "رسالت",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 83,
+          "sentence_id": 4,
+          "text": "خود.",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        }
+      ]
+    },
+    {
+      "core": 48,
+      "offset": 46,
+      "frames": 799,
+      "emissions": "session-03-48.f32.gz",
+      "words": [
+        {
+          "word_id": 40,
+          "sentence_id": 1,
+          "text": "با",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 41,
+          "sentence_id": 1,
+          "text": "توجه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 42,
+          "sentence_id": 1,
+          "text": "به",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 43,
+          "sentence_id": 1,
+          "text": "چند",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 44,
+          "sentence_id": 1,
+          "text": "آیه‌ای",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 45,
+          "sentence_id": 1,
+          "text": "که",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 46,
+          "sentence_id": 1,
+          "text": "امروز",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 47,
+          "sentence_id": 1,
+          "text": "ما",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 48,
+          "sentence_id": 1,
+          "text": "تلاوت",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 49,
+          "sentence_id": 1,
+          "text": "می‌کنیم",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 50,
+          "sentence_id": 1,
+          "text": "و",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 51,
+          "sentence_id": 1,
+          "text": "در",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 52,
+          "sentence_id": 1,
+          "text": "آن",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 53,
+          "sentence_id": 1,
+          "text": "ورقه",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 54,
+          "sentence_id": 1,
+          "text": "نوشته",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 55,
+          "sentence_id": 1,
+          "text": "شده",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 56,
+          "sentence_id": 1,
+          "text": "است،",
+          "coarse_start": 22.42,
+          "coarse_end": 32.58
+        },
+        {
+          "word_id": 57,
+          "sentence_id": 2,
+          "text": "دو،",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 58,
+          "sentence_id": 2,
+          "text": "سه",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 59,
+          "sentence_id": 2,
+          "text": "حقیقت",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 60,
+          "sentence_id": 2,
+          "text": "دیگر",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 61,
+          "sentence_id": 2,
+          "text": "در",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 62,
+          "sentence_id": 2,
+          "text": "زمینۀ",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 63,
+          "sentence_id": 2,
+          "text": "ایمان",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 64,
+          "sentence_id": 2,
+          "text": "به‌دست",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 65,
+          "sentence_id": 2,
+          "text": "می‌آید.",
+          "coarse_start": 34.26,
+          "coarse_end": 39.9
+        },
+        {
+          "word_id": 66,
+          "sentence_id": 3,
+          "text": "اولا",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 67,
+          "sentence_id": 3,
+          "text": "ایمان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 68,
+          "sentence_id": 3,
+          "text": "یک",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 69,
+          "sentence_id": 3,
+          "text": "خصلت",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 70,
+          "sentence_id": 3,
+          "text": "برجستۀ",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 71,
+          "sentence_id": 3,
+          "text": "پیامبران",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 72,
+          "sentence_id": 3,
+          "text": "خدا",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 73,
+          "sentence_id": 3,
+          "text": "و",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 74,
+          "sentence_id": 3,
+          "text": "مؤمنان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 75,
+          "sentence_id": 3,
+          "text": "و",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 76,
+          "sentence_id": 3,
+          "text": "دنباله‌روان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 77,
+          "sentence_id": 3,
+          "text": "آنهاست؛",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 78,
+          "sentence_id": 4,
+          "text": "ایمان",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 79,
+          "sentence_id": 4,
+          "text": "داشتن،",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 80,
+          "sentence_id": 4,
+          "text": "باور‌داشتنِ",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 81,
+          "sentence_id": 4,
+          "text": "به",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 82,
+          "sentence_id": 4,
+          "text": "رسالت",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 83,
+          "sentence_id": 4,
+          "text": "خود.",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 84,
+          "sentence_id": 5,
+          "text": "فرق",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 85,
+          "sentence_id": 5,
+          "text": "میان",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 86,
+          "sentence_id": 5,
+          "text": "رهبران",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 87,
+          "sentence_id": 5,
+          "text": "الهی",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 88,
+          "sentence_id": 5,
+          "text": "و",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 89,
+          "sentence_id": 5,
+          "text": "رهبران",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 90,
+          "sentence_id": 5,
+          "text": "سیاستمدار",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 91,
+          "sentence_id": 5,
+          "text": "جهانی",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 92,
+          "sentence_id": 5,
+          "text": "در",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 93,
+          "sentence_id": 5,
+          "text": "همین‌جاست.",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        }
+      ]
+    },
+    {
+      "core": 60,
+      "offset": 58,
+      "frames": 799,
+      "emissions": "session-03-60.f32.gz",
+      "words": [
+        {
+          "word_id": 66,
+          "sentence_id": 3,
+          "text": "اولا",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 67,
+          "sentence_id": 3,
+          "text": "ایمان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 68,
+          "sentence_id": 3,
+          "text": "یک",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 69,
+          "sentence_id": 3,
+          "text": "خصلت",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 70,
+          "sentence_id": 3,
+          "text": "برجستۀ",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 71,
+          "sentence_id": 3,
+          "text": "پیامبران",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 72,
+          "sentence_id": 3,
+          "text": "خدا",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 73,
+          "sentence_id": 3,
+          "text": "و",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 74,
+          "sentence_id": 3,
+          "text": "مؤمنان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 75,
+          "sentence_id": 3,
+          "text": "و",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 76,
+          "sentence_id": 3,
+          "text": "دنباله‌روان",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 77,
+          "sentence_id": 3,
+          "text": "آنهاست؛",
+          "coarse_start": 43.44,
+          "coarse_end": 52.72
+        },
+        {
+          "word_id": 78,
+          "sentence_id": 4,
+          "text": "ایمان",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 79,
+          "sentence_id": 4,
+          "text": "داشتن،",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 80,
+          "sentence_id": 4,
+          "text": "باور‌داشتنِ",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 81,
+          "sentence_id": 4,
+          "text": "به",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 82,
+          "sentence_id": 4,
+          "text": "رسالت",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 83,
+          "sentence_id": 4,
+          "text": "خود.",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 84,
+          "sentence_id": 5,
+          "text": "فرق",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 85,
+          "sentence_id": 5,
+          "text": "میان",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 86,
+          "sentence_id": 5,
+          "text": "رهبران",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 87,
+          "sentence_id": 5,
+          "text": "الهی",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 88,
+          "sentence_id": 5,
+          "text": "و",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 89,
+          "sentence_id": 5,
+          "text": "رهبران",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 90,
+          "sentence_id": 5,
+          "text": "سیاستمدار",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 91,
+          "sentence_id": 5,
+          "text": "جهانی",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 92,
+          "sentence_id": 5,
+          "text": "در",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 93,
+          "sentence_id": 5,
+          "text": "همین‌جاست.",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 94,
+          "sentence_id": 6,
+          "text": "رهبر",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 95,
+          "sentence_id": 6,
+          "text": "الهی",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 96,
+          "sentence_id": 6,
+          "text": "مانند",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 97,
+          "sentence_id": 6,
+          "text": "راه‌روِ",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 98,
+          "sentence_id": 6,
+          "text": "این",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 99,
+          "sentence_id": 6,
+          "text": "راه،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 100,
+          "sentence_id": 6,
+          "text": "به",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 101,
+          "sentence_id": 6,
+          "text": "آنچه",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 102,
+          "sentence_id": 6,
+          "text": "می‌گوید،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 103,
+          "sentence_id": 6,
+          "text": "به",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 104,
+          "sentence_id": 6,
+          "text": "گامی",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 105,
+          "sentence_id": 6,
+          "text": "که",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 106,
+          "sentence_id": 6,
+          "text": "برمی‌دارد،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        }
+      ]
+    },
+    {
+      "core": 72,
+      "offset": 70,
+      "frames": 799,
+      "emissions": "session-03-72.f32.gz",
+      "words": [
+        {
+          "word_id": 78,
+          "sentence_id": 4,
+          "text": "ایمان",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 79,
+          "sentence_id": 4,
+          "text": "داشتن،",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 80,
+          "sentence_id": 4,
+          "text": "باور‌داشتنِ",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 81,
+          "sentence_id": 4,
+          "text": "به",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 82,
+          "sentence_id": 4,
+          "text": "رسالت",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 83,
+          "sentence_id": 4,
+          "text": "خود.",
+          "coarse_start": 53.34,
+          "coarse_end": 59.76
+        },
+        {
+          "word_id": 84,
+          "sentence_id": 5,
+          "text": "فرق",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 85,
+          "sentence_id": 5,
+          "text": "میان",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 86,
+          "sentence_id": 5,
+          "text": "رهبران",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 87,
+          "sentence_id": 5,
+          "text": "الهی",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 88,
+          "sentence_id": 5,
+          "text": "و",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 89,
+          "sentence_id": 5,
+          "text": "رهبران",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 90,
+          "sentence_id": 5,
+          "text": "سیاستمدار",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 91,
+          "sentence_id": 5,
+          "text": "جهانی",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 92,
+          "sentence_id": 5,
+          "text": "در",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 93,
+          "sentence_id": 5,
+          "text": "همین‌جاست.",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 94,
+          "sentence_id": 6,
+          "text": "رهبر",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 95,
+          "sentence_id": 6,
+          "text": "الهی",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 96,
+          "sentence_id": 6,
+          "text": "مانند",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 97,
+          "sentence_id": 6,
+          "text": "راه‌روِ",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 98,
+          "sentence_id": 6,
+          "text": "این",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 99,
+          "sentence_id": 6,
+          "text": "راه،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 100,
+          "sentence_id": 6,
+          "text": "به",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 101,
+          "sentence_id": 6,
+          "text": "آنچه",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 102,
+          "sentence_id": 6,
+          "text": "می‌گوید،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 103,
+          "sentence_id": 6,
+          "text": "به",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 104,
+          "sentence_id": 6,
+          "text": "گامی",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 105,
+          "sentence_id": 6,
+          "text": "که",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 106,
+          "sentence_id": 6,
+          "text": "برمی‌دارد،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 107,
+          "sentence_id": 7,
+          "text": "به",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 108,
+          "sentence_id": 7,
+          "text": "راهی",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 109,
+          "sentence_id": 7,
+          "text": "که",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 110,
+          "sentence_id": 7,
+          "text": "می‌پیماید،",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 111,
+          "sentence_id": 7,
+          "text": "با",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 112,
+          "sentence_id": 7,
+          "text": "همۀ",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 113,
+          "sentence_id": 7,
+          "text": "وجودش",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 114,
+          "sentence_id": 7,
+          "text": "صمیمانه",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 115,
+          "sentence_id": 7,
+          "text": "مؤمن",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 116,
+          "sentence_id": 7,
+          "text": "است.",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        }
+      ]
+    },
+    {
+      "core": 84,
+      "offset": 82,
+      "frames": 799,
+      "emissions": "session-03-84.f32.gz",
+      "words": [
+        {
+          "word_id": 84,
+          "sentence_id": 5,
+          "text": "فرق",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 85,
+          "sentence_id": 5,
+          "text": "میان",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 86,
+          "sentence_id": 5,
+          "text": "رهبران",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 87,
+          "sentence_id": 5,
+          "text": "الهی",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 88,
+          "sentence_id": 5,
+          "text": "و",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 89,
+          "sentence_id": 5,
+          "text": "رهبران",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 90,
+          "sentence_id": 5,
+          "text": "سیاستمدار",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 91,
+          "sentence_id": 5,
+          "text": "جهانی",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 92,
+          "sentence_id": 5,
+          "text": "در",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 93,
+          "sentence_id": 5,
+          "text": "همین‌جاست.",
+          "coarse_start": 67.12,
+          "coarse_end": 78.28
+        },
+        {
+          "word_id": 94,
+          "sentence_id": 6,
+          "text": "رهبر",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 95,
+          "sentence_id": 6,
+          "text": "الهی",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 96,
+          "sentence_id": 6,
+          "text": "مانند",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 97,
+          "sentence_id": 6,
+          "text": "راه‌روِ",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 98,
+          "sentence_id": 6,
+          "text": "این",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 99,
+          "sentence_id": 6,
+          "text": "راه،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 100,
+          "sentence_id": 6,
+          "text": "به",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 101,
+          "sentence_id": 6,
+          "text": "آنچه",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 102,
+          "sentence_id": 6,
+          "text": "می‌گوید،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 103,
+          "sentence_id": 6,
+          "text": "به",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 104,
+          "sentence_id": 6,
+          "text": "گامی",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 105,
+          "sentence_id": 6,
+          "text": "که",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 106,
+          "sentence_id": 6,
+          "text": "برمی‌دارد،",
+          "coarse_start": 81.22,
+          "coarse_end": 92.32
+        },
+        {
+          "word_id": 107,
+          "sentence_id": 7,
+          "text": "به",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 108,
+          "sentence_id": 7,
+          "text": "راهی",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 109,
+          "sentence_id": 7,
+          "text": "که",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 110,
+          "sentence_id": 7,
+          "text": "می‌پیماید،",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 111,
+          "sentence_id": 7,
+          "text": "با",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 112,
+          "sentence_id": 7,
+          "text": "همۀ",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 113,
+          "sentence_id": 7,
+          "text": "وجودش",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 114,
+          "sentence_id": 7,
+          "text": "صمیمانه",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 115,
+          "sentence_id": 7,
+          "text": "مؤمن",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 116,
+          "sentence_id": 7,
+          "text": "است.",
+          "coarse_start": 93.24,
+          "coarse_end": 101
+        },
+        {
+          "word_id": 117,
+          "sentence_id": 8,
+          "text": "درحالی‌که",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 118,
+          "sentence_id": 8,
+          "text": "سیاستمداران",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 119,
+          "sentence_id": 8,
+          "text": "عالم،",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 120,
+          "sentence_id": 8,
+          "text": "احیانا",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 121,
+          "sentence_id": 8,
+          "text": "سخنان",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 122,
+          "sentence_id": 8,
+          "text": "زیبایی",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 123,
+          "sentence_id": 8,
+          "text": "و",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 124,
+          "sentence_id": 8,
+          "text": "بیانات",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 125,
+          "sentence_id": 8,
+          "text": "دلکش",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 126,
+          "sentence_id": 8,
+          "text": "و",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 127,
+          "sentence_id": 8,
+          "text": "شیوایی",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 128,
+          "sentence_id": 8,
+          "text": "ممکن",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 129,
+          "sentence_id": 8,
+          "text": "است",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 130,
+          "sentence_id": 8,
+          "text": "داشته",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        },
+        {
+          "word_id": 131,
+          "sentence_id": 8,
+          "text": "باشند،",
+          "coarse_start": 105.1,
+          "coarse_end": 114.96
+        }
+      ]
+    }
+  ],
+  "expected": [
+    {
+      "word_id": 40,
+      "text": "با",
+      "range": [
+        22,
+        24
+      ]
+    },
+    {
+      "word_id": 41,
+      "text": "توجه",
+      "range": [
+        23,
+        24.5
+      ]
+    },
+    {
+      "word_id": 42,
+      "text": "به",
+      "range": [
+        23.5,
+        24.6
+      ]
+    },
+    {
+      "word_id": 43,
+      "text": "چند",
+      "range": [
+        24,
+        25
+      ]
+    },
+    {
+      "word_id": 44,
+      "text": "آیه‌ای",
+      "range": [
+        24.6,
+        25.5
+      ]
+    },
+    {
+      "word_id": 64,
+      "text": "به‌دست",
+      "range": [
+        38,
+        39.6
+      ]
+    },
+    {
+      "word_id": 66,
+      "text": "اولا",
+      "range": [
+        42.5,
+        44
+      ]
+    },
+    {
+      "word_id": 77,
+      "text": "آنهاست؛",
+      "range": [
+        56,
+        57.6
+      ]
+    },
+    {
+      "word_id": 82,
+      "text": "رسالت",
+      "range": [
+        63.7,
+        64.8
+      ]
+    },
+    {
+      "word_id": 83,
+      "text": "خود.",
+      "range": [
+        64.6,
+        65.5
+      ]
+    },
+    {
+      "word_id": 94,
+      "text": "رهبر",
+      "range": [
+        81.3,
+        82.6
+      ]
+    }
+  ]
+}
