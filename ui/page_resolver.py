@@ -43,6 +43,14 @@ _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
 
 
+# The Book text layer's backspace word separators (\x08, recorded live
+# 2026-09-09) and any non-whitespace C0 control gets the space the layer meant.
+_CONTROL_MARKS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_TERMINAL_PUNCT = re.compile(
+    r"([\.!\?؟\u2026]+[\)»\"'\]]*|[\)»\"'\]][\.!\?؟\u2026]+)$"
+)
+
+
 def bookshelf_dir() -> Path:
     """The Books' directory — serve.py's own rule (compose mounts the
     Books at /books; dev default: the repo's books/ beside ui/)."""
@@ -51,27 +59,208 @@ def bookshelf_dir() -> Path:
     )
 
 
-def _dataset_pages(dataset: str):
-    """The dataset's {page number: normalized page text}, loaded and
-    normalized once per process; None when the index is unreadable (the
-    estimate behavior stands)."""
+def _dataset_raw_pages(dataset: str) -> dict[str, str] | None:
+    """The dataset's {page number: verbatim page text}, loaded once per
+    process; None when the index is unreadable."""
+    if not isinstance(dataset, str) or not dataset:
+        return None
+    cache_key = f"raw:{dataset}"
+    with _CACHE_LOCK:
+        if cache_key in _CACHE:
+            return _CACHE[cache_key]
+        try:
+            path = bookshelf_dir() / f"{dataset}.pages.json"
+            data = json.loads(path.read_text(encoding="utf-8"))
+            raw = (
+                data.get("pages")
+                if isinstance(data, dict) and "pages" in data
+                else data
+            )
+            if isinstance(raw, dict):
+                pages = {str(k): str(v) for k, v in raw.items()}
+            else:
+                pages = None
+        except (OSError, ValueError):
+            pages = None
+        _CACHE[cache_key] = pages
+        return pages
+
+
+def _dataset_pages(dataset: str) -> dict[str, str] | None:
+    """The dataset's {page number: normalized page text}, derived from
+    _dataset_raw_pages and normalized once per process; None when the index is
+    unreadable (the estimate behavior stands)."""
+    if not isinstance(dataset, str) or not dataset:
+        return None
     with _CACHE_LOCK:
         if dataset in _CACHE:
             return _CACHE[dataset]
-        try:
-            data = json.loads(
-                (bookshelf_dir() / f"{dataset}.pages.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-            pages = {
-                str(number): normalize_for_match(text)
-                for number, text in (data.get("pages") or {}).items()
-            }
-        except (OSError, ValueError):
-            pages = None
+    raw = _dataset_raw_pages(dataset)
+    if raw is None:
+        pages = None
+    else:
+        pages = {
+            str(number): normalize_for_match(text)
+            for number, text in raw.items()
+        }
+    with _CACHE_LOCK:
         _CACHE[dataset] = pages
         return pages
+
+
+def _clean_text(text: str) -> str:
+    """Clean control characters (like \x08) and normalize whitespace within lines."""
+    if not text:
+        return ""
+    cleaned = _CONTROL_MARKS.sub(" ", text)
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.splitlines()]
+    return "\n".join(lines).strip()
+
+
+def _extract_paragraphs(text: str) -> list[str]:
+    """Split text into paragraphs based on double newlines (blank lines)
+    if present; otherwise splits into coherent line blocks grouped by
+    terminal punctuation. Cleans control characters and normalizes whitespace."""
+    if not text or not text.strip():
+        return []
+
+    cleaned = _CONTROL_MARKS.sub(" ", text)
+
+    # 1. Double newlines (blank lines): split by blank lines
+    if re.search(r"\n\s*\n+", cleaned):
+        chunks = [c.strip() for c in re.split(r"\n\s*\n+", cleaned.strip()) if c.strip()]
+        paras = []
+        for chunk in chunks:
+            lines = [re.sub(r"[ \t]+", " ", l).strip() for l in chunk.splitlines() if l.strip()]
+            if lines:
+                paras.append(" ".join(lines))
+        return paras if paras else [_clean_text(cleaned)]
+
+    # 2. Single newlines: split into coherent line blocks by terminal punctuation
+    lines = [re.sub(r"[ \t]+", " ", l).strip() for l in cleaned.splitlines()]
+    lines = [l for l in lines if l]
+    if not lines:
+        return []
+
+    blocks: list[str] = []
+    current: list[str] = []
+    for line in lines:
+        current.append(line)
+        if _TERMINAL_PUNCT.search(line):
+            blocks.append(" ".join(current))
+            current = []
+    if current:
+        blocks.append(" ".join(current))
+
+    return blocks
+
+
+def get_page_context(
+    book: str, page: int | str = None, pages: list = None
+) -> dict | None:
+    """Retrieve the verbatim text for the targeted page or interval alongside boundary
+    context (±1 margin: trailing paragraph of start_page-1 and leading paragraph of end_page+1).
+    Resolves within an allotted length budget (~12,000 chars) and returns page, last_page, pages.
+    Returns None if missing or invalid."""
+    if not isinstance(book, str) or not book:
+        return None
+
+    clean_pages: list[int] = []
+    if pages:
+        for p in pages:
+            try:
+                val = int(p)
+                if val > 0:
+                    clean_pages.append(val)
+            except (ValueError, TypeError):
+                pass
+
+    if not clean_pages and page is not None:
+        try:
+            val = int(page)
+            if val > 0:
+                clean_pages = [val]
+        except (ValueError, TypeError):
+            return None
+
+    if not clean_pages:
+        return None
+
+    raw_pages = _dataset_raw_pages(book)
+    if not raw_pages:
+        return None
+
+    start_page = min(clean_pages)
+    end_page = max(clean_pages)
+    interval_pages = list(range(start_page, end_page + 1))
+
+    if str(start_page) not in raw_pages:
+        return None
+
+    max_length = 12000
+    collected_pages: list[int] = []
+    collected_texts: list[str] = []
+    current_len = 0
+
+    for p_num in interval_pages:
+        p_key = str(p_num)
+        if p_key not in raw_pages:
+            break
+        raw_p_text = raw_pages[p_key]
+        if not isinstance(raw_p_text, str) or not raw_p_text.strip():
+            continue
+        cleaned_p = _clean_text(raw_p_text)
+        if not cleaned_p:
+            continue
+
+        extra_len = len(cleaned_p) + (2 if collected_texts else 0)
+        if collected_pages and (current_len + extra_len > max_length):
+            break
+
+        collected_pages.append(p_num)
+        collected_texts.append(cleaned_p)
+        current_len += extra_len
+
+    if not collected_pages:
+        return None
+
+    resolved_start = collected_pages[0]
+    resolved_end = collected_pages[-1]
+    combined_text = "\n\n".join(collected_texts)
+
+    prev_paragraph = None
+    prev_page_num = None
+    prev_key = str(resolved_start - 1)
+    if prev_key in raw_pages:
+        prev_raw = raw_pages[prev_key]
+        if isinstance(prev_raw, str) and prev_raw.strip():
+            prev_paras = _extract_paragraphs(prev_raw)
+            if prev_paras:
+                prev_paragraph = prev_paras[-1]
+                prev_page_num = resolved_start - 1
+
+    next_paragraph = None
+    next_page_num = None
+    next_key = str(resolved_end + 1)
+    if next_key in raw_pages:
+        next_raw = raw_pages[next_key]
+        if isinstance(next_raw, str) and next_raw.strip():
+            next_paras = _extract_paragraphs(next_raw)
+            if next_paras:
+                next_paragraph = next_paras[0]
+                next_page_num = resolved_end + 1
+
+    return {
+        "book": book,
+        "page": resolved_start,
+        "last_page": resolved_end,
+        "pages": collected_pages,
+        "text": combined_text,
+        "prev_page": prev_page_num,
+        "prev_paragraph": prev_paragraph,
+        "next_page": next_page_num,
+        "next_paragraph": next_paragraph,
+    }
 
 
 def reset_cache() -> None:

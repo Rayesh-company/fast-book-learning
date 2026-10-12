@@ -811,3 +811,276 @@ def test_the_store_migrates_a_deployed_agent_chats_table(tmp_path):
         assert fresh[-1]["sources"] == CLEAN_WEB_SOURCES
     finally:
         chat_store.CHAT_DB = original_db
+
+
+def test_learner_turn_context_defaults_and_to_request_body():
+    """LearnerTurnContext handles default factories and serializes to the
+    Mastra chat agent request body schema."""
+    turn = agent_client.LearnerTurnContext(
+        query="تست پرسش",
+        thread_id="learner-09121112233",
+    )
+    assert turn.datasets == []
+    assert turn.resource_id == "learner-09121112233"
+    assert turn.user_profile == {}
+    assert turn.page_context is None
+    assert turn.selection_text is None
+
+    body = turn.to_request_body()
+    assert body["messages"] == [{"role": "user", "content": "تست پرسش"}]
+    assert body["memory"] == {
+        "thread": "learner-09121112233",
+        "resource": "learner-09121112233",
+    }
+    assert body["requestContext"] == {"datasets": []}
+    assert "userProfile" not in body["requestContext"]
+    assert "pageContext" not in body["requestContext"]
+    assert "selectionText" not in body["requestContext"]
+
+
+def test_learner_turn_context_to_request_body_with_full_context():
+    turn = agent_client.LearnerTurnContext(
+        query="تست پرسش کامل",
+        datasets=["tarhe-kolli"],
+        thread_id="learner-phone",
+        resource_id="learner-acc",
+        user_profile={"tone": "formal"},
+        page_context={"page": 5, "book": "tarhe-kolli", "text": "متن صفحه ۵"},
+        selection_text={"text": "انتخاب", "page": 5},
+    )
+    body = turn.to_request_body()
+    assert body["messages"] == [{"role": "user", "content": "تست پرسش کامل"}]
+    assert body["memory"] == {
+        "thread": "learner-phone",
+        "resource": "learner-acc",
+    }
+    assert body["requestContext"]["datasets"] == ["tarhe-kolli"]
+    assert body["requestContext"]["userProfile"] == {"tone": "formal"}
+    assert body["requestContext"]["pageContext"] == {
+        "page": 5,
+        "book": "tarhe-kolli",
+        "text": "متن صفحه ۵",
+    }
+    assert body["requestContext"]["selectionText"] == {
+        "text": "انتخاب",
+        "page": 5,
+    }
+
+
+def test_learner_turn_context_from_request_validation():
+    import pytest
+
+    # Non-dict payload
+    with pytest.raises(ValueError):
+        agent_client.LearnerTurnContext.from_request("09120000000", None, "not-a-dict")  # type: ignore
+
+    # Missing query
+    with pytest.raises(ValueError):
+        agent_client.LearnerTurnContext.from_request("09120000000", None, {})
+
+    # Empty query
+    with pytest.raises(ValueError):
+        agent_client.LearnerTurnContext.from_request(
+            "09120000000", None, {"query": "   "}
+        )
+
+
+def test_learner_turn_context_from_request_coordination(tmp_path):
+    # Setup test profile
+    from ui import accounts
+
+    orig_db = accounts.ACCOUNTS_DB
+    accounts.ACCOUNTS_DB = tmp_path / "accounts.sqlite3"
+    try:
+        accounts.create_account("learner@example.com", "pass12345", phone="09121112233")
+        accounts.save_profile(
+            "learner@example.com",
+            {"usage_purpose": "اکادمیک", "tone": "حرفه‌ای"},
+        )
+
+        payload = {
+            "query": "  پرسش کاربری  ",
+            "datasets": ["tarhe-kolli", "invalid-book"],
+            "scope": "page",
+            "page": 2,
+            "book": "tarhe-kolli",
+            "selection": "فراز منتخب",
+        }
+        turn = agent_client.LearnerTurnContext.from_request(
+            phone="09121112233",
+            account="learner@example.com",
+            payload=payload,
+        )
+        assert turn.query == "پرسش کاربری"
+        assert turn.datasets == ["tarhe-kolli"]
+        assert turn.thread_id == "learner-09121112233"
+        assert turn.resource_id == "learner-learner@example.com"
+        assert turn.user_profile.get("tone") == "حرفه‌ای"
+        assert turn.selection_text == {
+            "text": "فراز منتخب",
+            "page": 2,
+            "book": "tarhe-kolli",
+        }
+    finally:
+        accounts.ACCOUNTS_DB = orig_db
+
+
+def test_agent_stream_and_agent_answer_with_turn_context():
+    turn = agent_client.LearnerTurnContext(
+        query="پرسش مستقیم",
+        datasets=["tarhe-kolli"],
+        thread_id="learner-test",
+        resource_id="learner-test",
+    )
+
+    # 1. AgentStream accepts turn instance
+    stream = agent_client.AgentStream(turn)
+    assert stream.query == "پرسش مستقیم"
+    assert stream.datasets == ["tarhe-kolli"]
+    assert stream.turn is turn
+
+    # 2. agent_answer accepts turn instance
+    def fake_urlopen(req, timeout=120):
+        body = json.loads(req.data.decode("utf-8"))
+        assert body["messages"][0]["content"] == "پرسش مستقیم"
+        assert body["memory"]["thread"] == "learner-test"
+        return FakeResponse(json.dumps({"text": "پاسخ"}).encode("utf-8"))
+
+    orig_urlopen = agent_client.urlopen
+    agent_client.urlopen = fake_urlopen
+    try:
+        ans = agent_client.agent_answer(turn)
+        assert ans["text"] == "پاسخ"
+    finally:
+        agent_client.urlopen = orig_urlopen
+
+
+def test_learner_turn_context_from_request_attaches_page_context_and_selection_in_agent_stream(
+    tmp_path,
+):
+    from ui import page_resolver
+
+    shelf = tmp_path / "books"
+    shelf.mkdir(parents=True, exist_ok=True)
+    (shelf / "tarhe-kolli.pages.json").write_text(
+        json.dumps(
+            {
+                "pages": {
+                    "2": "پاراگراف صفحه دو کتاب طرح کلی."
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    orig_shelf = os.environ.get("SESSION_BOOKS_DIR")
+    os.environ["SESSION_BOOKS_DIR"] = str(shelf)
+    page_resolver.reset_cache()
+    try:
+        payload = {
+            "query": "این متن در صفحه دو چیست؟",
+            "datasets": ["tarhe-kolli"],
+            "scope": "page",
+            "page": 2,
+            "book": "tarhe-kolli",
+            "selection": {"text": "متن انتخاب شده", "page": 2, "book": "tarhe-kolli"},
+        }
+        turn = agent_client.LearnerTurnContext.from_request(
+            phone="09121112233",
+            account="learner@example.com",
+            payload=payload,
+        )
+        assert turn.page_context is not None
+        assert turn.page_context["page"] == 2
+        assert turn.page_context["book"] == "tarhe-kolli"
+        assert "پاراگراف صفحه دو کتاب طرح کلی." in turn.page_context["text"]
+        assert turn.selection_text == {
+            "text": "متن انتخاب شده",
+            "page": 2,
+            "book": "tarhe-kolli",
+        }
+
+        # 1. AgentStream(turn).to_request_body() carries pageContext and selectionText
+        stream = agent_client.AgentStream(turn)
+        body = stream.to_request_body()
+        assert "requestContext" in body
+        req_ctx = body["requestContext"]
+        assert "pageContext" in req_ctx
+        assert req_ctx["pageContext"] == turn.page_context
+        assert "selectionText" in req_ctx
+        assert req_ctx["selectionText"] == turn.selection_text
+
+        # 2. _request_body(turn) helper also produces them
+        body_helper = agent_client._request_body(turn)
+        assert body_helper["requestContext"]["pageContext"] == turn.page_context
+        assert body_helper["requestContext"]["selectionText"] == turn.selection_text
+
+        # 3. Backwards-compatible properties on AgentStream
+        assert stream.query == turn.query
+        assert stream.datasets == turn.datasets
+        assert stream.thread_id == turn.thread_id
+        assert stream.resource_id == turn.resource_id
+        assert stream.user_profile == turn.user_profile
+        assert stream.page_context == turn.page_context
+        assert stream.selection_text == turn.selection_text
+    finally:
+        page_resolver.reset_cache()
+        if orig_shelf is None:
+            os.environ.pop("SESSION_BOOKS_DIR", None)
+        else:
+            os.environ["SESSION_BOOKS_DIR"] = orig_shelf
+
+
+def test_learner_turn_context_from_request_none_account_avoids_calling_profile(monkeypatch):
+    called = []
+
+    def mock_get_profile(identifier):
+        called.append(identifier)
+        return {"should_not": "be_called"}
+
+    monkeypatch.setattr(agent_client, "get_profile", mock_get_profile)
+    payload = {"query": "پرسش ساده"}
+    turn = agent_client.LearnerTurnContext.from_request(
+        phone="09120000000",
+        account=None,
+        payload=payload,
+    )
+    assert called == []
+    assert turn.user_profile == {}
+    assert turn.resource_id == "learner-09120000000"
+    assert turn.thread_id == "learner-09120000000"
+
+
+def test_coerce_turn_context_and_agent_stream_initialization():
+    # Coercion from keyword arguments
+    turn1 = agent_client._coerce_turn_context(
+        query="تست کوئری",
+        datasets=["tarhe-kolli"],
+        thread_id="t-1",
+        resource_id="r-1",
+        user_profile={"role": "tester"},
+    )
+    assert isinstance(turn1, agent_client.LearnerTurnContext)
+    assert turn1.query == "تست کوئری"
+    assert turn1.datasets == ["tarhe-kolli"]
+    assert turn1.user_profile == {"role": "tester"}
+
+    # Coercion from existing turn instance returns same instance
+    turn2 = agent_client._coerce_turn_context(turn1)
+    assert turn2 is turn1
+
+    # AgentStream initialized with kwargs
+    stream = agent_client.AgentStream(
+        query="تست استریم",
+        datasets=["tarhe-kolli"],
+        thread_id="t-2",
+    )
+    assert stream.query == "تست استریم"
+    assert stream.datasets == ["tarhe-kolli"]
+    assert stream.thread_id == "t-2"
+    assert stream.resource_id == "t-2"
+    assert stream.user_profile == {}
+    assert stream.page_context is None
+    assert stream.selection_text is None
+
+

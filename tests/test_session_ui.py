@@ -441,7 +441,7 @@ def test_session_ui_server_relays_the_streamed_agent_answer_unbuffered():
     # gate exercises the disconnect itself; this pin holds the ordering.
     text = SERVE.read_text(encoding="utf-8")
     handler = text[
-        text.index("def _agent_chat(self, phone: str)") : text.index(
+        text.index("def _agent_chat(self, phone: str") : text.index(
             "def _agent_chat_history(self)"
         )
     ]

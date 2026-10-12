@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import sqlite3
@@ -69,6 +70,12 @@ def _connect() -> sqlite3.Connection:
         )
     except sqlite3.OperationalError:
         pass  # the column is already there
+    try:
+        conn.execute(
+            "ALTER TABLE accounts ADD COLUMN profile_json TEXT"
+        )
+    except sqlite3.OperationalError:
+        pass
     return conn
 
 
@@ -109,12 +116,41 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+VALID_USAGE_PURPOSES = (
+    "اکادمیک",
+    "مطالعه آزاد",
+    "یادگیری",
+    "مباحثه",
+    "آموزش",
+    "اموزش",
+    "ارائه",
+)
+VALID_TONES = (
+    "حرفه‌ای",
+    "حرفه ای",
+    "آموزشی",
+    "اموزشی",
+    "برای نوجوان و کودک",
+    "برای نو جوان و کودک",
+    "ساده و روان",
+)
+VALID_FAMILIARITY = ("زیاد", "متوسط", "کم", "آشنایی ندارم", "اشنایی ندارم")
+
+
 def _row_to_account(row) -> dict:
+    profile = None
+    if len(row) > 4 and row[4]:
+        try:
+            profile = json.loads(row[4])
+        except Exception:
+            profile = None
     return {
         "email": row[0],
         "phone": row[1],
         "role": row[2],
         "created_at": row[3],
+        "profile": profile,
+        "profile_completed": bool(profile and profile.get("usage_purpose")),
     }
 
 
@@ -152,7 +188,7 @@ def verify_login(email, password):
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT email, password_hash, phone, role, created_at "
+            "SELECT email, password_hash, phone, role, created_at, profile_json "
             "FROM accounts WHERE email = ?",
             (_normalize_email(email),),
         ).fetchone()
@@ -160,8 +196,20 @@ def verify_login(email, password):
         conn.close()
     if row is None or not verify_password(str(password or ""), row[1]):
         return None
-    # The SELECT carries the hash at index 1; the account dict never does.
-    return {"email": row[0], "phone": row[2], "role": row[3], "created_at": row[4]}
+    profile = None
+    if len(row) > 5 and row[5]:
+        try:
+            profile = json.loads(row[5])
+        except Exception:
+            profile = None
+    return {
+        "email": row[0],
+        "phone": row[2],
+        "role": row[3],
+        "created_at": row[4],
+        "profile": profile,
+        "profile_completed": bool(profile and profile.get("usage_purpose")),
+    }
 
 
 def account_by_email(email):
@@ -170,13 +218,127 @@ def account_by_email(email):
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT email, phone, role, created_at FROM accounts "
+            "SELECT email, phone, role, created_at, profile_json FROM accounts "
             "WHERE email = ?",
             (_normalize_email(email),),
         ).fetchone()
     finally:
         conn.close()
     return _row_to_account(row) if row is not None else None
+
+
+def get_profile(email: str) -> dict | None:
+    """The Account's learning profile, or None."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT profile_json FROM accounts WHERE email = ?",
+            (_normalize_email(email),),
+        ).fetchone()
+        if row and row[0]:
+            try:
+                return json.loads(row[0])
+            except Exception:
+                return None
+        return None
+    finally:
+        conn.close()
+
+
+PURPOSE_MAP = {
+    "academic": "اکادمیک",
+    "leisure": "مطالعه آزاد",
+    "learning": "یادگیری",
+    "discussion": "مباحثه",
+    "teaching": "آموزش",
+    "presentation": "ارائه",
+}
+TONE_MAP = {
+    "professional": "حرفه‌ای",
+    "educational": "آموزشی",
+    "kids": "برای نوجوان و کودک",
+    "simple": "ساده و روان",
+}
+FAMILIARITY_MAP = {
+    "high": "زیاد",
+    "medium": "متوسط",
+    "low": "کم",
+    "none": "آشنایی ندارم",
+}
+
+
+def save_profile(email: str, profile: dict) -> dict:
+    """Save or update the learning profile for the Account."""
+    purpose = str(profile.get("usage_purpose") or "").strip()
+    if not purpose:
+        raise ValueError("انتخاب نحوه استفاده الزامی است.")
+    purpose = PURPOSE_MAP.get(purpose, purpose)
+    if purpose not in VALID_USAGE_PURPOSES:
+        raise ValueError(f"نحوه استفاده نامعتبر است: {purpose}")
+
+    martyr = str(profile.get("martyr_leader_familiarity") or profile.get("martyr_works_familiarity") or "").strip()
+    martyr = FAMILIARITY_MAP.get(martyr, martyr)
+    if martyr and martyr not in VALID_FAMILIARITY:
+        raise ValueError(f"میزان آشنایی با آثار نامعتبر است: {martyr}")
+
+    politics = str(profile.get("politics_familiarity") or profile.get("political_familiarity") or "").strip()
+    politics = FAMILIARITY_MAP.get(politics, politics)
+    if politics and politics not in VALID_FAMILIARITY:
+        raise ValueError(f"میزان آشنایی با سیاست نامعتبر است: {politics}")
+
+    religion = str(profile.get("religion_familiarity") or profile.get("religious_familiarity") or "").strip()
+    religion = FAMILIARITY_MAP.get(religion, religion)
+    if religion and religion not in VALID_FAMILIARITY:
+        raise ValueError(f"میزان آشنایی با مباحث دینی نامعتبر است: {religion}")
+
+    raw_age = str(profile.get("age") or "").strip()
+    if raw_age:
+        try:
+            age_int = int(raw_age)
+            if age_int < 0 or age_int > 150:
+                raise ValueError("سن باید عددی معتبر بین ۰ تا ۱۵۰ باشد.")
+            age_val = str(age_int)
+        except ValueError as err:
+            if "بین" in str(err):
+                raise
+            raise ValueError(f"سن نامعتبر است: {raw_age}")
+    else:
+        age_val = ""
+
+    job = str(profile.get("job") or profile.get("occupation") or "").strip()
+
+    tone = str(profile.get("tone") or profile.get("assistant_tone") or "").strip()
+    tone = TONE_MAP.get(tone, tone)
+    if tone and tone not in VALID_TONES:
+        raise ValueError(f"لحن نامعتبر است: {tone}")
+
+    cleaned = {
+        "usage_purpose": purpose,
+        "martyr_leader_familiarity": martyr,
+        "martyr_works_familiarity": martyr,
+        "age": age_val,
+        "politics_familiarity": politics,
+        "political_familiarity": politics,
+        "religion_familiarity": religion,
+        "religious_familiarity": religion,
+        "job": job,
+        "occupation": job,
+        "tone": tone or "آموزشی",
+        "assistant_tone": tone or "آموزشی",
+        "updated_at": _now(),
+    }
+    conn = _connect()
+    try:
+        cursor = conn.execute(
+            "UPDATE accounts SET profile_json = ? WHERE email = ?",
+            (json.dumps(cleaned, ensure_ascii=False), _normalize_email(email)),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise ValueError("حساب کاربری یافت نشد.")
+    finally:
+        conn.close()
+    return cleaned
 
 
 def list_accounts():

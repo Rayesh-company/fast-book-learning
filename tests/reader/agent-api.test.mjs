@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApi, parseAgentCitations } from '../../ui/mobile/api.mjs';
-import { answer } from '../../ui/mobile/views.mjs';
+import { answer, CANONICAL_CITATION_REGEX } from '../../ui/mobile/views.mjs';
 
 function makeSSEResponse(lines, { status = 200, statusText = 'OK' } = {}) {
   const encoder = new TextEncoder();
@@ -138,4 +138,45 @@ test('views.answer formats agent citations as interactive buttons', () => {
   assert.match(html, /data-action="citation"/);
   assert.match(html, /data-book="tarhe-kolli"/);
   assert.match(html, /data-page="50"/);
+});
+
+test('CANONICAL_CITATION_REGEX matches canonical single and range citations', () => {
+  const m1 = 'document tarhe-kolli (page 85)'.match(CANONICAL_CITATION_REGEX);
+  assert.ok(m1);
+  assert.equal(m1[1], 'tarhe-kolli');
+  assert.equal(m1[2], 'page 85');
+  assert.equal(m1[3], '85');
+  assert.equal(m1[4], undefined);
+
+  const m2 = 'document 70143-336 (pages 40-45)'.match(CANONICAL_CITATION_REGEX);
+  assert.ok(m2);
+  assert.equal(m2[1], '70143-336');
+  assert.equal(m2[2], 'pages 40-45');
+  assert.equal(m2[3], '40');
+  assert.equal(m2[4], '45');
+});
+
+test('createApi.ask does not leak selection text into query prompt', async () => {
+  let capturedBody = null;
+  const mockFetch = async (url, options) => {
+    capturedBody = JSON.parse(options.body);
+    return makeSSEResponse([
+      'data: {"type":"chat-answer-finalized","payload":{"answer":"پاسخ"}}\n\n',
+    ]);
+  };
+  const api = createApi({ fetchImpl: mockFetch });
+  await api.ask({
+    question: 'سوال درباره توحید',
+    book: 'tarhe-kolli',
+    selection: { text: 'عبارت انتخاب شده از کتاب', page: 85, book: 'tarhe-kolli' },
+  });
+
+  assert.ok(capturedBody);
+  assert.equal(capturedBody.query, 'سوال درباره توحید');
+  assert.doesNotMatch(capturedBody.query, /متن انتخاب‌شده/);
+  assert.deepEqual(capturedBody.selection, {
+    text: 'عبارت انتخاب شده از کتاب',
+    page: 85,
+    book: 'tarhe-kolli',
+  });
 });

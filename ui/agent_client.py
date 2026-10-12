@@ -17,12 +17,22 @@ the tests' env pins hold."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import json
 import os
 import queue
 import threading
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+try:
+    from ui.accounts import get_profile
+    from ui.dive import BOOK_DATASETS
+    from ui.page_resolver import get_page_context
+except ImportError:
+    from accounts import get_profile
+    from dive import BOOK_DATASETS
+    from page_resolver import get_page_context
 
 # The web tool's names in the reply's tool-call record: the OBJECT KEY
 # is what the model actually sees ("webSearchTool" — probed against the
@@ -122,15 +132,193 @@ def _web_guarantee(payload: dict) -> tuple[bool, list]:
     return sourced, sources[:MAX_WEB_SOURCES]
 
 
-def _request_body(query: str, datasets, thread_id: str) -> dict:
+def validated_datasets(raw: list | None) -> list[str] | None:
+    """The ask's Book selection (ADR-0010): the client's list
+    intersected with the Book set, in the set's stable order — a name
+    outside the Book set never reaches an upstream. None (missing,
+    malformed, or nothing left) means the whole Book set, the shape
+    every searcher already treats as the default."""
+    if not isinstance(raw, list):
+        return None
+    picked = {item for item in raw if isinstance(item, str) and item in BOOK_DATASETS}
+    if not picked:
+        return None
+    return [dataset for dataset in BOOK_DATASETS if dataset in picked]
+
+
+def normalize_selection(
+    selection: dict | str | None,
+    default_page: int | None = None,
+    default_book: str | None = None,
+) -> dict | None:
+    """Normalize user selection payload into a canonical dictionary or None.
+
+    Accepts either:
+    - a dict with 'text' and optional 'page'/'book'
+    - a non-empty string representing selected text
+    Returns None if selection is empty, missing, or whitespace.
+    """
+    if not selection:
+        return None
+    if isinstance(selection, dict):
+        text = selection.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return None
+        res = {"text": text.strip()}
+        page = (
+            selection.get("page")
+            if selection.get("page") is not None
+            else default_page
+        )
+        if page is not None:
+            res["page"] = page
+        book = selection.get("book") or default_book
+        if book:
+            res["book"] = book
+        return res
+    if isinstance(selection, str):
+        text = selection.strip()
+        if not text:
+            return None
+        res = {"text": text}
+        if default_page is not None:
+            res["page"] = default_page
+        if default_book:
+            res["book"] = default_book
+        return res
+    return None
+
+
+@dataclass
+class LearnerTurnContext:
+    query: str
+    datasets: list[str] = field(default_factory=list)
+    thread_id: str = ""
+    resource_id: str = ""
+    user_profile: dict = field(default_factory=dict)
+    page_context: dict | None = None
+    selection_text: dict | str | None = None
+
+    def __post_init__(self) -> None:
+        if self.datasets is None:
+            self.datasets = []
+        elif not isinstance(self.datasets, list):
+            self.datasets = list(self.datasets)
+        if not self.resource_id:
+            self.resource_id = self.thread_id
+        if self.user_profile is None:
+            self.user_profile = {}
+
+    def to_request_body(self) -> dict:
+        """The ONE body both routes carry (the generate call's own shape —
+        #24's pin): the message, the per-Learner thread, and the Book
+        selection, user profile, and active page context riding the requestContext,
+        never the prompt text."""
+        body = {
+            "messages": [{"role": "user", "content": self.query}],
+            "memory": {
+                "thread": self.thread_id,
+                "resource": self.resource_id or self.thread_id,
+            },
+            "requestContext": {"datasets": list(self.datasets or [])},
+        }
+        if self.user_profile:
+            body["requestContext"]["userProfile"] = self.user_profile
+        if self.page_context:
+            body["requestContext"]["pageContext"] = self.page_context
+        if self.selection_text:
+            body["requestContext"]["selectionText"] = self.selection_text
+        return body
+
+    @classmethod
+    def from_request(
+        cls, phone: str, account: str | None, payload: dict
+    ) -> LearnerTurnContext:
+        """Factory creating turn context from a client request payload."""
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be a dictionary")
+        query = payload.get("query")
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query is required")
+        query = query.strip()
+        datasets = validated_datasets(payload.get("datasets")) or []
+        thread_id = f"learner-{phone}"
+        resource_id = f"learner-{account or phone}"
+        user_profile = (get_profile(account) if account else {}) or {}
+        book = payload.get("book") or (datasets[0] if datasets else None)
+        page = payload.get("page")
+        pages = payload.get("pages")
+        scope = payload.get("scope")
+        page_context = None
+        if scope == "page" and (page is not None or pages) and book:
+            page_context = get_page_context(book, page, pages=pages)
+        selection = payload.get("selection")
+        selection_payload = normalize_selection(
+            selection,
+            default_page=page,
+            default_book=book,
+        )
+        return cls(
+            query=query,
+            datasets=datasets,
+            thread_id=thread_id,
+            resource_id=resource_id,
+            user_profile=user_profile,
+            page_context=page_context,
+            selection_text=selection_payload,
+        )
+
+
+def _coerce_turn_context(
+    turn_or_query: LearnerTurnContext | str = None,
+    datasets=None,
+    thread_id: str = "",
+    resource_id: str = None,
+    user_profile: dict = None,
+    page_context: dict = None,
+    selection_text: dict | str = None,
+    *,
+    query: str = None,
+) -> LearnerTurnContext:
+    if isinstance(turn_or_query, LearnerTurnContext):
+        return turn_or_query
+    actual_query = query if query is not None else (turn_or_query or "")
+    return LearnerTurnContext(
+        query=actual_query,
+        datasets=list(datasets or []),
+        thread_id=thread_id,
+        resource_id=resource_id or thread_id,
+        user_profile=user_profile or {},
+        page_context=page_context,
+        selection_text=selection_text,
+    )
+
+
+def _request_body(
+    turn_or_query: LearnerTurnContext | str = None,
+    datasets=None,
+    thread_id: str = "",
+    resource_id: str = None,
+    user_profile: dict = None,
+    page_context: dict = None,
+    selection_text: dict | str = None,
+    *,
+    query: str = None,
+) -> dict:
     """The ONE body both routes carry (the generate call's own shape —
     #24's pin): the message, the per-Learner thread, and the Book
-    selection riding the requestContext, never the prompt text."""
-    return {
-        "messages": [{"role": "user", "content": query}],
-        "memory": {"thread": thread_id, "resource": thread_id},
-        "requestContext": {"datasets": list(datasets or [])},
-    }
+    selection, user profile, and active page context riding the requestContext,
+    never the prompt text."""
+    return _coerce_turn_context(
+        turn_or_query,
+        datasets=datasets,
+        thread_id=thread_id,
+        resource_id=resource_id,
+        user_profile=user_profile,
+        page_context=page_context,
+        selection_text=selection_text,
+        query=query,
+    ).to_request_body()
 
 
 class AgentStream:
@@ -152,13 +340,66 @@ class AgentStream:
     (abort(): the Learner went away; the upstream is torn down and
     nothing is answered)."""
 
-    def __init__(self, query: str, datasets, thread_id: str):
-        self.query = query
-        self.datasets = datasets
-        self.thread_id = thread_id
+    def __init__(
+        self,
+        turn: LearnerTurnContext | str = None,
+        datasets=None,
+        thread_id: str = "",
+        resource_id: str = None,
+        user_profile: dict = None,
+        page_context: dict = None,
+        selection_text: dict | str = None,
+        *,
+        query: str = None,
+    ):
+        self.turn = (
+            turn
+            if isinstance(turn, LearnerTurnContext)
+            else _coerce_turn_context(
+                turn,
+                datasets=datasets,
+                thread_id=thread_id,
+                resource_id=resource_id,
+                user_profile=user_profile,
+                page_context=page_context,
+                selection_text=selection_text,
+                query=query,
+            )
+        )
         self.reply = None
         self._response = None
         self._generator = None
+
+    @property
+    def query(self) -> str:
+        return self.turn.query
+
+    @property
+    def datasets(self) -> list[str]:
+        return self.turn.datasets
+
+    @property
+    def thread_id(self) -> str:
+        return self.turn.thread_id
+
+    @property
+    def resource_id(self) -> str:
+        return self.turn.resource_id
+
+    @property
+    def user_profile(self) -> dict:
+        return self.turn.user_profile
+
+    @property
+    def page_context(self) -> dict | None:
+        return self.turn.page_context
+
+    @property
+    def selection_text(self) -> dict | str | None:
+        return self.turn.selection_text
+
+    def to_request_body(self) -> dict:
+        return self.turn.to_request_body()
 
     def abort(self) -> None:
         """Tear the upstream down (a gone Learner abandons the stream):
@@ -194,7 +435,7 @@ class AgentStream:
         request = Request(
             _agent_stream_url(),
             data=json.dumps(
-                _request_body(self.query, self.datasets, self.thread_id),
+                self.turn.to_request_body(),
                 ensure_ascii=False,
             ).encode("utf-8"),
             headers={"Content-Type": "application/json; charset=utf-8"},
@@ -296,7 +537,17 @@ class AgentStream:
                 tool_records.append({"payload": payload})
 
 
-def agent_answer(query: str, datasets, thread_id: str) -> dict:
+def agent_answer(
+    turn: LearnerTurnContext | str = None,
+    datasets=None,
+    thread_id: str = "",
+    resource_id: str = None,
+    user_profile: dict = None,
+    page_context: dict = None,
+    selection_text: dict | str = None,
+    *,
+    query: str = None,
+) -> dict:
     """One Learner message through the agent; the STRUCTURED reply back
     — {"text", "web_sourced", "sources"} — the marking derived from the
     reply's tool-call record so it is the platform's guarantee, never
@@ -304,11 +555,19 @@ def agent_answer(query: str, datasets, thread_id: str) -> dict:
     carries no answer and URLError/TimeoutError/OSError when the service
     is unreachable — the seam maps both (502/504) and meters neither: a
     Question is an ANSWERED message (ADR-0018)."""
+    body = _coerce_turn_context(
+        turn,
+        datasets=datasets,
+        thread_id=thread_id,
+        resource_id=resource_id,
+        user_profile=user_profile,
+        page_context=page_context,
+        selection_text=selection_text,
+        query=query,
+    ).to_request_body()
     request = Request(
         _agent_url(),
-        data=json.dumps(
-            _request_body(query, datasets, thread_id), ensure_ascii=False
-        ).encode("utf-8"),
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json; charset=utf-8"},
         method="POST",
     )

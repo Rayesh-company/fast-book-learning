@@ -3,16 +3,18 @@
  * Connects directly to the Mastra chat agent via /agent/chat with streaming SSE (ADR-0018).
  */
 
+import { CANONICAL_CITATION_REGEX } from './views.mjs';
+
 export function parseAgentCitations(text = '', defaultBook = '') {
   if (!text) return [];
   const citations = [];
   const seen = new Set();
-  const regex = /\bdocument\s+([\w.-]+)\s*\((?:pages?\s+(\d+)(?:-(\d+))?)\)/g;
+  const regex = new RegExp(CANONICAL_CITATION_REGEX.source, 'g');
   let match;
   while ((match = regex.exec(text)) !== null) {
     const doc = match[1] || defaultBook;
-    const first = Number(match[2]);
-    const last = match[3] ? Number(match[3]) : first;
+    const first = Number(match[3]);
+    const last = match[4] ? Number(match[4]) : first;
     const key = `${doc}:${first}-${last}`;
     if (!seen.has(key)) {
       seen.add(key);
@@ -176,6 +178,9 @@ export function createApi({ fetchImpl = fetch } = {}) {
       await request('/profile/data');
       return { subscription: null, subscription_available: false, questions_remaining: null };
     },
+    getProfile: () => request('/api/user/profile'),
+    saveProfile: profile =>
+      request('/api/user/profile', { method: 'POST', body: profile }),
     sessions: async () => (await request('/sessions')).sessions,
     session: id => request(`/sessions/${Number(id)}`),
     createSession: (book, title) =>
@@ -186,13 +191,21 @@ export function createApi({ fetchImpl = fetch } = {}) {
       request(`/sessions/${Number(id)}/messages`, { method: 'POST', body: { role, payload } }),
     ask: async (input, { signal, onStatus, onDelta } = {}) => {
       onStatus?.('در حال ارتباط با عامل گفت‌وگو');
-      const question = input.selection?.text
-        ? `${input.question}\n\nمتن انتخاب‌شده از کتاب:\n${input.selection.text}`
-        : input.question;
+      const question = input.question;
+      const page = input.page ?? input.pages?.[0];
       const body = {
         query: question,
         datasets: input.book ? [input.book] : undefined,
+        book: input.book,
+        page,
+        scope: input.scope || 'all',
       };
+      if (input.pages) {
+        body.pages = input.pages;
+      }
+      if (input.selection) {
+        body.selection = input.selection;
+      }
 
       let response;
       try {

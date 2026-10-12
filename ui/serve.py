@@ -47,8 +47,10 @@ try:
         AgentStream,
         CHAT_ANSWER_ERROR,
         CHAT_ANSWER_FINALIZED,
+        LearnerTurnContext,
         agent_answer,
         sse_frame,
+        validated_datasets,
     )
     from ui.question_window import (
         QUESTION_WINDOW_HOURS,
@@ -84,7 +86,9 @@ try:
         deduct_balance,
         ensure_admin,
         get_balance,
+        get_profile,
         list_accounts,
+        save_profile,
         verify_login,
     )
     from ui import audit, migrate
@@ -122,7 +126,9 @@ try:
         parse_broaden_reply,
         recall_more,
     )
-    from ui.page_resolver import install as install_page_resolver
+    from ui.page_resolver import (
+        install as install_page_resolver,
+    )
     from ui.dive import (
         BOOK_DATASETS,
         DIVE_MAX_RETRIEVAL_ROUNDS,
@@ -205,8 +211,10 @@ except ImportError:  # the container runs this file as a script beside the modul
         AgentStream,
         CHAT_ANSWER_ERROR,
         CHAT_ANSWER_FINALIZED,
+        LearnerTurnContext,
         agent_answer,
         sse_frame,
+        validated_datasets,
     )
     from question_window import (
         QUESTION_WINDOW_HOURS,
@@ -242,7 +250,9 @@ except ImportError:  # the container runs this file as a script beside the modul
         deduct_balance,
         ensure_admin,
         get_balance,
+        get_profile,
         list_accounts,
+        save_profile,
         verify_login,
     )
     import audit, migrate
@@ -284,7 +294,9 @@ except ImportError:  # the container runs this file as a script beside the modul
         parse_broaden_reply,
         recall_more,
     )
-    from page_resolver import install as install_page_resolver
+    from page_resolver import (
+        install as install_page_resolver,
+    )
     from dive import (
         BOOK_DATASETS,
         DIVE_MAX_RETRIEVAL_ROUNDS,
@@ -632,18 +644,6 @@ def resolve_account(handler):
     return account_by_email(claims["email"])
 
 
-def validated_datasets(raw):
-    """The ask's Book selection (ADR-0010): the client's list
-    intersected with the Book set, in the set's stable order — a name
-    outside the Book set never reaches an upstream. None (missing,
-    malformed, or nothing left) means the whole Book set, the shape
-    every searcher already treats as the default."""
-    if not isinstance(raw, list):
-        return None
-    picked = {item for item in raw if isinstance(item, str) and item in BOOK_DATASETS}
-    if not picked:
-        return None
-    return [dataset for dataset in BOOK_DATASETS if dataset in picked]
 
 
 # The follow-up thread's budget (ADR-0015): the sitting's recent turns
@@ -805,6 +805,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path == "/profile/data":
             self._profile_data()
+            return
+        if path == "/api/user/profile":
+            self._user_profile_get()
             return
         if path == "/sessions":
             # The Session store's list (T27 stage 3, GitLab #40): the
@@ -1328,6 +1331,8 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 "email": account["email"],
                 "role": account["role"],
                 "phone": account["phone"],
+                "profile": account.get("profile"),
+                "profile_completed": account.get("profile_completed", False),
             },
         )
 
@@ -1464,6 +1469,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # follow the mapping — audited, from the browser.
             self._admin_attach()
             return
+        if path == "/api/user/profile":
+            self._user_profile_save()
+            return
         if path == "/agent/chat":
             account = resolve_identity(self)
             if account is None:
@@ -1510,7 +1518,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
             record_size_estimate(
                 account, "agent", int(self.headers.get("Content-Length", "0") or "0")
             )
-            self._agent_chat(phone)
+            self._agent_chat(phone, account=account)
             return
         if path == "/agent/recall":
             self._agent_recall()
@@ -1794,7 +1802,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
             {"chat_id": chat_id, "sources": sources, "pool_size": len(sources)},
         )
 
-    def _agent_chat(self, phone: str) -> None:
+    def _agent_chat(self, phone: str, account: str | None = None) -> None:
         """The Learner-facing seam (ADR-0018), STREAMED (issue #26): the
         sheet's chat surface — the Learner's message goes to the Mastra
         agent's stream route (its tools are the Book pool through
@@ -1817,16 +1825,16 @@ class SessionHandler(SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0") or "0")
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
-            query = payload["query"]
-            if not isinstance(query, str) or not query.strip():
-                raise ValueError("query is required")
-            datasets = validated_datasets(payload.get("datasets"))
         except (ValueError, KeyError, TypeError):
             # The body is already read above, so _send_json is safe.
             self._send_json(400, {"detail": "پرسش را بنویسید."})
             return
-        thread_id = f"learner-{phone}"
-        stream = AgentStream(query.strip(), datasets, thread_id)
+        try:
+            turn = LearnerTurnContext.from_request(phone, account, payload)
+        except ValueError as err:
+            self._send_json(400, {"detail": "پرسش را بنویسید."})
+            return
+        stream = AgentStream(turn)
         # Close-delimited SSE (HTTP/1.0): no Content-Length, lines hit
         # the socket as they arrive — the sheet reads the body with
         # getReader() and renders progressively.
@@ -1862,8 +1870,8 @@ class SessionHandler(SimpleHTTPRequestHandler):
         # stored form with no agent call and no re-billing.
         chat_store.record_agent_exchange(
             phone,
-            thread_id,
-            query.strip(),
+            turn.thread_id,
+            turn.query,
             reply["text"],
             reply["web_sourced"],
             reply["sources"],
@@ -2478,6 +2486,47 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 "balance_toman": get_balance(account),
                 "today_toman": today_total(account),
                 "sessions": sessions,
+            },
+        )
+
+    def _user_profile_get(self) -> None:
+        """The Learner's profile read: the Account's learning preferences
+        and onboarding status."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        profile = get_profile(account)
+        self._send_json(
+            200,
+            {
+                "email": account,
+                "profile": profile,
+                "profile_completed": bool(profile and profile.get("usage_purpose")),
+            },
+        )
+
+    def _user_profile_save(self) -> None:
+        """The Learner's profile update: validate and persist learning preferences."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except Exception:
+            self._send_json(400, {"detail": "داده‌های ورودی نامعتبر است."})
+            return
+        try:
+            saved = save_profile(account, payload)
+        except ValueError as err:
+            self._send_json(400, {"detail": str(err)})
+            return
+        self._send_json(
+            200,
+            {
+                "ok": True,
+                "profile": saved,
+                "profile_completed": True,
             },
         )
 
