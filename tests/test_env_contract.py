@@ -62,3 +62,31 @@ def test_env_example_names_the_first_admin_without_shipping_a_password():
     compose = (REPO_ROOT / "compose.yaml").read_text(encoding="utf-8")
     assert "ADMIN_EMAIL: ${ADMIN_EMAIL:-}" in compose
     assert "ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}" in compose
+
+
+def test_env_example_and_compose_include_chat_agent_model():
+    env = parse_dotenv(ENV_EXAMPLE)
+    assert "CHAT_AGENT_MODEL" in env
+    assert env["CHAT_AGENT_MODEL"] == "avalai/deepseek-v4.1-flash"
+
+    compose = (REPO_ROOT / "compose.yaml").read_text(encoding="utf-8")
+    assert "CHAT_AGENT_MODEL: ${CHAT_AGENT_MODEL:-avalai/deepseek-v4.1-flash}" in compose
+
+
+def test_dotenv_helper_loads_env_into_environ(tmp_path, monkeypatch):
+    from ui.dotenv_helper import load_env
+
+    fake_env = tmp_path / ".env"
+    fake_env.write_text(
+        "TEST_NEW_VAR=hello_world\n# comment\nTEST_QUOTED='with_quotes'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("TEST_NEW_VAR", raising=False)
+    monkeypatch.delenv("TEST_QUOTED", raising=False)
+
+    loaded = load_env(fake_env)
+    assert loaded["TEST_NEW_VAR"] == "hello_world"
+    assert loaded["TEST_QUOTED"] == "with_quotes"
+    import os
+    assert os.environ["TEST_NEW_VAR"] == "hello_world"
+    assert os.environ["TEST_QUOTED"] == "with_quotes"

@@ -10,8 +10,7 @@ RUN npm ci --omit=dev && if [ "$NARRATION_WITH_ALIGNMENT" = "1" ]; then npm ci -
 # The interpreter, sheet, and modules serve.py facades (guard, quotas,
 # composer, picker, dive, ask, chat_store, research, research_store,
 # recall_more, page_resolver, accounts, audit, console, migrate, report,
-# ledger, session_store, note_store).
-# COGNEE_URL / NEXT_TIER_URL are set in compose to the container-network
+# ledger, session_store, note_store).\n# COGNEE_URL / NEXT_TIER_URL are set in compose to the container-network
 # service names; the sheet must bind 0.0.0.0 to be reachable through the
 # published port.
 FROM python:3.12-slim
@@ -19,7 +18,7 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY --from=narration-runtime /usr/local/bin/node /usr/local/bin/node
 RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 libatomic1 libgomp1 && rm -rf /var/lib/apt/lists/*
-COPY serve.py guard.py quotas.py composer.py picker.py dive.py ask.py chat_store.py research.py research_store.py recall_more.py page_resolver.py accounts.py audit.py console.py migrate.py report.py ledger.py session_store.py note_store.py narration.py narration_cache.py lectures.py index.html ./
+COPY serve.py guard.py quotas.py composer.py picker.py dive.py ask.py chat_store.py research.py research_store.py recall_more.py page_resolver.py accounts.py audit.py console.py migrate.py report.py ledger.py session_store.py note_store.py narration.py narration_cache.py lectures.py agent_client.py question_window.py seam.py index.html dotenv_helper.py ./
 # The reader's client-side PDF engine (pdf.js, Apache-2.0) — vendored so
 # the sheet works on a LAN with no CDN (ADR-0007).
 COPY vendor /app/vendor

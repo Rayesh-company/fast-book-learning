@@ -651,18 +651,19 @@ model or dimensions (see §13).
 
 ## 10. Configuration map — who reads what
 
-Two config layers with a strict rule: **`.env` carries keys; `compose.yaml`
-carries behavior.**
+The root `.env` file is the **single source of truth** for all models, endpoints, and API keys. `compose.yaml` delegates and interpolates from `.env` with sensible defaults.
 
 | Setting | Lives in | Notes |
 |---|---|---|
-| `LLM_API_KEY` (Z.AI) | `.env` only | Picked up by cognee services (env_file) AND interpolated into the session container's env. Never in the image, never in git. |
-| `EMBEDDING_API_KEY` (AvalAI) | `.env` only | Same. Also feeds `LLM_EXTRACTION_*` / `LLM_SUMMARIZATION_*` by compose interpolation. |
-| `LLM_MODEL` per service | `compose.yaml` `environment:` | `glm-5.3-flash` on cognee, `glm-5.3` on next-tier. Overrides `.env`, so editing `.env`'s model does nothing in compose. |
-| `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS` | `.env`, compose default `text-embedding-3-large`/3072 | **Frozen into the data.** See §13. |
-| Endpoints (Z.AI / AvalAI) | `compose.yaml` | Pinned; changing one requires a successful live smoke on that key first. |
+| `LLM_MODEL` | `.env` | Controls the main LLM model across Cognee, Session, and Composer (default: `openai/glm-5.3-flash`). |
+| `LLM_ENDPOINT` | `.env` | Controls the OpenAI-compatible or provider endpoint (default: `https://api.avalai.ir/v1`). |
+| `LLM_API_KEY` | `.env` only | Primary API key for LLM chat and text generation. |
+| `CHAT_AGENT_MODEL` | `.env` | Conversational Mastra Chat Agent model (default: `avalai/deepseek-v4.1-flash`). |
+| `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS` | `.env` | **Frozen into the data** (default: `text-embedding-3-large`/3072). See §13. |
+| `EMBEDDING_ENDPOINT` | `.env` | Endpoint for embeddings (default: `https://api.avalai.ir/v1`). |
+| `EMBEDDING_API_KEY` | `.env` only | API key for AvalAI / embedding service. Also feeds extraction and summarization. |
+| Extraction & Summarization | `.env` overrides | `LLM_EXTRACTION_*` / `LLM_SUMMARIZATION_*` default to `LLM_MODEL` / `LLM_ENDPOINT` / `EMBEDDING_API_KEY`. |
 | Rate limits & retries | `compose.yaml` | Per service; see the table in §4. |
-| Picker/composer/research prompts, model pins, timeouts, caps | `ui/serve.py` source | Pinned in source "like every pin", never env-tunable. |
 | `NEXT_TIER_TIMEOUT` | compose env, default 1200s | The relay's leash; COT searches can pass 10 minutes. |
 | `enable_farsi_evidence.py` | bind-mounted into both Cognee containers | Entry point override: enables Farsi `Evidence:` blocks + 600-char snippets. Bind mount ⇒ re-read on container restart, **no re-ingest needed** (it applies at search time). |
 

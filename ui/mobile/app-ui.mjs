@@ -1,4 +1,4 @@
-import {mainView,drawer,sheet,floating,composerAction,books,bookInfo,number,digits,esc,visibleNotes,completeAnswer} from './views.mjs';
+import {mainView,drawer,sheet,floating,composerAction,books,bookInfo,number,digits,esc,visibleNotes,completeAnswer,activePage,CANONICAL_CITATION_REGEX} from './views.mjs';
 import {installQuestionGestures} from './reader-interactions.mjs';
 import {icon} from './icons.mjs';
 import {createInterfaceMotion} from './motion.mjs';
@@ -14,11 +14,11 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  const panelFocus=createPanelFocus(root);
  let navigationBack=false,toastRevision=0;
  const s={view:'boot',demo:api.demo,loginRequired:api.loginRequired!==false,pageFiltering:api.demo||api.pageFiltering===true,book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},account:null,
-  messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],theme:'system',profile:null,
+  messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',theme:'system',profile:null,
   readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false};
  let storageKey,disposed=false,job=null,sequence=0,accountRevision=0,recordRevision=0,recordPending=false,otpTimer,pending=new Set(),toastTimer,recorder,timer,media,recordingStarted,recordingPlace,recordDraft;
  const safeRead=key=>{try{return JSON.parse(storage?.getItem(key));}catch{return null;}};
- const persist=()=>{if(!storageKey||disposed)return;try{storage?.setItem(storageKey,JSON.stringify({view:['reader','chat'].includes(s.view)?s.view:s.stack.find(v=>['reader','chat'].includes(v))||'reader',book:s.book,positions:s.positions,drafts:s.drafts,pages:s.pages,sessionId:s.sessionId,chatScroll:s.chatScroll,follow:s.follow,theme:s.theme,readerGuideSeen:s.readerGuideSeen}));}catch{}};
+ const persist=()=>{if(!storageKey||disposed)return;try{storage?.setItem(storageKey,JSON.stringify({view:['reader','chat'].includes(s.view)?s.view:s.stack.find(v=>['reader','chat'].includes(v))||'reader',book:s.book,positions:s.positions,drafts:s.drafts,pages:s.pages,scope:s.scope,sessionId:s.sessionId,chatScroll:s.chatScroll,follow:s.follow,theme:s.theme,readerGuideSeen:s.readerGuideSeen}));}catch{}};
  const run=p=>{const promise=Promise.resolve(p).catch(e=>{if(!disposed&&e.name!=='AbortError'){s.error=e.message;renderOverlay();toast(e.message);}}).finally(()=>pending.delete(promise));pending.add(promise);return promise;};
  const phone=()=>root.querySelector('.phone');
  function capture(){
@@ -61,7 +61,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function closeOverlay(){s.menu=false;s.sheet=null;s.error='';renderOverlay();focusReturn?.isConnected&&focusReturn.focus({preventScroll:true});}
  function renderFloating(){const holder=root.querySelector('[data-reader-floating]');if(holder){const previous=motion.beforeFloating();holder.innerHTML=floating(s);phone().readerQuestion=s.readerQuestion;holder.querySelectorAll('textarea').forEach(autosize);motion.afterFloating(previous);}}
  function minimiseQuestion(){if(s.view!=='reader'||!s.readerQuestion||s.readerQuestion.minimised)return;capture();stopRecording();s.readerQuestion.minimised=true;renderFloating();root.querySelector('[data-action="restore"]')?.focus({preventScroll:true});}
- function expandQuestion(){if(!s.readerQuestion)return;capture();if(!s.readerQuestion.inChat)s.readerQuestion.chatDraft=s.drafts[s.book]||'';s.readerQuestion.inChat=true;s.drafts[s.book]=s.readerQuestion.draft||'';s.pages=s.readerQuestion.selection.pages.map(p=>p.page);navigate('chat',{captured:true});root.querySelector('[name="question"]')?.focus({preventScroll:true});}
+ function expandQuestion(){if(!s.readerQuestion)return;capture();if(!s.readerQuestion.inChat)s.readerQuestion.chatDraft=s.drafts[s.book]||'';s.readerQuestion.inChat=true;s.drafts[s.book]=s.readerQuestion.draft||'';s.scope='page';s.pages=s.readerQuestion.selection.pages.map(p=>p.page);navigate('chat',{captured:true});root.querySelector('[name="question"]')?.focus({preventScroll:true});}
  function syncComposer(input){const group=input.closest('form')?.querySelector('.send-group');if(group)group.innerHTML=composerAction(input.value,s.busy,input.name==='reader-question'?'reader':'chat');}
  const questionGestures=installQuestionGestures({root,minimise:minimiseQuestion,expand:expandQuestion});
  lifecycle.signal.addEventListener('abort',()=>questionGestures.dispose(),{once:true});
@@ -70,14 +70,16 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function navigate(view,{back=false,captured=false}={}){if(!captured)capture();stopRecording();if(!back&&!['reader','chat'].includes(view)&&s.view!==view)s.stack.push(s.view);s.view=view;s.error='';navigationBack=back;render();}
  async function refresh(){const rev=accountRevision;const [sessions,profile]=await Promise.allSettled([api.sessions(),api.profile()]);if(disposed||rev!==accountRevision)return;if(sessions.status==='fulfilled')s.sessions=sessions.value||[];if(profile.status==='fulfilled')s.profile=profile.value;}
  async function openSession(id){capture();abortJob();stopRecording();const rev=++sequence;const row=await api.session(Number(id));if(disposed||rev!==sequence)return;capture();s.book=books.some(b=>b.id===row.book)?row.book:s.book;s.sessionId=row.id;s.messages=row.messages||[];restoreUnanswered();s.follow=true;s.chatScroll=0;s.readerQuestion=null;navigate('chat',{captured:true});}
- async function selectBook(id){if(!books.some(b=>b.id===id))return;capture();abortJob();s.readerQuestion=null;s.book=id;s.messages=[];s.sessionId=null;s.pages=[s.positions[id]?.page||1];await refresh();const latest=s.sessions.find(r=>r.book===id);if(latest)await openSession(latest.id);else navigate('chat',{captured:true});}
+ async function selectBook(id){if(!books.some(b=>b.id===id))return;capture();abortJob();s.readerQuestion=null;s.book=id;s.messages=[];s.sessionId=null;s.scope='all';s.pages=[activePage(s)];await refresh();const latest=s.sessions.find(r=>r.book===id);if(latest){await openSession(latest.id);s.scope='all';}else navigate('chat',{captured:true});}
  function abortJob(){job?.abort();job=null;s.busy=false;if(s.readerQuestion)s.readerQuestion.busy=false;}
  async function send(place='chat',retryIndex=null){
   if(s.busy)return;
   const rq=place==='reader'||s.readerQuestion?.inChat?s.readerQuestion:null;
   const question=retryIndex!==null?s.messages[retryIndex]?.payload.text:place==='reader'?root.querySelector('[name="reader-question"]')?.value:s.drafts[s.book]||root.querySelector('[name="question"]')?.value;
   if(!question?.trim())return;
-  const context=retryIndex!==null?s.messages[retryIndex].payload:{text:question.trim(),book:s.book,pages:[...(rq?rq.selection.pages.map(p=>p.page):s.pages||[])],selection:rq?.selection};
+  const scope=rq?'page':(s.scope||'page');
+  const page=(rq?rq.selection.pages[0]?.page:s.pages?.[0])||activePage(s);
+  const context=retryIndex!==null?s.messages[retryIndex].payload:{text:question.trim(),book:s.book,page,scope,pages:[...(rq?rq.selection.pages.map(p=>p.page):s.pages||[])],selection:rq?.selection};
   const book=context.book||s.book;
   const controller=new win.AbortController();job=controller;s.busy=true;s.error='';s.status='در حال جستجو در کتاب';
   const at=retryIndex??s.messages.length;
@@ -89,7 +91,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
    const id=s.sessionId;
    if(turn.payload.pending_store){await api.append(id,'user',{...context,failed:undefined,failure:undefined,pending_store:undefined});if(controller.signal.aborted)return;delete turn.payload.pending_store;}
    if(rq){rq.lastDraft=question;rq.draft='';rq.busy=true;rq.error='';if(rq.inChat)s.drafts[book]='';renderFloating();}else{s.drafts[book]='';s.follow=true;render();}
-   const response=await api.ask({question:context.text,book,pages:context.pages,selection:context.selection,sessionId:id},{signal:controller.signal,onStatus:status=>{if(disposed||controller.signal.aborted)return;s.status=status;const el=root.querySelector('.operation-status span:nth-child(2),.loading-label');if(el)el.textContent=status;}});
+   const response=await api.ask({question:context.text,book,page:context.page,scope:context.scope,pages:context.pages,selection:context.selection,sessionId:id},{signal:controller.signal,onStatus:status=>{if(disposed||controller.signal.aborted)return;s.status=status;const el=root.querySelector('.operation-status span:nth-child(2),.loading-label');if(el)el.textContent=status;}});
    if(disposed||controller.signal.aborted)return;
    await api.append(id,'assistant',{...response,book,origin_session_id:id});
    if(disposed||controller.signal.aborted||job!==controller||id!==s.sessionId)return;
@@ -114,7 +116,8 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  async function loadNotes(){const rev=accountRevision;s.noteBook=s.book;s.notesLoading=true;navigate('notebook');try{const notes=await api.notes();if(rev===accountRevision&&!disposed)s.notes=notes;}finally{if(rev!==accountRevision)return;s.notesLoading=false;if(s.view==='notebook')render();}}
  async function highlightSelection(selected){if(!selected)return;const rev=accountRevision,book=s.book;const note=await api.saveNote({text:selected.text,doc:book,pages:selected.pages.map(p=>p.page),refs:[],source:{kind:'book',capture:'highlight',book,selection:selected}});if(disposed||rev!==accountRevision)return;s.notes.unshift(note);doc.getSelection()?.removeAllRanges();toast('هایلایت در دفتر ذخیره شد');if(book===s.book)for(const p of selected.pages)phone()?.bookReader?.highlight(p);}
  function sourcePage(book,page,text,selection){capture();abortJob();if(book!==s.book){s.sessionId=null;s.messages=[];}s.readerQuestion=null;s.book=books.some(b=>b.id===book)?book:s.book;s.positions[s.book]={...s.positions[s.book],page:Number(page)||1,scroll:0};s.pendingSource={text,selection};navigate('reader',{captured:true});}
- async function citation(target){let book=target.dataset.book||s.book,page=number(target.dataset.page),text=target.dataset.text||'';const match=target.dataset.reference?.match(/document\s+([\w-]+)\s*\(pages?\s+(\d+)/);if(match){book=match[1];page=Number(match[2]);}if(!page){toast('این ارجاع شمارهٔ صفحه ندارد.');return;}
+ async function citation(target){let book=target.dataset.book||s.book,page=number(target.dataset.page),text=target.dataset.text||'';const match=target.dataset.reference?.match(CANONICAL_CITATION_REGEX);if(match){book=match[1];page=Number(match[3]);}if(!page){toast('این ارجاع شمارهٔ صفحه ندارد.');return;}
+  if(target.classList.contains('agent-cite')){sourcePage(book,page,'');return;}
   if(text&&target.dataset.reference){try{const response=await win.fetch(`/books/${book}.pages.json`);if(response.ok){const data=await response.json(),pages=Array.isArray(data)?data:data.pages||data;const needle=normalText(text);for(let n=page;n<=page+10;n++){const raw=pages[String(n)]??pages[n-1];const value=typeof raw==='string'?raw:raw?.text;if(value&&normalText(value).includes(needle)){page=n;break;}}}}catch{}}
   sourcePage(book,page,text);
  }
@@ -161,23 +164,47 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(form.matches('[data-pdf-page-form]'))return;
   e.preventDefault();
   if(form.matches('[data-chat-form],[data-reader-form]'))return run(send(form.hasAttribute('data-reader-form')?'reader':'chat'));
-  if(form.matches('[data-pages-form]')){const range=form.elements.range.checked,start=number(form.elements[range?'from':'single'].value),end=range?number(form.elements.to.value):start;const count=number(phone()?.querySelector('[data-pdf-page-count]')?.textContent?.replace(/[^۰-۹0-9]/g,''))||bookInfo(s.book).pages;if(!Number.isInteger(start)||!Number.isInteger(end)||start<1||end<start||end>count){s.error='شمارهٔ صفحه و ترتیب بازه را بررسی کنید.';renderOverlay();return;}s.pages=Array.from({length:end-start+1},(_,i)=>start+i);closeOverlay();render();}
+  if(form.matches('[data-pages-form]')){const range=form.elements.range.checked,start=number(form.elements[range?'from':'single'].value),end=range?number(form.elements.to.value):start;const count=number(phone()?.querySelector('[data-pdf-page-count]')?.textContent?.replace(/[^۰-۹0-9]/g,''))||bookInfo(s.book).pages;if(!Number.isInteger(start)||!Number.isInteger(end)||start<1||end<start||end>count){s.error='شمارهٔ صفحه و ترتیب بازه را بررسی کنید.';renderOverlay();return;}s.scope='page';s.pages=Array.from({length:end-start+1},(_,i)=>start+i);closeOverlay();render();}
   if(form.matches('[data-rename-form]'))run((async()=>{const title=form.elements.title.value.trim();if(!title)return;await api.renameSession(s.sheet.id,title);await refresh();closeOverlay();})());
   if(form.matches('[data-book-search]'))run(searchBook(form.elements.search.value));
+  if(form.matches('[data-onboarding-form],[data-profile-form]'))run((async()=>{
+   s.error='';
+   const usage_purpose=form.elements.usage_purpose?.value;
+   if(!usage_purpose){s.error='لطفاً هدف استفاده را انتخاب کنید.';render();return;}
+   const martyr_works_familiarity=form.elements.martyr_works_familiarity?.value||undefined;
+   const rawAge=form.elements.age?.value;
+   const age=rawAge?number(rawAge)||undefined:undefined;
+   const political_familiarity=form.elements.political_familiarity?.value||undefined;
+   const religious_familiarity=form.elements.religious_familiarity?.value||undefined;
+   const occupation=form.elements.occupation?.value?.trim()||undefined;
+   const assistant_tone=form.elements.assistant_tone?.value||undefined;
+   const payload={usage_purpose,martyr_works_familiarity,age,political_familiarity,religious_familiarity,occupation,assistant_tone};
+   for(const[k,v]of Object.entries(payload)){if(v===undefined||v==='')delete payload[k];}
+   try{
+    const res=await api.saveProfile(payload);
+    if(s.account){s.account.profile=res?.profile||payload;s.account.profile_completed=true;}
+    toast('مشخصات و سبک یادگیری با موفقیت ثبت شد.');
+    if(s.sheet?.type==='edit-profile')closeOverlay();
+    if(form.matches('[data-onboarding-form]')){navigate('reader');}
+    else if(s.view==='profile'){navigate(s.stack.pop()||'account',{back:true});}
+    else{render();}
+   }catch(err){s.error=err.message||'خطا در ذخیره مشخصات';render();}
+  })());
   if(form.matches('[data-auth-form]'))run((async()=>{s.error='';try{if(s.view==='email-login'){s.account=await api.login({email:form.elements.email.value,password:form.elements.password.value});await initialize();}else if(s.view==='otp'){const code=String(number(form.elements.code.value)).padStart(6,'0');s.account=await api.verifyOtp(s.phone,code);await initialize();}else{const phone=normalPhone(form.elements.phone.value);if(!/^09\d{9}$/.test(phone))throw new Error('شمارهٔ موبایل ایرانی را با ۱۱ رقم وارد کنید.');s.phone=phone;if(s.view==='waitlist'){await api.joinWaitlist(phone);s.waitlisted=true;render();}else{const result=await api.requestOtp(phone);startOtpCooldown();navigate(result.waitlist?'waitlist':'otp');}}}catch(e){s.error=e.message;render();}})());
  },listenerOptions);
  root.addEventListener('click',e=>{
   const t=e.target.closest('[data-action]');if(!t)return;const a=t.dataset.action;
   if(a==='menu'){capture();focusReturn=t;s.menu=true;renderOverlay();root.querySelector('.drawer button')?.focus({preventScroll:true});run(refresh().then(()=>{if(s.menu)renderOverlay();}));}
   if(a==='close-menu'||a==='close-sheet')closeOverlay();
-  if(a==='open-chat'){capture();s.pages=[s.positions[s.book]?.page||1];navigate('chat');}
+  if(a==='open-chat'){capture();s.scope='page';s.pages=[activePage(s)];navigate('chat');}
   if(a==='open-reader'){capture();if(s.readerQuestion?.inChat){s.drafts[s.book]=s.readerQuestion.chatDraft||'';s.readerQuestion.inChat=false;}navigate('reader',{captured:true});}
   if(a==='expand-question')expandQuestion();
   if(a==='dismiss-reader-guide'){dismissReaderGuide();root.querySelector('.reader-page')?.focus({preventScroll:true});}
-  if(a==='new-chat'){abortJob();s.sessionId=null;s.messages=[];s.readerQuestion=null;s.chatScroll=0;s.follow=true;navigate('chat');}
-  if(a==='suggest-question'||a==='suggest-plan'){s.drafts[s.book]=a==='suggest-question'?'این بخش از کتاب را توضیح بده.':'برای مطالعهٔ این کتاب یک برنامه پیشنهاد بده.';render();root.querySelector('[name="question"]').focus();}
+  if(a==='new-chat'){abortJob();s.sessionId=null;s.messages=[];s.readerQuestion=null;s.scope='all';s.chatScroll=0;s.follow=true;navigate('chat');}
+  if(a==='suggest-question'||a==='suggest-plan'){if(a==='suggest-question'){s.scope='page';if(!s.pages||!s.pages.length)s.pages=[activePage(s)];}s.drafts[s.book]=a==='suggest-question'?'این بخش از کتاب را توضیح بده.':'برای مطالعهٔ این کتاب یک برنامه پیشنهاد بده.';render();root.querySelector('[name="question"]').focus();}
   if(a==='back'){const view=s.stack.pop()||'reader';navigate(view,{back:true});}
   if(a==='account')navigate('account');
+  if(a==='edit-profile')navigate('profile');
   if(a==='subscription')navigate('subscription');
   if(a==='theme'){s.theme=t.dataset.theme;render();}
   if(a==='books'||a==='pages'||a==='reading-settings'||a==='book-search')openSheet(a);
@@ -187,7 +214,8 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='rename-session'){const row=s.sessions.find(r=>r.id===s.sheet.id);openSheet('rename',{id:row.id,title:row.title});}
   if(a==='confirm-delete-session'){const row=s.sessions.find(r=>r.id===s.sheet.id);openSheet('delete-session',{id:row.id,title:row.title});}
   if(a==='delete-session')run((async()=>{const id=s.sheet.id;await api.deleteSession(id);await refresh();closeOverlay();if(s.sessionId===id){s.sessionId=null;s.messages=[];navigate('chat');}})());
-  if(a==='clear-pages'){s.pages=[];closeOverlay();render();}
+  if(a==='clear-pages'){s.scope='all';s.pages=[];closeOverlay();render();}
+  if(a==='toggle-scope'){s.scope=s.scope==='page'?'all':'page';if(s.scope==='page'&&(!s.pages||!s.pages.length))s.pages=[activePage(s)];render();}
   if(a==='send-chat')run(send());
   if(a==='send-reader')run(send('reader'));
   if(a==='retry')run(send('chat',Number(t.dataset.index)));
@@ -236,9 +264,9 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='resend-otp')run((async()=>{await api.requestOtp(s.phone);startOtpCooldown();render();toast('کد ورود دوباره درخواست شد.');})());
  },listenerOptions);
  function restoreUnanswered(){const turn=s.messages.at(-1);if(turn?.role==='user'){turn.payload.failed=true;turn.payload.failure='پاسخ این پرسش کامل نشده است. می‌توانید دوباره تلاش کنید.';}}
- function resetAccountState(){accountRevision++;sequence++;clearTimeout(otpTimer);Object.assign(s,{book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],profile:null,readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,pendingSource:null,outline:[],payment:null,phone:'',waitlisted:false});}
+ function resetAccountState(){accountRevision++;sequence++;clearTimeout(otpTimer);Object.assign(s,{book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',profile:null,readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,pendingSource:null,outline:[],payment:null,phone:'',waitlisted:false});}
  function startOtpCooldown(){s.resendAt=Date.now()+60000;clearTimeout(otpTimer);otpTimer=setTimeout(()=>{if(!disposed&&s.view==='otp'){const button=root.querySelector('[data-action="resend-otp"]');if(button)button.disabled=false;}},60010);}
- async function initialize(){if(disposed)return;resetAccountState();storageKey=`book-ui:${s.demo?'demo:':''}${s.account.email||normalPhone(s.account.phone)}`;const saved=safeRead(storageKey);if(saved){for(const key of ['book','positions','drafts','pages','sessionId','chatScroll','follow','theme','readerGuideSeen'])if(saved[key]!=null)s[key]=saved[key];s.view=['reader','chat'].includes(saved.view)?saved.view:'reader';}else s.view='reader';await refresh();if(s.sessionId){try{const row=await api.session(s.sessionId);s.messages=row.messages||[];restoreUnanswered();}catch{s.sessionId=null;s.messages=[];}}render();}
+ async function initialize(){if(disposed)return;resetAccountState();storageKey=`book-ui:${s.demo?'demo:':''}${s.account.email||normalPhone(s.account.phone)}`;const saved=safeRead(storageKey);if(saved){for(const key of ['book','positions','drafts','pages','scope','sessionId','chatScroll','follow','theme','readerGuideSeen'])if(saved[key]!=null)s[key]=saved[key];s.view=['reader','chat'].includes(saved.view)?saved.view:'reader';}else s.view='reader';await refresh();if(s.sessionId){try{const row=await api.session(s.sessionId);s.messages=row.messages||[];restoreUnanswered();}catch{s.sessionId=null;s.messages=[];}}if(s.account&&!s.account.profile_completed&&!s.demo){navigate('onboarding');return;}render();}
  const mediaQuery=win.matchMedia?.('(prefers-color-scheme: dark)');mediaQuery?.addEventListener('change',applyTheme,{signal:lifecycle.signal});
  const viewport=win.visualViewport;
  function keyboard(){if(viewport)doc.documentElement.style.setProperty('--app-height',`${viewport.height}px`);}

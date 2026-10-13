@@ -1,0 +1,64 @@
+services:
+  mobile-ui:
+    build:
+      context: ./ui
+      args:
+        NARRATION_WITH_ALIGNMENT: ${NARRATION_WITH_ALIGNMENT:-0}
+    image: chat-with-books-mobile:latest
+    container_name: chat-with-books-mobile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SESSION_UI_HOST: 0.0.0.0
+      SESSION_UI_PORT: "8765"
+      SESSION_UI_QUOTA_DB: /data/usage.sqlite3
+      ACCOUNTS_DB: /data/accounts.sqlite3
+      AUTH_SECRET: ${AUTH_SECRET:-mobile-worktree-secret-key}
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
+      AGENT_URL: http://chat-with-books-agent:4111
+      AGENT_TIMEOUT: ${AGENT_TIMEOUT:-240}
+      COGNEE_URL: http://chat-with-books-cognee:8000
+      NEXT_TIER_URL: http://chat-with-books-cognee-next-tier:8000
+      NEXT_TIER_TIMEOUT: ${NEXT_TIER_TIMEOUT:-1200}
+      SESSION_RESEARCH_DB: /data/research.sqlite3
+      LEDGER_DB: /data/usage_ledger.sqlite3
+      TARIFF_INPUT_TOMAN_PER_MTOK: ${TARIFF_INPUT_TOMAN_PER_MTOK:-2000}
+      TARIFF_OUTPUT_TOMAN_PER_MTOK: ${TARIFF_OUTPUT_TOMAN_PER_MTOK:-8000}
+      AUDIT_DB: /data/audit.sqlite3
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SESSIONS_DB: /data/sessions.sqlite3
+      SESSION_CHAT_DB: /data/chats.sqlite3
+      LLM_ENDPOINT: ${LLM_ENDPOINT:-https://api.avalai.ir/v1}
+      LLM_MODEL: ${LLM_MODEL:-openai/glm-5.3-flash}
+      LLM_API_KEY: ${LLM_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-"3072"}
+      FROZEN_EMBEDDING_MODEL: ${FROZEN_EMBEDDING_MODEL:-${EMBEDDING_MODEL:-text-embedding-3-large}}
+      FROZEN_EMBEDDING_DIMENSIONS: ${FROZEN_EMBEDDING_DIMENSIONS:-${EMBEDDING_DIMENSIONS:-"3072"}}
+    volumes:
+      - session_mobile_data:/data
+      - ../../books:/books:ro
+      - ./models:/models:ro
+      - ../../render-cache:/render-cache
+    ports:
+      - "8766:8765"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/livez')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - cognee-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  cognee-network:
+    name: chat-with-books
+    external: true
+
+volumes:
+  session_mobile_data:

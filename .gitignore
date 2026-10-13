@@ -49,3 +49,16 @@ benchmark/pilot/runs/
 *.flac
 *.mp3
 !books/*/lectures/*.mp3
+
+# The Mastra chat agent service (ADR-0018)
+agent/node_modules/
+agent/.mastra/
+agent/dist/
+agent/src/mastra/public/data/
+
+# Reticle browser-test artifacts
+.reticle/
+
+# Local e2e scratch
+e2e-tmp/
+agent-dev.log

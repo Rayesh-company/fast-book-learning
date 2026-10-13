@@ -23,7 +23,10 @@ BULLET_IDS_AND_PAGES = (
     'f\'{_provenance_suffix(data_id, chunk_id)}{_pages_suffix(text)}: "{_snippet(text)}"\''
 )
 BULLET_FINAL = 'f\'{_pages_suffix(text)}: "{_snippet(text)}"\''
-HELPER_ANCHOR = "def _chunk_id(obj: Any, payload: dict) -> Optional[str]:"
+HELPER_ANCHORS = (
+    "def _chunk_id(obj: Any, payload: dict) -> Optional[str]:",
+    "def _chunk_id(obj: Any, payload: dict) -> str | None:",
+)
 PAGES_HELPER = r'''_PAGE_MARKER = re.compile(r"Page\s+(\d+)\s*[:：]", re.IGNORECASE)
 
 
@@ -55,12 +58,14 @@ def patch_references(source: str) -> str:
 def patch_bullets(source: str) -> str:
     if BULLET_FINAL in source:
         return source
-    if source.count(HELPER_ANCHOR) != 1:
+    matching_anchor = next((a for a in HELPER_ANCHORS if source.count(a) == 1), None)
+    if matching_anchor is None:
+        found = sum(source.count(a) for a in HELPER_ANCHORS)
         raise ValueError(
-            f"expected 1 Evidence helper anchor, found {source.count(HELPER_ANCHOR)}"
+            f"expected 1 Evidence helper anchor, found {found}"
         )
     if "def _pages_suffix" not in source:
-        source = source.replace(HELPER_ANCHOR, PAGES_HELPER + HELPER_ANCHOR, 1)
+        source = source.replace(matching_anchor, PAGES_HELPER + matching_anchor, 1)
     for anchor in (BULLET_IDS_AND_PAGES, BULLET_ANCHOR):
         if source.count(anchor) == 1:
             return source.replace(anchor, BULLET_FINAL, 1)
@@ -77,6 +82,20 @@ def patch_snippet_cap(source: str) -> str:
 
 
 def main() -> None:
+    for key in (
+        "LLM_ENDPOINT",
+        "EMBEDDING_ENDPOINT",
+        "LLM_EXTRACTION_ENDPOINT",
+        "LLM_SUMMARIZATION_ENDPOINT",
+    ):
+        val = os.environ.get(key)
+        if val and ("127.0.0.1" in val or "localhost" in val):
+            os.environ[key] = (
+                val.replace("127.0.0.1", "host.docker.internal").replace(
+                    "localhost", "host.docker.internal"
+                )
+            )
+
     source = REFERENCES_PATH.read_text(encoding="utf-8")
     patched = patch_snippet_cap(patch_bullets(patch_references(source)))
     REFERENCES_PATH.write_text(patched, encoding="utf-8")
