@@ -372,14 +372,50 @@ export const chatAgent = new Agent({
     );
   },
   model: {
-    id: "avalai/deepseek-v4.1-flash",
+    get id() {
+      let m = (
+        process.env.CHAT_AGENT_MODEL ||
+        process.env.AGENT_MODEL ||
+        process.env.LLM_MODEL ||
+        "avalai/deepseek-v4.1-flash"
+      ).trim();
+
+      // If user provided Qwen3.8-27B-GGUF for unsloth, ensure the repo owner prefix unsloth/ is present
+      if (m === "Qwen3.8-27B-GGUF") {
+        m = "unsloth/Qwen3.8-27B-GGUF";
+      }
+
+      // Mastra's ModelRouterLanguageModel requires "provider/model" format.
+      // If no provider prefix is supplied or it's a HuggingFace-style repo model (e.g. unsloth/model),
+      // prefix "openai/" so Mastra treats it as an OpenAI-compatible model and passes the model id as-is to the endpoint.
+      if (!m.includes("/")) {
+        m = `openai/${m}`;
+      } else if (!m.startsWith("openai/") && !m.startsWith("avalai/") && !m.startsWith("google/")) {
+        m = `openai/${m}`;
+      }
+      return m;
+    },
     get url() {
-      return (
-        process.env.AVALAI_BASE_URL ?? "https://api.avalai.ir/v1"
+      let u = (
+        process.env.AVALAI_BASE_URL ||
+        process.env.LLM_ENDPOINT ||
+        "https://api.avalai.ir/v1"
       ).replace(/\/+$/, "");
+      if (
+        !process.env.VITEST &&
+        process.env.NODE_ENV === "production" &&
+        (u.includes("127.0.0.1") || u.includes("localhost"))
+      ) {
+        u = u.replace("127.0.0.1", "host.docker.internal").replace("localhost", "host.docker.internal");
+      }
+      return u;
     },
     get apiKey() {
-      return process.env.AVALAI_API_KEY ?? "";
+      return (
+        process.env.AVALAI_API_KEY ||
+        process.env.LLM_API_KEY ||
+        ""
+      );
     },
   },
   tools: { searchBooksTool, webSearchTool },
@@ -387,9 +423,9 @@ export const chatAgent = new Agent({
     options: {
       // The durable conversation (ADR-0014's persistence leg): the
       // thread history rides the Mastra storage, keyed per Learner.
-      lastMessages: 30,
+      lastMessages: parseInt(process.env.CHAT_AGENT_LAST_MESSAGES || "6", 10),
       workingMemory: {
-        enabled: true,
+        enabled: process.env.MASTRA_WORKING_MEMORY !== "false",
         scope: "resource",
       },
     },

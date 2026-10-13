@@ -82,6 +82,20 @@ def patch_snippet_cap(source: str) -> str:
 
 
 def main() -> None:
+    for key in (
+        "LLM_ENDPOINT",
+        "EMBEDDING_ENDPOINT",
+        "LLM_EXTRACTION_ENDPOINT",
+        "LLM_SUMMARIZATION_ENDPOINT",
+    ):
+        val = os.environ.get(key)
+        if val and ("127.0.0.1" in val or "localhost" in val):
+            os.environ[key] = (
+                val.replace("127.0.0.1", "host.docker.internal").replace(
+                    "localhost", "host.docker.internal"
+                )
+            )
+
     source = REFERENCES_PATH.read_text(encoding="utf-8")
     patched = patch_snippet_cap(patch_bullets(patch_references(source)))
     REFERENCES_PATH.write_text(patched, encoding="utf-8")

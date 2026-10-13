@@ -28,6 +28,13 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 try:
+    from ui.dotenv_helper import load_env
+except ImportError:
+    from dotenv_helper import load_env
+
+load_env()
+
+try:
     # The visual pipeline: pages of the Books rasterized by a real PDF
     # engine (PDFium, ADR-0007's rendering addendum) — the browser never
     # re-typesets these Persian subsets. Kept optional so a dev machine
@@ -3074,8 +3081,8 @@ class SessionHandler(SimpleHTTPRequestHandler):
 # health stayed green and every search died. Present-but-wrong pins refuse
 # the start here, loudly; absent pins (a bare dev run outside compose)
 # cannot contradict the data and pass.
-FROZEN_EMBEDDING_MODEL = "text-embedding-3-large"
-FROZEN_EMBEDDING_DIMENSIONS = "3072"
+FROZEN_EMBEDDING_MODEL = os.environ.get("FROZEN_EMBEDDING_MODEL", "text-embedding-3-large")
+FROZEN_EMBEDDING_DIMENSIONS = os.environ.get("FROZEN_EMBEDDING_DIMENSIONS", "3072")
 
 
 def check_embedding_pin() -> None:

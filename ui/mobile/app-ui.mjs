@@ -201,7 +201,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='expand-question')expandQuestion();
   if(a==='dismiss-reader-guide'){dismissReaderGuide();root.querySelector('.reader-page')?.focus({preventScroll:true});}
   if(a==='new-chat'){abortJob();s.sessionId=null;s.messages=[];s.readerQuestion=null;s.scope='all';s.chatScroll=0;s.follow=true;navigate('chat');}
-  if(a==='suggest-question'||a==='suggest-plan'){s.drafts[s.book]=a==='suggest-question'?'این بخش از کتاب را توضیح بده.':'برای مطالعهٔ این کتاب یک برنامه پیشنهاد بده.';render();root.querySelector('[name="question"]').focus();}
+  if(a==='suggest-question'||a==='suggest-plan'){if(a==='suggest-question'){s.scope='page';if(!s.pages||!s.pages.length)s.pages=[activePage(s)];}s.drafts[s.book]=a==='suggest-question'?'این بخش از کتاب را توضیح بده.':'برای مطالعهٔ این کتاب یک برنامه پیشنهاد بده.';render();root.querySelector('[name="question"]').focus();}
   if(a==='back'){const view=s.stack.pop()||'reader';navigate(view,{back:true});}
   if(a==='account')navigate('account');
   if(a==='edit-profile')navigate('profile');

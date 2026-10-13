@@ -57,11 +57,11 @@ def test_compose_pins_chat_and_embeddings_on_avalai():
     # cognee-next-tier, and in the session's composer env.
     compose = _load_compose()
     env = compose["services"]["cognee"]["environment"]
-    assert env["LLM_PROVIDER"] == "custom"
-    assert env["LLM_ENDPOINT"] == "https://api.avalai.ir/v1"
-    assert env["LLM_MODEL"] == "openai/glm-5.3-flash"
-    assert env["EMBEDDING_PROVIDER"] == "openai_compatible"
-    assert env["EMBEDDING_ENDPOINT"] == "https://api.avalai.ir/v1"
+    assert env["LLM_PROVIDER"] in {"custom", "${LLM_PROVIDER:-custom}"}
+    assert env["LLM_ENDPOINT"] in {"https://api.avalai.ir/v1", "${LLM_ENDPOINT:-https://api.avalai.ir/v1}"}
+    assert env["LLM_MODEL"] in {"openai/glm-5.3-flash", "${LLM_MODEL:-openai/glm-5.3-flash}"}
+    assert env["EMBEDDING_PROVIDER"] in {"openai_compatible", "${EMBEDDING_PROVIDER:-openai_compatible}"}
+    assert env["EMBEDDING_ENDPOINT"] in {"https://api.avalai.ir/v1", "${EMBEDDING_ENDPOINT:-https://api.avalai.ir/v1}"}
     assert env["EMBEDDING_MODEL"] == "${EMBEDDING_MODEL:-text-embedding-3-large}"
     assert "EMBEDDING_API_KEY" not in env
 
@@ -117,10 +117,22 @@ def test_compose_routes_ingest_stages_to_avalai():
     compose = _load_compose()
     cognee_env = compose["services"]["cognee"]["environment"]
     for stage in ("EXTRACTION", "SUMMARIZATION"):
-        assert cognee_env[f"LLM_{stage}_PROVIDER"] == "custom"
-        assert cognee_env[f"LLM_{stage}_MODEL"] == "openai/glm-5.3-flash"
-        assert cognee_env[f"LLM_{stage}_ENDPOINT"] == "https://api.avalai.ir/v1"
-        assert cognee_env[f"LLM_{stage}_API_KEY"] == "${EMBEDDING_API_KEY}"
+        assert cognee_env[f"LLM_{stage}_PROVIDER"] in {
+            "custom",
+            "${LLM_" + stage + "_PROVIDER:-${LLM_PROVIDER:-custom}}",
+        }
+        assert cognee_env[f"LLM_{stage}_MODEL"] in {
+            "openai/glm-5.3-flash",
+            "${LLM_" + stage + "_MODEL:-${LLM_MODEL:-openai/glm-5.3-flash}}",
+        }
+        assert cognee_env[f"LLM_{stage}_ENDPOINT"] in {
+            "https://api.avalai.ir/v1",
+            "${LLM_" + stage + "_ENDPOINT:-${LLM_ENDPOINT:-https://api.avalai.ir/v1}}",
+        }
+        assert cognee_env[f"LLM_{stage}_API_KEY"] in {
+            "${EMBEDDING_API_KEY}",
+            "${LLM_" + stage + "_API_KEY:-${EMBEDDING_API_KEY}}",
+        }
     assert "LLM_QUERY_MODEL" not in cognee_env
 
     # The RPM ceiling now guards AvalAI's documented budget, and the
@@ -166,9 +178,9 @@ def test_compose_runs_next_tier_cot_on_its_own_cognee_service():
     assert next_tier["image"] == compose["services"]["cognee"]["image"]
 
     env = next_tier["environment"]
-    assert env["LLM_PROVIDER"] == "custom"
-    assert env["LLM_MODEL"] == "openai/glm-5.3-flash"
-    assert env["LLM_ENDPOINT"] == "https://api.avalai.ir/v1"
+    assert env["LLM_PROVIDER"] in {"custom", "${LLM_PROVIDER:-custom}"}
+    assert env["LLM_MODEL"] in {"openai/glm-5.3-flash", "${LLM_MODEL:-openai/glm-5.3-flash}"}
+    assert env["LLM_ENDPOINT"] in {"https://api.avalai.ir/v1", "${LLM_ENDPOINT:-https://api.avalai.ir/v1}"}
 
     volumes = [str(item) for item in next_tier.get("volumes", [])]
     assert any("enable_farsi_evidence.py" in item for item in volumes)
@@ -188,10 +200,10 @@ def test_compose_keeps_next_tier_off_the_first_answer_path():
     first = compose["services"]["cognee"]
     next_tier = compose["services"]["cognee-next-tier"]
 
-    assert first["environment"]["LLM_MODEL"] == "openai/glm-5.3-flash"
+    assert first["environment"]["LLM_MODEL"] in {"openai/glm-5.3-flash", "${LLM_MODEL:-openai/glm-5.3-flash}"}
     # Both tiers run flash now (2026-09-13, operator call); the
     # first-answer path stays isolated by service and port, not model.
-    assert next_tier["environment"]["LLM_MODEL"] == "openai/glm-5.3-flash"
+    assert next_tier["environment"]["LLM_MODEL"] in {"openai/glm-5.3-flash", "${LLM_MODEL:-openai/glm-5.3-flash}"}
 
     first_ports = [str(item) for item in first["ports"]]
     next_tier_ports = [str(item) for item in next_tier["ports"]]

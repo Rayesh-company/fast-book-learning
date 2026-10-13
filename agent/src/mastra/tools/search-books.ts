@@ -60,13 +60,20 @@ export const searchBooksTool = createTool({
       const data = (await response.json()) as {
         passages?: Array<{ reference: string; passage: string }>;
       };
+      const rawPassages = Array.isArray(data.passages)
+        ? data.passages.filter(
+            (p) =>
+              typeof p?.reference === "string" && typeof p?.passage === "string",
+          )
+        : [];
       return {
-        passages: Array.isArray(data.passages)
-          ? data.passages.filter(
-              (p) =>
-                typeof p?.reference === "string" && typeof p?.passage === "string",
-            )
-          : [],
+        passages: rawPassages.slice(0, 4).map((p) => ({
+          reference: p.reference,
+          passage:
+            p.passage.length > 1500
+              ? p.passage.slice(0, 1500) + "…"
+              : p.passage,
+        })),
       };
     } catch {
       // A missed seam contributes nothing; the agent must say the

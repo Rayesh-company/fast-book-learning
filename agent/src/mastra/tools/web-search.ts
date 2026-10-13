@@ -25,14 +25,28 @@ export const webSearchTool = createTool({
     ),
   }),
   execute: async ({ query, maxResults }, { abortSignal }) => {
-    const avalaiUrl = (process.env.AVALAI_BASE_URL ?? "https://api.avalai.ir/v1").replace(/\/+$/, "");
+    let avalaiUrl = (
+      process.env.AVALAI_BASE_URL ||
+      process.env.LLM_ENDPOINT ||
+      "https://api.avalai.ir/v1"
+    ).replace(/\/+$/, "");
+    if (
+      !process.env.VITEST &&
+      process.env.NODE_ENV === "production" &&
+      (avalaiUrl.includes("127.0.0.1") || avalaiUrl.includes("localhost"))
+    ) {
+      avalaiUrl = avalaiUrl
+        .replace("127.0.0.1", "host.docker.internal")
+        .replace("localhost", "host.docker.internal");
+    }
     const searchTool = process.env.AVALAI_SEARCH_TOOL ?? "perplexity-search";
+    const apiKey = process.env.AVALAI_API_KEY || process.env.LLM_API_KEY || "";
     try {
       const response = await fetch(`${avalaiUrl}/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.AVALAI_API_KEY ?? ""}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
           query,

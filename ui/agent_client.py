@@ -250,7 +250,7 @@ class LearnerTurnContext:
         pages = payload.get("pages")
         scope = payload.get("scope")
         page_context = None
-        if scope == "page" and (page is not None or pages) and book:
+        if (scope == "page" or "این بخش" in query or "این صفحه" in query) and (page is not None or pages) and book:
             page_context = get_page_context(book, page, pages=pages)
         selection = payload.get("selection")
         selection_payload = normalize_selection(

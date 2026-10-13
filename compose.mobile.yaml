@@ -17,6 +17,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:-mobile-worktree-secret-key}
       AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
       AGENT_URL: http://chat-with-books-agent:4111
+      AGENT_TIMEOUT: ${AGENT_TIMEOUT:-240}
       COGNEE_URL: http://chat-with-books-cognee:8000
       NEXT_TIER_URL: http://chat-with-books-cognee-next-tier:8000
       NEXT_TIER_TIMEOUT: ${NEXT_TIER_TIMEOUT:-1200}
@@ -29,10 +30,13 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SESSIONS_DB: /data/sessions.sqlite3
       SESSION_CHAT_DB: /data/chats.sqlite3
-      NOTES_DB: /data/notes.sqlite3
-      LLM_ENDPOINT: https://api.avalai.ir/v1
+      LLM_ENDPOINT: ${LLM_ENDPOINT:-https://api.avalai.ir/v1}
       LLM_MODEL: ${LLM_MODEL:-openai/glm-5.3-flash}
       LLM_API_KEY: ${LLM_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-"3072"}
+      FROZEN_EMBEDDING_MODEL: ${FROZEN_EMBEDDING_MODEL:-${EMBEDDING_MODEL:-text-embedding-3-large}}
+      FROZEN_EMBEDDING_DIMENSIONS: ${FROZEN_EMBEDDING_DIMENSIONS:-${EMBEDDING_DIMENSIONS:-"3072"}}
     volumes:
       - session_mobile_data:/data
       - ../../books:/books:ro
@@ -48,6 +52,8 @@ services:
       start_period: 10s
     networks:
       - cognee-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 networks:
   cognee-network:
