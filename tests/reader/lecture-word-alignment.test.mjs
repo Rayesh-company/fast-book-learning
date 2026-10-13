@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {gunzipSync} from 'node:zlib';
 import {ALIGNMENT_VOCAB} from '../../ui/narration/aligner.mjs';
-import {alignWords,orderedWords} from '../../tools/lecture-word-alignment.mjs';
+import {alignWords,alignWordCandidates,orderedWords} from '../../tools/lecture-word-alignment.mjs';
 import {createLectureTrack,sentenceIndexAt,pageForTime,focusForTime} from '../../ui/book-reader/lecture-sync.mjs';
 
 function recording(parts, duration=10) {
@@ -178,4 +178,68 @@ test('one conflicting late observation cannot hide better supported words that f
     {...observation(1,24,24.5),coarse_start:22,coarse_end:32},
   ]);
   assert.equal(intro.words[0].start,23);
+});
+
+test('adding collapsed-timing sentences cannot hide existing session 4 acoustic anchors',async()=>{
+  const folder=new URL('../fixtures/lecture-ctc/',import.meta.url);
+  const fixture=JSON.parse(readFileSync(new URL('session-04-candidates.json',folder),'utf8'));
+  const observations=fixture.windows.flatMap(window=>{
+    const bytes=gunzipSync(readFileSync(new URL(window.emissions,folder)));
+    const logits=new Float32Array(bytes.buffer,bytes.byteOffset,bytes.byteLength/4);
+    return alignWordCandidates(window.words,{logits,vocabSize:67,frameCount:window.frames},window.offset,window.core,window.core+12).words;
+  });
+  const sentence=orderedWords(observations).words.filter(w=>w.sentence_id===11);
+  assert.deepEqual(sentence.map(w=>[w.text,w.start,w.end]),[
+    ['این',174.16,174.3],['ایمان',174.36,174.74],['در',174.98,175.08],['همان',175.18,175.48],
+  ]);
+});
+
+test('collapsed coarse timing is an alternative context, not a veto or a guessed timestamp',()=>{
+  const words=source(['کتاب','سلام','مطلب']).map((w,i)=>({...w,coarse_timing_plausible:i!==1}));
+  const heard=orderedWords(alignWordCandidates(words,recording([['کتاب',1],['سلام',2],['مطلب',4]]),0,0,10).words).words;
+  assert.deepEqual(heard.map(w=>w.text),['کتاب','سلام','مطلب']);
+  assert.equal(heard[1].start,2);
+  const omitted=orderedWords(alignWordCandidates(words,recording([['کتاب',1],['مطلب',4]]),0,0,10).words).words;
+  assert.deepEqual(omitted.map(w=>w.text),['کتاب','مطلب']);
+});
+
+test('a noisy sentence prefix is recovered even with other sentences in the search window',()=>{
+  const words=source(['ناموجود','سلام','دنیا','مطلب','ناخوانده']).map((w,i)=>({...w,sentence_id:i===0 ? 0 : i===4 ? 2 : 1}));
+  const emissions=recording([['سلام',2],['دنیا',2.7],['مطلب',4]]);
+  for(const [text,start] of [['سلام',2],['دنیا',2.7]]) for(let i=0;i<text.length;i++) {
+    for(let n=0;n<3;n++) {
+      const row=(Math.round(start*50)+i*5+n)*67;
+      emissions.logits[row+ALIGNMENT_VOCAB[text[i]]]=8;
+      emissions.logits[row+ALIGNMENT_VOCAB['ظ']]=8.2;
+    }
+  }
+  const result=alignWords(words,emissions,0,0,10).words;
+  assert.deepEqual(result.map(w=>w.text),['سلام','دنیا','مطلب']);
+  assert.equal(result[0].start,2);
+});
+
+test('real session 1 prefix starts the sentence before the old late anchor',()=>{
+  const folder=new URL('../fixtures/lecture-ctc/',import.meta.url);
+  const fixture=JSON.parse(readFileSync(new URL('session-01-prefix.json',folder),'utf8'));
+  const observations=fixture.windows.flatMap(window=>{
+    const bytes=gunzipSync(readFileSync(new URL(window.emissions,folder)));
+    const logits=new Float32Array(bytes.buffer,bytes.byteOffset,bytes.byteLength/4);
+    return alignWordCandidates(window.words,{logits,vocabSize:67,frameCount:window.frames},window.offset,window.core,window.core+12).words;
+  });
+  const words=orderedWords(observations).words.filter(w=>w.sentence_id===58);
+  assert.equal(words[0].text,'اگر');
+  assert.equal(words[0].start,494.6);
+  assert.ok(words.some(w=>w.text==='گناهکاریم،' && w.start===494.96));
+  const focus={id:58,text:'ما می‌گوییم که اگر گناهکاریم، اگر نافرمانی خدا کردیم،',boxes:words.flatMap(w=>w.boxes)};
+  const track=createLectureTrack({word_alignment:{},sentence_focus:[focus],cues:words.map((w,id)=>({
+    id,sentence_id:58,start:w.start,end:w.end,words:[w],boxes:w.boxes,page_timing:'word_alignment',
+  }))});
+  const state=sentenceIndexAt(track,495);
+  assert.ok(state.active);
+  assert.equal(focusForTime(track.sentences[state.index],495,state.active).sentence.text,focus.text);
+});
+
+test('open-edge recovery does not invent a prefix or suffix during silence',()=>{
+  const words=source(['ناموجود','سلام','مطلب','دنیا','ناخوانده']).map((w,i)=>({...w,sentence_id:i===0 ? 0 : i===4 ? 2 : 1}));
+  assert.deepEqual(alignWords(words,recording([['مطلب',4]]),0,0,10).words.map(w=>w.text),['مطلب']);
 });

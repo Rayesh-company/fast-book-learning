@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from bisect import bisect_right
 from concurrent.futures import ThreadPoolExecutor
+from difflib import SequenceMatcher
 import hashlib
 import json
 from pathlib import Path
@@ -28,6 +29,34 @@ PHRASE_SCOPE = {"max_words": 8, "max_speech_seconds": 4.0,
                 "boundaries": "pause_sentence_punctuation_or_word_limit"}
 
 
+def exact_fragment_spans(stream, key, lo, hi, cursor):
+    """Locate context approximately, but authorize geometry only for exact runs.
+
+    One extraction/spelling difference must not discard an entire sentence.
+    Runs are subsequently checked at complete source and PDF word boundaries.
+    Short sentences require a complete PDF word, never a suffix such as نه in خانه.
+    """
+    def boundary(at):
+        return at == 0 or at == len(stream.owner) or stream.owner[at-1] != stream.owner[at]
+
+    for search_lo in (max(lo, cursor), lo):
+        at = stream.text.find(key, search_lo, hi)
+        while at >= 0:
+            if boundary(at) and boundary(at+len(key)):
+                return [(0, at, len(key))]
+            at = stream.text.find(key, at+1, hi)
+    if len(key) < 5:
+        return []
+    hit = locate(stream.text, key, lo, hi, cursor)
+    if not hit:
+        return []
+    start, end = max(lo, hit[0]-24), min(hi, hit[1]+24)
+    blocks = SequenceMatcher(None, key, stream.text[start:end], autojunk=False).get_matching_blocks()
+    if sum(b.size for b in blocks) < max(8, len(key)*.7):
+        return []
+    return [(b.a, start+b.b, b.size) for b in blocks if b.size]
+
+
 
 def prepare_words(session, stream):
     """Text offsets stay in the original sentence. Geometry must match the PDF
@@ -38,7 +67,14 @@ def prepare_words(session, stream):
         tokens = list(re.finditer(r"\S+", text))
         # A long, interpolated Quran block squeezed into 1 second is not a
         # usable speech transcript. Do not let its letters steal later speech.
-        plausible = len(norm_key(text)) / max(.02, sentence["end"]-sentence["start"]) <= 18
+        # Rough transcript timestamps often collapse a real Persian sentence
+        # into a fraction of a second. They cannot veto acoustic alignment.
+        # Retain only the known non-spoken, interpolated Quran-header exclusion.
+        placeholder = ("quran" in sentence.get("flags", [])
+                       and "interpolated" in sentence.get("flags", [])
+                       and len(norm_key(text)) > 80
+                       and sentence["end"]-sentence["start"] <= 2)
+        coarse_timing_plausible = len(norm_key(text)) / max(.02, sentence["end"]-sentence["start"]) <= 18
         lo = stream.page_start.get(sentence["page"], 0)
         hi = stream.page_end.get(sentence["page_end"], len(stream.text))
         placements,broken_tokens = {},set()
@@ -54,24 +90,32 @@ def prepare_words(session, stream):
                 broken.add(fragment_tokens[-1].start())
             broken_tokens.update(broken)
             key = norm_key(fragment.group())
-            if len(key) < 5:
+            if not key:
                 continue
-            hit = locate(stream.text, key, lo, hi, cursor)
-            if not hit or hit[2] != "exact":
+            spans = exact_fragment_spans(stream, key, lo, hi, cursor)
+            if not spans:
                 continue
-            cursor = max(cursor, hit[1])
             for token in fragment_tokens:
                 if token.start() in broken:
                     continue
-                a = hit[0]+len(norm_key(text[fragment.start():token.start()]))
+                a = len(norm_key(text[fragment.start():token.start()]))
                 b = a+len(norm_key(token.group()))
-                if b>a:
-                    placements[token.start()] = boxes_for(stream, a, b)
+                for source, target, length in spans:
+                    if not source <= a < b <= source+length:
+                        continue
+                    left, right = target+a-source, target+b-source
+                    full_context = source == 0 and length == len(key) and len(key) >= 5
+                    if full_context or ((left == 0 or stream.owner[left-1] != stream.owner[left])
+                            and (right == len(stream.owner) or stream.owner[right-1] != stream.owner[right])):
+                        placements[token.start()] = boxes_for(stream, left, right)
+                        cursor = max(cursor, right)
+                    break
         for i, token in enumerate(tokens):
             boxes = placements.get(token.start(), [])
-            if plausible and token.start() not in broken_tokens and "▯" not in token.group() and norm_key(token.group()) and "out_of_order" not in sentence.get("flags", []):
+            if not placeholder and token.start() not in broken_tokens and "▯" not in token.group() and norm_key(token.group()) and "out_of_order" not in sentence.get("flags", []):
                 words.append({"word_id":word_id,"sentence_id":sentence["id"],"word_index":i,
                               "text":token.group(),"text_start":token.start(),"text_end":token.end(),
+                              "coarse_timing_plausible":coarse_timing_plausible,
                               "coarse_start":sentence["start"],"coarse_end":sentence["end"],"boxes":boxes})
             word_id += 1
     return words
@@ -295,6 +339,7 @@ def main():
         session["word_alignment"]={"method":"local_ctc","version":report["version"],"model":report["model"],"audio_sha256":report["audio_sha256"],"supported_words":report["supported_words"]}
     index["source"]["word_alignment"]={"method":"recognized_characters_and_local_ctc","sessions":[s["session"] for s,_,_ in results],
                                        "text_boundaries":"acoustic_words","unknown_text":"no_highlight","frame_resolution_ms":20}
+    index["source"]["word_alignment"]["text_preparation"] = "exact_word_runs_in_matched_context_v2"
     index["source"]["word_alignment"]["phrase_scope"]=PHRASE_SCOPE
     index["source"]["word_alignment"]["display_scope"]="sentence"
     index["source"]["word_alignment"]["sentence_onsets"]={

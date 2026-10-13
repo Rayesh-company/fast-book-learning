@@ -55,8 +55,27 @@ speaker's pause; immediate neighbour proximity is not required for it.
 
 Words wholly inside a measured silent interval are also rejected.
 Words lacking an exact PDF placement cannot borrow the old fuzzy sentence's
-rectangle. Garbled text and impossible source timings may therefore have no
+rectangle. Garbled text without a complete PDF word placement may therefore have no
 highlight. The original sentences remain available for diagnostics.
+
+In v4, an extraction or spelling difference in one PDF word no longer discards
+all the other words in its sentence. An exact sentence match remains the first
+choice. Otherwise, local matching identifies context, and only complete exact
+word runs authorize PDF rectangles; changed or partial words cannot borrow a
+neighbour's geometry. The PDF's visual-order `اهلل` ligature is normalized
+to `الله`, including inside compounds, while retaining original glyph owners.
+Short sentences such as `نه.` are allowed only at complete
+PDF word boundaries, so they cannot match the suffix of `خانه`.
+
+Rough source intervals no longer exclude readable sentences by apparent speech
+speed. The known long interpolated Quran-header placeholder remains excluded.
+For windows containing collapsed source intervals, alignment evaluates both the
+expanded transcript and the plausible-timing subset. Both use the same acoustic
+support gates, followed by one recording-wide monotonic selection. This lets
+real speech in a formerly excluded sentence contribute evidence without forcing
+its text into silence or displacing valid neighbouring observations solely by
+changing the character-matching context. It does not interpolate word times.
+
 
 Phrases split only between observed words: at a measured pause, an unsupported
 word, a page break, a sentence/clause boundary, or a long gap. Continuous speech
@@ -149,9 +168,9 @@ It estimates text cuts and must not overwrite a word-aligned production index.
 
 ## Accuracy and verification
 
-The committed build covers all 28 sessions (26.96 hours), with 91,723 accepted
-word highlights and 9,991 measured silence checkpoints. This is 68.2% of the
-134,482 usable transcript candidates; source text also contains garbled and
+The committed build covers all 28 sessions (26.96 hours), with 100,112 accepted
+word highlights and 10,903 measured silence checkpoints. This is 70.3% of the
+142,479 usable transcript candidates; source text also contains garbled and
 excluded fragments. Coverage is not timing accuracy. Session counts and audio
 identities are recorded in [lecture-alignment-report.json](lecture-alignment-report.json).
 
@@ -180,3 +199,31 @@ reported omissions (`با توجه به چند آیه‌ای`, `به‌دست`, 
 Additional tests exercise omitted words, silence, diffuse model uncertainty,
 window boundaries, delayed speech and isolated words. No per-word corrections
 or session-specific branches are used.
+
+
+The v4 rebuild restores 1,064 previously absent sentence identities and adds
+6,808 acoustic word highlights across all 28 sessions. Seven formerly represented
+identities are reassigned to competing source occurrences or rejected as partial
+PDF fragments; counts are coverage, not a listening-based accuracy score.
+The PDF-placement fixture replays session 3 at 260.78 seconds, where one spelling
+difference previously removed an otherwise recognized sentence. A second real
+CTC fixture from session 4 at 174 seconds ensures expanded transcript candidates
+do not erase neighbouring acoustic anchors. Synthetic checks also cover short
+sentences, collapsed coarse intervals, unrelated PDF text, and omitted speech.
+
+
+In v5, open-edge recovery first restricts a candidate prefix or suffix to the
+acoustic anchor's source sentence. The wider search window still contains
+neighbouring sentences, but their presence cannot cancel recovery of the current
+sentence's words. The same support and duration gates apply; silence and omitted
+words remain rejected. Across the 28-session rebuild this adds 1,581 acoustic
+words. First acoustic anchors move earlier by more than 100 ms in 343 sentences
+(median 840 ms); these are model-derived changes, not a human accuracy score.
+Six sentence identities gain cues and six lose their former competing matches.
+The real session-1 replay asserts speech at 494.60 seconds rather than waiting
+until the old anchor at 497.48 seconds, and exercises the player lookup too.
+
+Precomputed lecture rectangles now mount and paint independently of PDF text
+extraction, including on a cold page. Canonical-offset narration and selection
+still require the text index. A regression keeps extraction pending while the
+page paints, and asserts the lecture highlight appears and clears immediately.

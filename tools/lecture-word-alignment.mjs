@@ -8,7 +8,7 @@ import {ALIGNMENT_VOCAB, buildAlignmentTranscript, ctcForcedAlign} from '../ui/n
 const letters = Object.fromEntries(Object.entries(ALIGNMENT_VOCAB).map(([k, v]) => [v, k]));
 const fold = c => ({'ي':'ی','ى':'ی','ك':'ک','آ':'ا','أ':'ا','إ':'ا','ٱ':'ا','ئ':'ی','ؤ':'و','ۀ':'ه','ة':'ه'}[c] ?? c);
 const audible = c => /^[\u0621-\u064a\u067e\u0686\u0698\u06a9\u06af\u06ccA-Z]$/u.test(c);
-export const WORD_ALIGNMENT_VERSION = 'lecture-ctc-words-v3';
+export const WORD_ALIGNMENT_VERSION = 'lecture-ctc-words-v5';
 const equivalentLabels=new Map();
 for(const [id,char] of Object.entries(letters)) if(audible(char)) {
   const key=fold(char);
@@ -109,8 +109,19 @@ function recoverBoundedPhrases(words, emissions, offset, accepted, anchors) {
   const boundaries=[null,...strong,null],recovered=[];
   for(let i=0;i<boundaries.length-1;i++) {
     const left=boundaries[i],right=boundaries[i+1];
-    const start=left ? positions.get(left.word_id)+1 : 0;
-    const end=right ? positions.get(right.word_id) : words.length;
+    let start=left ? positions.get(left.word_id)+1 : 0;
+    let end=right ? positions.get(right.word_id) : words.length;
+    // Candidate windows deliberately include neighbouring sentences. At an
+    // open acoustic edge only the anchor's own sentence is recoverable; the
+    // presence of earlier/later candidates must not veto its prefix/suffix.
+    if (!left && right) {
+      start=end;
+      while(start>0 && words[start-1].sentence_id===right.sentence_id) start--;
+    }
+    if (!right && left) {
+      end=start;
+      while(end<words.length && words[end].sentence_id===left.sentence_id) end++;
+    }
     const group=words.slice(start,end);
     if(!group.length || group.length>12 || (!left && !right)) continue;
     if(group.some((w,j)=>j && w.word_id!==group[j-1].word_id+1)) continue;
@@ -281,6 +292,19 @@ export function alignWords(words, emissions, offset, coreStart, coreEnd) {
     return w.start>=offset+(offset>0 ? .08 : 0) && w.end<=recordingEnd-(recordingEnd>coreEnd+.1 ? .08 : 0);
   });
   return {words:supported, recognized:heard.map(h=>h.char).join('')};
+}
+
+/** Match candidates without letting uncertain transcript timing veto speech. */
+export function alignWordCandidates(words, emissions, offset, coreStart, coreEnd) {
+  const full = alignWords(words, emissions, offset, coreStart, coreEnd);
+  const plausible = words.filter(w => w.coarse_timing_plausible !== false);
+  if (!plausible.length || plausible.length === words.length) return full;
+  // Collapsed source intervals may be genuine speech or editorial additions.
+  // Evaluate both contexts: their letters must not steal the neighbouring
+  // sentence's observations. Both passes use identical acoustic support gates;
+  // the recording-wide monotonic chain resolves competing observations once.
+  const alternative = alignWords(plausible, emissions, offset, coreStart, coreEnd);
+  return { ...full, words: [...full.words, ...alternative.words] };
 }
 
 /** Maximum-support nonoverlapping chain in Book order. One stray observation

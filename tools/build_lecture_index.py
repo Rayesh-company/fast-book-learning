@@ -54,7 +54,10 @@ _LETTER = re.compile("[\u0621-\u064a\u066e-\u06d3\u06d5\u06fa-\u06ffA-Za-z]")
 def _norm_word(word: str) -> str:
     word = _DIAC.sub("", word.replace("ـ", "")).translate(_MAP)
     letters = "".join(ch for ch in word if _LETTER.match(ch))
-    return letters.replace("لا", "ال")
+    # The PDF's Allah ligature can extract in visual order (اهلل), including
+    # inside compounds such as آیت‌الله. Canonicalize without changing length,
+    # so Stream character owners still point to the original PDF glyphs.
+    return letters.replace("اهلل", "الله").replace("لا", "ال")
 
 
 def norm_key(text: str) -> str:

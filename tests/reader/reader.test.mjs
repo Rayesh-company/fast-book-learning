@@ -289,3 +289,19 @@ test('lecture boxes in PDF points are drawn scaled onto the rendered page, and c
   assert.equal(reader.pointAt(9, 1, 1), null);
   reader.clear();
 });
+
+test('lecture highlight appears with the page even while PDF text extraction is pending',async()=>{
+  const {p,reader,pdfPage}=renderingFixture();
+  let finish;
+  pdfPage.getTextContent=()=>new Promise(resolve=>{finish=resolve;});
+  p.surface.getBoundingClientRect=()=>({left:0,top:0,width:500,height:700});
+  reader.highlight({page:2,tone:'exact',boxes:[{page:2,x0:10,y0:20,x1:110,y1:40}]});
+  const mounted=reader.mountPage({page:pdfPage,surface:p.surface,width:500});
+  await mounted.painted;
+  try {
+    assert.equal(p.surface.querySelectorAll('.book-reader-playback-focus > span').length,1,
+      'Precomputed lecture geometry must not wait for the selectable text layer');
+    reader.highlight(null);
+    assert.equal(p.surface.querySelectorAll('.book-reader-playback-focus > span').length,0);
+  } finally {finish({items:[]});await mounted.ready;reader.clear();}
+});

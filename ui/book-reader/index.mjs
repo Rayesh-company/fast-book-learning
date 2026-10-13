@@ -16,8 +16,9 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
   function paintFocus(record) {
     record.overlay.replaceChildren();
     if (focus?.tone) record.overlay.dataset.tone = focus.tone; else delete record.overlay.dataset.tone;
-    if (!record.index || !focus || focus.page !== record.page) return;
+    if (!focus || focus.page !== record.page) return;
     if (focus.boxes) { paintBoxes(record); return; }
+    if (!record.index) return;
     const unit = { text: focus.text, range: { start: focus.start, end: focus.end },
       locatorParts: [{ locator: { kind: 'exact', page: focus.page }, segmentStart: 0,
         range: { start: focus.start, end: focus.end } }] };
@@ -77,6 +78,17 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
       renderTask?.cancel(); textLayer?.cancel(); observer?.disconnect(); removeSelection();
       layer.remove(); overlay.remove(); canvas.remove();
     };
+    // Recorded lectures already have PDF-point geometry. Paint independently
+    // of text extraction, which can finish much later (or fail) on a cold page.
+    surface.append(overlay);
+    const syncScale = () => {
+      layer.style.setProperty('--total-scale-factor', String(surface.getBoundingClientRect().width / record.pointWidth));
+      paintFocus(record);
+    };
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(syncScale); observer.observe(surface);
+    }
+    paintFocus(record);
     // Text is prepared separately from canvas painting, as in Tuba. Hidden
     // windows must not hold up selection while requestAnimationFrame waits.
     record.painted = (async () => {
@@ -121,13 +133,6 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
       surface.append(layer, overlay);
       removeSelection = installPointerSelection(layer, onSelection,
         () => [...pages.values()].filter(page => page.index && !page.disposed).map(page => page.layer));
-      const syncScale = () => {
-        layer.style.setProperty('--total-scale-factor', String(surface.getBoundingClientRect().width / (viewport.width / viewport.scale)));
-        paintFocus(record);
-      };
-      if (typeof ResizeObserver !== 'undefined') {
-        observer = new ResizeObserver(syncScale); observer.observe(surface);
-      }
       paintFocus(record);
       return { content, index: record.index };
     })();

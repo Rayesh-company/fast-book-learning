@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {join} from 'node:path';
 import {createAlignmentModel} from '../ui/narration/model.mjs';
 import {normalizeUtterance} from '../ui/narration/aligner.mjs';
-import {alignWords,orderedWords,WORD_ALIGNMENT_VERSION} from './lecture-word-alignment.mjs';
+import {alignWordCandidates,orderedWords,WORD_ALIGNMENT_VERSION} from './lecture-word-alignment.mjs';
 
 const [manifestPath,modelPath,outputPath,cacheDir]=process.argv.slice(2);
 if(!cacheDir) throw new Error('Usage: node tools/align_lecture_words.mjs MANIFEST MODEL OUTPUT CACHE');
@@ -39,7 +39,7 @@ try {
     if(data.length!==expectedFrames*268) throw new Error(`Truncated emissions: ${target}`);
     const logits=new Float32Array(data.buffer,data.byteOffset,data.byteLength/4);
     if(logits.some(v=>!Number.isFinite(v))) throw new Error(`Invalid emissions: ${target}`);
-    const result=alignWords(words,{logits,vocabSize:67,frameCount:logits.length/67},offset,core,coreEnd);
+    const result=alignWordCandidates(words,{logits,vocabSize:67,frameCount:logits.length/67},offset,core,coreEnd);
     verified.push(...result.words);
     processed++;
     if(processed%50===0) console.log(`session ${manifest.session}: ${Math.round(coreEnd)}/${Math.round(duration)} seconds, ${verified.length} acoustic words`);

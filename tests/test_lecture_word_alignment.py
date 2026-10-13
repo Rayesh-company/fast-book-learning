@@ -1,4 +1,6 @@
 import unittest
+import json
+from pathlib import Path
 from tools.build_lecture_index import Stream
 from tools.align_lecture_words import prepare_words,build_cues,validate_cues,PHRASE_SCOPE,build_sentence_focus,add_sentence_onsets
 
@@ -12,6 +14,56 @@ class WordAlignmentTests(unittest.TestCase):
         for w,(a,b) in zip(words,[(1,1.5),(2,2.5),(6,6.5),(8,8.5)]):
             w.update(start=a,end=b,coverage=1,support=1)
         return session,words
+
+    def test_one_pdf_spelling_difference_does_not_hide_the_remaining_sentence(self):
+        pdf_text = 'مولانا محمدعلی مولانا شوکتعلی که مولانا یعنی ایتالله مولانا در تعبیر مسلمانان هند'
+        text = 'مولانا محمدعلی مولانا شوکتعلی که مولانا یعنی ایتالله مولانا در تعبیر مسلمانان هندوستان'
+        stream = Stream({1: [(400-i*25,20,420-i*25,30,w) for i,w in enumerate(pdf_text.split())]})
+        session = {'sentences': [{'id':0,'text':text,'start':0,'end':12,'page':1,'page_end':1}]}
+        words = prepare_words(session, stream)
+        for i, word in enumerate(words):
+            word.update(start=i*.5,end=i*.5+.3,coverage=1,support=1)
+        cues = build_cues(session, {'words':words,'duration':12}, [])
+        self.assertTrue(cues, 'Recognized sentence vanished because one PDF word differs')
+        self.assertEqual([w['text'] for w in words if w['boxes']], text.split()[:-1])
+        self.assertFalse(words[-1]['boxes'])
+
+    def test_short_sentence_uses_whole_pdf_word_not_substring_of_another_word(self):
+        stream = Stream({1: [(100,20,120,30,'خانه'), (70,20,90,30,'نه')]})
+        session = {'sentences': [{'id':0,'text':'نه.','start':0,'end':1,'page':1,'page_end':1}]}
+        words = prepare_words(session, stream)
+        self.assertEqual(words[0]['boxes'], [[1,70,20,90,30]])
+
+    def test_rough_sentence_duration_cannot_exclude_a_readable_sentence_from_audio_alignment(self):
+        text = 'پس ایمان لازم است.'
+        stream = Stream({1: [(100-i*20,20,118-i*20,30,w) for i,w in enumerate(text.split())]})
+        session = {'sentences': [{'id':109,'text':text,'start':1025.08,'end':1025.5,
+                                 'page':1,'page_end':1,'flags':['low_confidence']}]}
+        words = prepare_words(session, stream)
+        self.assertEqual([w['text'] for w in words], text.split())
+        self.assertTrue(all(w['boxes'] for w in words))
+
+    def test_real_recognized_session_three_sentence_survives_pdf_spelling_difference(self):
+        fixture = json.loads((Path(__file__).parent/'fixtures/lecture-ctc/session-03-pdf-placement.json').read_text())
+        stream = Stream({int(p):words for p,words in fixture['pages'].items()})
+        prepared = prepare_words(fixture['session'], stream)
+        by_offset = {w['text_start']:w for w in prepared}
+        observed = [{**w, 'boxes':by_offset[w['text_start']]['boxes']} for w in fixture['observations']]
+        cues = build_cues(fixture['session'], {'words':observed,'duration':fixture['duration']}, [])
+        shown = [w for c in cues for w in c['words']]
+        self.assertEqual(len(shown), 12)
+        self.assertEqual(shown[0]['text'], 'مولانا')
+        self.assertEqual(shown[0]['start'], 260.78)
+        self.assertEqual(shown[-1]['text'], 'هند،')
+        self.assertEqual(shown[-1]['end'], 269.18)
+        self.assertTrue(all(w['boxes'][0][0] == 91 for w in shown))
+        self.assertIn('آیت‌الله،', build_sentence_focus(prepared)[0]['text'])
+
+    def test_approximate_context_cannot_authorize_unrelated_pdf_words(self):
+        stream = Stream({1: [(100-i*20,20,118-i*20,30,w) for i,w in enumerate('سلام کتاب بلند دنیا'.split())]})
+        session = {'sentences': [{'id':0,'text':'خداحافظ زمین کوتاه فردا',
+                                 'start':0,'end':10,'page':1,'page_end':1}]}
+        self.assertFalse(any(w['boxes'] for w in prepare_words(session, stream)))
 
     def test_text_split_uses_words_on_either_side_of_measured_pause(self):
         session,words=self.fixture()
