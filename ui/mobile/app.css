@@ -59,3 +59,122 @@ html,body{height:100%;min-height:100%;background:var(--bg);color:var(--ink)}body
 body.dark .pages-button.scope-active,body.dark .pages-options-button.scope-active{color:#17342d}
 body.dark .pages-button.scope-active svg,body.dark .pages-options-button.scope-active svg{color:#17342d}
 
+/* Markdown styling in assistant responses and floating response cards */
+.assistant h1, .assistant h2, .assistant h3, .assistant h4, .assistant h5, .assistant h6,
+.response-card h1, .response-card h2, .response-card h3, .response-card h4, .response-card h5, .response-card h6 {
+  font-weight: 700;
+  line-height: 1.6;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+.assistant h1, .assistant h2, .response-card h1, .response-card h2 { font-size: 18px; }
+.assistant h3, .response-card h3 { font-size: 16px; }
+.assistant h4, .assistant h5, .assistant h6, .response-card h4, .response-card h5, .response-card h6 { font-size: 15px; }
+
+.assistant > *:first-child, .response-card .assistant > *:first-child {
+  margin-top: 0;
+}
+
+.assistant ul, .assistant ol,
+.response-card ul, .response-card ol {
+  margin: 10px 0;
+  padding-right: 22px;
+  padding-left: 0;
+}
+.assistant li, .response-card li {
+  margin-bottom: 6px;
+  line-height: 1.85;
+}
+.assistant li:last-child, .response-card li:last-child {
+  margin-bottom: 0;
+}
+
+.assistant blockquote, .response-card blockquote {
+  margin: 12px 0;
+  padding: 8px 14px;
+  border-right: 3px solid var(--accent);
+  background: var(--soft);
+  border-radius: 4px 0 0 4px;
+  color: var(--muted);
+}
+.assistant blockquote p, .response-card blockquote p {
+  margin: 0;
+}
+.assistant blockquote p + p, .response-card blockquote p + p {
+  margin-top: 8px;
+}
+
+.assistant code, .response-card code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  background: var(--soft);
+  padding: 2px 6px;
+  border-radius: 6px;
+  word-break: break-word;
+}
+
+.assistant pre, .response-card pre {
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: var(--soft);
+  border-radius: 12px;
+  overflow-x: auto;
+  direction: ltr;
+  text-align: left;
+  border: 1px solid var(--line);
+}
+.assistant pre code, .response-card pre code {
+  padding: 0;
+  background: none;
+  font-size: 13px;
+  display: block;
+  word-break: normal;
+}
+
+.assistant hr, .response-card hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 16px 0;
+}
+
+.assistant strong, .response-card strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.assistant em, .response-card em {
+  font-style: italic;
+}
+
+.assistant del, .response-card del {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.assistant a, .response-card a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.assistant .table-wrap, .response-card .table-wrap {
+  overflow-x: auto;
+  margin: 12px 0;
+  -webkit-overflow-scrolling: touch;
+}
+.assistant table, .response-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: right;
+}
+.assistant th, .assistant td, .response-card th, .response-card td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+}
+.assistant th, .response-card th {
+  background: var(--soft);
+  font-weight: 700;
+}
+
+

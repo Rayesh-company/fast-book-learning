@@ -45,7 +45,8 @@ export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequi
    const page=(input.page??input.pages?.[0])||100;
    const scope=input.scope||'all';
    data.lastAsk={book:input.book,page,scope,selection:input.selection,question:input.question};
-   return {text:'برای فهم این بخش، ابتدا نکتهٔ اصلی را با زبان خودتان بیان کنید؛ سپس آن را به یک مثال از تجربهٔ خودتان پیوند بدهید. برگشتن به متن و بررسی مثال کمک می‌کند برداشتتان را دقیق‌تر کنید.',
+   const md = `### راهنمای مطالعه\nبرای فهم این بخش، ابتدا **نکتهٔ اصلی** را با زبان خودتان بیان کنید:\n- یک مثال از *تجربهٔ خودتان* بیاورید.\n- طبق document ${input.book} (page ${page}) تطبیق با متن را بررسی کنید.\n\n> برگشتن به متن و بررسی مثال کمک می‌کند برداشتتان را دقیق‌تر کنید.`;
+    return {text:md,
     citations:input.selection?.text?[{doc:input.book,page,text:input.selection.text}]:[],
     study:{doc:input.book,page,text:'این صفحه را دوباره بخوانید و یک نکتهٔ اصلی از آن بنویسید.'},
     outside:/اینترنت|وب/.test(input.question)?[{text:'برای اطلاعات عمومی می‌توانید منبع بیرون از کتاب را بررسی کنید.',url:'https://fa.wikipedia.org/wiki/یادگیری',title:'یادگیری'}]:[]};

@@ -24,23 +24,220 @@ function quotePart(part,p){
  const text=part.quote??part.text;
  return `<button class="cite-sent" data-action="citation" data-book="${esc(book)}" data-page="${page}" data-reference="${esc(reference)}" data-text="${esc(text)}" title="${esc(part.pages_label||pageLabel([page]))}">${esc(text)}</button>`;
 }
-function formatAgentParagraph(text, p) {
- const paragraphs = String(text || '').split(/\n{2,}/).map(x => x.trim()).filter(Boolean);
- if (!paragraphs.length) return `<p>${esc(text)}</p>`;
- const regex = new RegExp(CANONICAL_CITATION_REGEX.source, 'g');
- return paragraphs.map(para => {
-  let escaped = esc(para);
-  escaped = escaped.replace(regex, (m, doc, label, first, last) => {
-   const page = Number(first) || 0;
-   const book = doc || p.book || '';
-   return `<button type="button" class="cite-sent agent-cite" data-action="citation" data-book="${esc(book)}" data-page="${page}" data-reference="${esc(m)}" data-text="${esc(m)}">${esc(m)}</button>`;
-  });
-  return `<p>${escaped}</p>`;
- }).join('');
+function renderCitationButton(m, doc, label, first, last, p) {
+ const page = Number(first) || 0;
+ const book = doc || p?.book || '';
+ return `<button type="button" class="cite-sent agent-cite" data-action="citation" data-book="${esc(book)}" data-page="${page}" data-reference="${esc(m)}" data-text="${esc(m)}">${esc(m)}</button>`;
 }
+
+export function parseInline(raw, p) {
+ if (!raw) return '';
+ const codeTokens = [];
+ let s = String(raw).replace(/`([^`]+)`/g, (_, code) => {
+  const token = `\x00CODE_${codeTokens.length}\x00`;
+  const citeRegex = new RegExp(CANONICAL_CITATION_REGEX.source, 'g');
+  const processedCode = esc(code).replace(citeRegex, (m, doc, label, first, last) =>
+   renderCitationButton(m, doc, label, first, last, p)
+  );
+  codeTokens.push(`<code>${processedCode}</code>`);
+  return token;
+ });
+
+ const linkTokens = [];
+ s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:)[^\s)"'<]+)\)/g, (_, label, url) => {
+  const token = `\x00LINK_${linkTokens.length}\x00`;
+  linkTokens.push({ label, url });
+  return token;
+ });
+
+ s = esc(s);
+
+ const citeTokens = [];
+ const citeRegex = new RegExp(CANONICAL_CITATION_REGEX.source, 'g');
+ s = s.replace(citeRegex, (m, doc, label, first, last) => {
+  const token = `\x00CITE_${citeTokens.length}\x00`;
+  citeTokens.push(renderCitationButton(m, doc, label, first, last, p));
+  return token;
+ });
+
+ s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+      .replace(/(^|[^\w\u0600-\u06FF])_([^_]+)_(?=[^\w\u0600-\u06FF]|$)/g, '$1<em>$2</em>')
+      .replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
+ s = s.replace(/\x00CITE_(\d+)\x00/g, (_, i) => citeTokens[Number(i)]);
+ s = s.replace(/\x00LINK_(\d+)\x00/g, (_, i) => {
+  const item = linkTokens[Number(i)];
+  return `<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${parseInline(item.label, p)}</a>`;
+ });
+ s = s.replace(/\x00CODE_(\d+)\x00/g, (_, i) => codeTokens[Number(i)]);
+
+ return s;
+}
+
+export function formatAgentMarkdown(text, p = {}) {
+ const raw = String(text ?? '').replace(/\r\n?/g, '\n').trim();
+ if (!raw) return `<p>${esc(text)}</p>`;
+
+ const lines = raw.split('\n');
+ const out = [];
+ let i = 0;
+
+ while (i < lines.length) {
+  const line = lines[i];
+
+  if (!line.trim()) {
+   i++;
+   continue;
+  }
+
+  const codeFenceMatch = line.match(/^```(\w*)/);
+  if (codeFenceMatch) {
+   const lang = codeFenceMatch[1] || '';
+   i++;
+   const codeLines = [];
+   while (i < lines.length && !lines[i].startsWith('```')) {
+    codeLines.push(lines[i]);
+    i++;
+   }
+   if (i < lines.length && lines[i].startsWith('```')) {
+    i++;
+   }
+   out.push(`<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(codeLines.join('\n'))}</code></pre>`);
+   continue;
+  }
+
+  const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+  if (headingMatch) {
+   const level = Math.min(headingMatch[1].length + 1, 6);
+   out.push(`<h${level}>${parseInline(headingMatch[2], p)}</h${level}>`);
+   i++;
+   continue;
+  }
+
+  if (/^\s*([-*_]\s*){3,}\s*$/.test(line)) {
+   out.push('<hr>');
+   i++;
+   continue;
+  }
+
+  if (/^>\s?(.*)$/.test(line)) {
+   const quoteLines = [];
+   while (i < lines.length && /^>\s?(.*)$/.test(lines[i])) {
+    const m = lines[i].match(/^>\s?(.*)$/);
+    quoteLines.push(m ? m[1] : '');
+    i++;
+   }
+   out.push(`<blockquote>${formatAgentMarkdown(quoteLines.join('\n'), p)}</blockquote>`);
+   continue;
+  }
+
+  const isTableSeparator = s => /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(s);
+  const isTableRow = s => Boolean(s && s.includes('|') && !s.startsWith('#') && !s.startsWith('```'));
+  if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+   const tableRows = [];
+   while (i < lines.length && isTableRow(lines[i])) {
+    tableRows.push(lines[i]);
+    i++;
+   }
+   if (tableRows.length >= 2) {
+    const parseRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+    const headerCells = parseRow(tableRows[0]);
+    const bodyRows = tableRows.slice(2).map(parseRow);
+    const thead = `<thead><tr>${headerCells.map(c => `<th>${parseInline(c, p)}</th>`).join('')}</tr></thead>`;
+    const tbody = bodyRows.length ? `<tbody>${bodyRows.map(r => `<tr>${r.map(c => `<td>${parseInline(c, p)}</td>`).join('')}</tr>`).join('')}</tbody>` : '';
+    out.push(`<div class="table-wrap"><table>${thead}${tbody}</table></div>`);
+    continue;
+   }
+  }
+
+  const formatTaskItem = it => {
+   let taskPrefix = '';
+   const taskMatch = it.match(/^\[([ xX])\]\s+(.*)$/);
+   if (taskMatch) {
+    const checked = taskMatch[1].toLowerCase() === 'x' ? ' checked' : '';
+    taskPrefix = `<input type="checkbox" disabled${checked}> `;
+    it = taskMatch[2];
+   }
+   return taskPrefix + it.split('\n').map(l => parseInline(l, p)).join('<br>');
+  };
+
+  if (/^\s*[-*+]\s+(.*)$/.test(line)) {
+   const items = [];
+   while (i < lines.length) {
+    const m = lines[i].match(/^\s*[-*+]\s+(.*)$/);
+    if (m) {
+     items.push(m[1]);
+     i++;
+    } else if (items.length && /^\s{2,}(.*)$/.test(lines[i])) {
+     items[items.length - 1] += '\n' + lines[i].trim();
+     i++;
+    } else if (items.length && !lines[i].trim() && i + 1 < lines.length && /^\s*[-*+]\s+/.test(lines[i + 1])) {
+     i++;
+    } else {
+     break;
+    }
+   }
+   out.push(`<ul>${items.map(it => `<li>${formatTaskItem(it)}</li>`).join('')}</ul>`);
+   continue;
+  }
+
+  if (/^\s*([0-9]+|[۰-۹]+)[.)]\s+(.*)$/.test(line)) {
+   const items = [];
+   while (i < lines.length) {
+    const m = lines[i].match(/^\s*([0-9]+|[۰-۹]+)[.)]\s+(.*)$/);
+    if (m) {
+     items.push(m[2]);
+     i++;
+    } else if (items.length && /^\s{2,}(.*)$/.test(lines[i])) {
+     items[items.length - 1] += '\n' + lines[i].trim();
+     i++;
+    } else if (items.length && !lines[i].trim() && i + 1 < lines.length && /^\s*([0-9]+|[۰-۹]+)[.)]\s+/.test(lines[i + 1])) {
+     const nextNum = lines[i + 1].match(/^\s*([0-9]+|[۰-۹]+)[.)]\s+/)?.[1];
+     if (nextNum === '1' || nextNum === '۱') break;
+     i++;
+    } else {
+     break;
+    }
+   }
+   out.push(`<ol>${items.map(it => `<li>${formatTaskItem(it)}</li>`).join('')}</ol>`);
+   continue;
+  }
+
+  const pLines = [];
+  while (i < lines.length) {
+   const cur = lines[i];
+   if (!cur.trim()) break;
+   if (
+    /^```/.test(cur) ||
+    /^(#{1,6})\s+/.test(cur) ||
+    /^\s*([-*_]\s*){3,}\s*$/.test(cur) ||
+    /^>\s?/.test(cur) ||
+    /^\s*[-*+]\s+/.test(cur) ||
+    /^\s*([0-9]+|[۰-۹]+)[.)]\s+/.test(cur) ||
+    (isTableRow(cur) && i + 1 < lines.length && isTableSeparator(lines[i + 1]))
+   ) {
+    break;
+   }
+   pLines.push(cur);
+   i++;
+  }
+  if (pLines.length) {
+   out.push(`<p>${pLines.map(l => parseInline(l, p)).join('<br>')}</p>`);
+  }
+ }
+
+ return out.join('');
+}
+
+export const formatAgentParagraph = formatAgentMarkdown;
+
 function answerBody(p){
  if(p.blocks?.length)return p.blocks.map(b=>b.type==='heading'?`<h3>${esc(b.text)}</h3>`:b.type==='references'?`<h3>منابع</h3>${(b.items||[]).map(x=>`<p>${esc(x)}</p>`).join('')}`:`<p>${b.parts?.length?b.parts.map(part=>part.quote!=null||part.type==='quote'?quotePart(part,p):esc(part.text)).join(' '):esc(b.text)}</p>`).join('');
- return formatAgentParagraph(p.text, p);
+ return formatAgentMarkdown(p.text, p);
 }
 export function answer(p,index){return `<article class="assistant" data-message="${index}">${answerBody(p)}${(p.citations||[]).filter(c=>c.doc&&c.page).map(c=>`<p><button class="cite-sent" data-action="citation" data-book="${esc(c.doc)}" data-page="${c.page}" data-text="${esc(c.text)}">${esc(c.text)}</button><button class="cite-pages" data-action="citation" data-book="${esc(c.doc)}" data-page="${c.page}" data-text="${esc(c.text)}">${esc(bookInfo(c.doc).title)} · ${pageLabel([c.page])}</button></p>`).join('')}${p.outside?.length?`<section class="outside-book"><h4>بیرون از کتاب</h4>${p.outside.map(x=>`<p>${esc(x.text)}</p>${/^https?:\/\//.test(x.url||'')?`<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title||'منبع وب')} ↗</a>`:''}`).join('')}</section>`:''}<div class="answer-actions">${ib('copy','کپی پاسخ','copy-answer',`data-index="${index}"`)}${ib('save',p.saved?'ذخیره شد':'ذخیره در یادداشت','save-answer',`data-index="${index}" ${p.saved?'disabled':''}`)}${ib('more','بیشتر','answer-more',`data-index="${index}"`)}</div>${p.study?`<div class="study-card"><div class="study-head">${icon('book')}<span>${esc(bookInfo(p.study.doc).title)} · ${pageLabel([p.study.page])}</span></div><p>${esc(p.study.text)}</p>${action('بازکردن کتاب '+icon('book'),'study',`data-book="${esc(p.study.doc)}" data-page="${p.study.page}"`)}</div>`:''}</article>`;}
 function message(m,i){const p=m.payload||{};return m.role==='user'?`<div class="user-turn"><div class="user-message">${esc(p.text)}</div><p class="message-context">${esc(bookInfo(p.book).title)}${p.scope!=='all'&&p.pages?.length?' · '+pageLabel(p.pages):''}</p>${p.selection?.text?`<details class="sent-selection"><summary>متن انتخاب‌شده</summary><p>${esc(p.selection.text)}</p></details>`:''}${p.failure?`<p class="inline-error" role="alert">${esc(p.failure)}</p>`:''}${p.failed?`<button class="send-failure" data-action="retry" data-index="${i}">ارسال نشد · تلاش دوباره</button>`:''}</div>`:answer(p,i);}
