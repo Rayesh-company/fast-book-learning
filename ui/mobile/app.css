@@ -48,16 +48,22 @@ html,body{height:100%;min-height:100%;background:var(--bg);color:var(--ink)}body
 .profile-row span{color:var(--muted)}
 .profile-row strong{color:var(--ink);font-weight:600}
 
-/* Composer Page Scope Pill & Split Toggle Styles */
-.pages-pill-group{display:inline-flex;align-items:center;direction:ltr}
-.pages-pill-group .pages-button{border-top-right-radius:0;border-bottom-right-radius:0;border-right:0;transition:all 140ms ease}
-.pages-pill-group .pages-options-button{height:44px;border:1px solid var(--line);border-top-right-radius:22px;border-bottom-right-radius:22px;border-top-left-radius:0;border-bottom-left-radius:0;padding:0 9px;display:flex;align-items:center;justify-content:center;transition:all 140ms ease}
+/* RTL composer tools keep a stable neutral scope control. */
+.product-shell .composer-tools{direction:rtl;gap:12px}
+.pages-pill-group{display:inline-flex;align-items:center;direction:rtl;width:168px;max-width:calc(100% - 56px);flex-shrink:0}
+.pages-pill-group .pages-button{flex:1;min-width:0;border-radius:0 22px 22px 0;border-left:0;direction:rtl;background:transparent;color:var(--ink);border-color:var(--line)}
+.pages-pill-group .pages-button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.pages-pill-group .pages-options-button{height:44px;min-width:44px;border:1px solid var(--line);border-radius:22px 0 0 22px;padding:0 9px;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--ink)}
 .pages-pill-group .pages-options-button svg{width:13px;height:13px}
-.pages-button.scope-active,.pages-options-button.scope-active{background:var(--accent);color:var(--surface);border-color:var(--accent)}
-.pages-button.scope-active svg,.pages-options-button.scope-active svg{color:var(--surface)}
-.pages-button.scope-outline,.pages-options-button.scope-outline{background:transparent;color:var(--ink);border-color:var(--line)}
-body.dark .pages-button.scope-active,body.dark .pages-options-button.scope-active{color:#17342d}
-body.dark .pages-button.scope-active svg,body.dark .pages-options-button.scope-active svg{color:#17342d}
+.product-shell .topbar .reader-return{position:absolute;left:12px;right:auto;top:14px}
+.product-shell .topbar:has(.reader-return) h3,.product-shell .topbar:has(.reader-return) p{max-width:calc(100vw - 128px)}
+.product-shell .history-item .icon-button{width:44px;min-width:44px}
+.session-popover{position:absolute;z-index:6;width:196px;max-width:calc(100% - 16px);padding:6px 12px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px var(--shadow);direction:rtl}
+.session-popover button{display:flex;align-items:center;gap:12px;min-height:48px;width:100%;padding:8px 4px;text-align:right;font-size:13px}
+.session-popover button+button{border-top:1px solid var(--line)}
+.session-popover button svg{width:19px;height:19px}
+.session-popover button:focus-visible{outline-offset:0;border-radius:8px}
+.session-popover button:hover{background:var(--soft);filter:none}
 
 /* Markdown styling in assistant responses and floating response cards */
 .assistant h1, .assistant h2, .assistant h3, .assistant h4, .assistant h5, .assistant h6,

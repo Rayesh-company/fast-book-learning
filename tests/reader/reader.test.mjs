@@ -305,3 +305,18 @@ test('lecture highlight appears with the page even while PDF text extraction is 
     assert.equal(p.surface.querySelectorAll('.book-reader-playback-focus > span').length,0);
   } finally {finish({items:[]});await mounted.ready;reader.clear();}
 });
+
+test('saved partial highlights survive page remounts and transient playback clearing',async()=>{
+ const {p,reader,pdfPage}=renderingFixture();
+ p.surface.getBoundingClientRect=()=>({left:0,top:0,width:500,height:700});
+ const createRange=p.document.createRange.bind(p.document);
+ p.document.createRange=()=>{const range=createRange();range.getClientRects=()=>[{left:20+range.startOffset*10,top:20,width:(range.endOffset-range.startOffset)*10,height:12}];return range;};
+ reader.setHighlights([{page:2,start:1,end:4,text:'lph'}]);
+ await reader.mountPage({page:pdfPage,surface:p.surface,width:500}).ready;
+ const saved=()=>p.surface.querySelector('.book-reader-saved-highlights');
+ assert.equal(saved().children.length,1);assert.equal(saved().firstChild.style.left,'30px');assert.equal(saved().firstChild.style.width,'30px');
+ reader.highlight({page:2,boxes:[{page:2,x0:10,y0:10,x1:100,y1:20}]});reader.highlight(null);assert.equal(saved().children.length,1);
+ reader.removePage(2);await reader.mountPage({page:pdfPage,surface:p.surface,width:750}).ready;assert.equal(saved().children.length,1);
+ reader.setHighlights([{page:2,start:1,end:4,text:'wrong'}]);assert.equal(saved().children.length,0);
+ reader.clear();
+});

@@ -1,173 +1,199 @@
-/** Lecture read-along: the session's recorded audio plays and the
- * sentence being spoken is highlighted on the rendered PDF page, from
- * precomputed page boxes (/books/<id>/lectures/<n>). The page turns and
- * scrolls to follow the voice; a click on a sentence seeks to it.
- * The host owns page rendering (showPage) and the markup (views.mjs).
- */
-import { createLectureTrack, sentenceIndexAt, toneFor, pageForTime, lineBoxesOnPage, focusForTime,
-  sentenceAtPoint, sessionForPage, formatClock } from './lecture-sync.mjs';
+/** Recorded lecture transport. The host owns PDF rendering and compact/expanded markup. */
+import {createLectureTrack,sentenceIndexAt,toneFor,pageForTime,lineBoxesOnPage,focusForTime,
+  sentenceAtPoint,sessionForPage,formatClock} from './lecture-sync.mjs';
+import {lectureParagraphAnchors} from './lecture-paragraphs.mjs';
 
-const digits = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
-
-export function installLecturePlayer({ element, reader, book, getPage, showPage,
-  fetchImpl = fetch, onActivate = () => {}, createAudio }) {
-  const doc = element.ownerDocument, win = doc.defaultView;
-  const life = new win.AbortController(), signal = life.signal;
-  const $ = selector => element.querySelector(selector);
-  const toggle = $('[data-lecture-toggle]'), bar = $('[data-lecture-bar]');
-  const select = $('[data-lecture-session]'), play = $('[data-lecture-play]');
-  const seek = $('[data-lecture-seek]'), clock = $('[data-lecture-time]');
-  const total = $('[data-lecture-duration]'), caption = $('[data-lecture-caption]');
-  const status = $('[data-lecture-status]'), skipIntro = $('[data-lecture-skip-intro]');
-  const viewport = $('.reader-page');
-  const audio = createAudio ? createAudio() : doc.createElement('audio');
-  audio.preload = 'metadata';
-  let sessions = [], session = null, track = null, last = '', turning = null, loadToken = 0, owning = false;
-  let listReady = null, ticker = null;
-
-  const say = text => { if (status) status.textContent = text || ''; };
-  function stopTicker() {
-    if (ticker !== null) { clearInterval(ticker); ticker = null; }
+const digits=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+export function installLecturePlayer({element,reader,book,getPage,showPage,getPageData,
+  fetchImpl=fetch,onActivate=()=>{},onExpanded=()=>{},createAudio}) {
+  const doc=element.ownerDocument,win=doc.defaultView,life=new win.AbortController(),signal=life.signal;
+  const $=selector=>element.querySelector(selector);
+  const unified=!!$('[data-audio-play]');
+  const toggle=$('[data-player-expand]')??$('[data-lecture-toggle]'),bar=$('[data-lecture-bar]');
+  const select=$('[data-lecture-session]'),play=$('[data-audio-play]')??$('[data-lecture-play]');
+  const seek=$('[data-lecture-seek]'),clock=$('[data-lecture-time]'),total=$('[data-lecture-duration]');
+  const caption=$('[data-lecture-caption]'),status=$('[data-lecture-status]'),skipIntro=$('[data-lecture-skip-intro]');
+  const previous=$('[data-audio-previous]'),next=$('[data-audio-next]'),rate=$('[data-lecture-rate]');
+  const viewport=$('.reader-page'),audio=createAudio?createAudio():doc.createElement('audio');
+  audio.preload='metadata';audio.playbackRate=1;
+  let sessions=[],session=null,track=null,last='',owning=false,loadToken=0,epoch=0,ticker=null,sessionRequest=null;
+  let initialPosition=true,expanded=false,listReady,anchorsByPage=new Map(),syncRevision=0,intent=0;
+  const say=text=>{if(status)status.textContent=text||'';};
+  const valid=(token,revision)=>!signal.aborted&&token===loadToken&&revision===epoch;
+  function stopTicker(){if(ticker!==null){clearInterval(ticker);ticker=null;}}
+  function setPlayState(){
+    const playing=!audio.paused&&!audio.ended;
+    play.dataset.state=playing?'playing':'paused';play.setAttribute('aria-label',playing?'مکث درس‌گفتار':'پخش درس‌گفتار');
+    if(playing&&ticker===null){ticker=setInterval(()=>{sync();},20);ticker?.unref?.();}
+    else if(!playing)stopTicker();
   }
-  function setPlayState() {
-    const playing = !audio.paused && !audio.ended;
-    play.dataset.state = playing ? 'playing' : 'paused';
-    play.setAttribute('aria-label', playing ? 'مکث درس‌گفتار' : 'پخش درس‌گفتار');
-    if (playing && ticker === null) {
-      // Match the acoustic frame cadence. This timer only redraws focus;
-      // media currentTime remains the clock for pauses, speed changes and seeks.
-      ticker = setInterval(() => { sync(); }, 20);
-      ticker?.unref?.();
-    } else if (!playing) {
-      stopTicker();
-    }
-  }
-
-  async function loadList() {
-    const response = await fetchImpl(`/books/${encodeURIComponent(book)}/lectures`, { signal });
-    if (!response.ok) return [];
-    const body = await response.json();
-    sessions = body.sessions ?? [];
-    select.innerHTML = sessions.map(s => `<option value="${s.session}">جلسهٔ ${digits(s.session)}${s.audio_available ? '' : ' (بدون صوت)'}</option>`).join('');
-    if (sessions.length) toggle.hidden = false;
+  function clearFocus(){if(owning)reader.highlight(null);owning=false;last='';}
+  function setAvailable(available){play.disabled=!available;if(previous)previous.disabled=!available;if(next)next.disabled=!available;seek.disabled=!available;}
+  async function loadList(){
+    const response=await fetchImpl(`/books/${encodeURIComponent(book)}/lectures`,{signal});
+    if(signal.aborted)return [];
+    if(!response.ok){if(response.status!==404)throw new Error('دریافت جلسات ناموفق بود.');say('برای این کتاب صوت جلسه موجود نیست.');return [];}
+    const body=await response.json();if(signal.aborted)return [];
+    sessions=body.sessions??[];
+    select.replaceChildren(...sessions.map(s=>{const option=doc.createElement('option');option.value=String(s.session);option.textContent=`جلسهٔ ${digits(s.session)}${s.audio_available?'':' (بدون صوت)'}`;return option;}));
+    select.disabled=!sessions.length;
+    if(toggle&&!unified)toggle.hidden=!sessions.length;
+    if(!sessions.length)say('برای این کتاب صوت جلسه موجود نیست.');
     return sessions;
   }
-
-  async function loadSession(number) {
-    const token = ++loadToken;
-    audio.pause();
-    clearFocus();
+  async function loadSession(number,{automatic=false}={}){
+    if(signal.aborted)return;if(!automatic)++intent;
+    const token=++loadToken;++epoch;++syncRevision;sessionRequest?.abort();sessionRequest=new win.AbortController();
+    audio.pause();audio.removeAttribute('src');audio.currentTime=0;session=null;track=null;anchorsByPage=new Map();clearFocus();setAvailable(false);
+    initialPosition=true;caption.textContent='';seek.value='0';clock.textContent=formatClock(0);total.textContent=formatClock(0);
     say('در حال بارگذاری جلسه…');
-    const response = await fetchImpl(`/books/${encodeURIComponent(book)}/lectures/${number}`, { signal });
-    const body = await response.json();
-    if (token !== loadToken) return;
-    if (!response.ok) { say(body.detail || 'بارگذاری جلسه ناموفق بود.'); return; }
-    session = body; track = createLectureTrack(body); last = '';
-    select.value = String(number);
-    seek.max = String(Math.ceil(body.duration || 0)); seek.value = '0';
-    total.textContent = formatClock(body.duration);
-    clock.textContent = formatClock(0);
-    caption.textContent = '';
-    if (body.audio_url) { audio.src = body.audio_url; play.disabled = false; say(''); }
-    else { audio.removeAttribute('src'); play.disabled = true; say('صوت این جلسه روی سرور نیست.'); }
-    setPlayState();
+    try{
+      const response=await fetchImpl(`/books/${encodeURIComponent(book)}/lectures/${number}`,{signal:sessionRequest.signal});
+      const body=await response.json();if(signal.aborted||token!==loadToken)return;
+      if(!response.ok)throw new Error(body.detail||'بارگذاری جلسه ناموفق بود.');
+      session=body;track=createLectureTrack(body);select.value=String(number);
+      seek.max=String(Math.ceil(body.duration||0));total.textContent=formatClock(body.duration);
+      if(body.audio_url){audio.src=body.audio_url;setAvailable(true);say('');}
+      else say('صوت این جلسه روی سرور نیست.');
+      setPlayState();
+    }catch(error){if(!signal.aborted&&token===loadToken&&error.name!=='AbortError')say('بارگذاری جلسه ناموفق بود؛ دوباره جلسه را انتخاب کنید.');}
   }
-
-  function clearFocus() {
-    if (owning) reader.highlight(null);
-    owning = false; last = '';
+  async function ensureForPage(){
+    await listReady;if(signal.aborted)return;
+    const chosen=sessionForPage(sessions,getPage());
+    if(!chosen){if(unified){setAvailable(false);say('این صفحه صوت جلسه ندارد.');}return;}
+    if(session?.session!==chosen.session)await loadSession(chosen.session,{automatic:true});
+    else setAvailable(Boolean(session.audio_url));
   }
-
-  function reveal() {
-    const span = element.querySelector('.book-reader-playback-focus > span');
-    if (!span || !viewport) return;
-    const view = viewport.getBoundingClientRect(), box = span.getBoundingClientRect();
-    if (box.top >= view.top + 8 && box.bottom <= view.bottom - 96) return;
-    const reduced = win.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const top = viewport.scrollTop + box.top - view.top - view.height * 0.3;
-    if (viewport.scrollTo) viewport.scrollTo({ top: Math.max(0, top), behavior: reduced ? 'auto' : 'smooth' });
-    else viewport.scrollTop = Math.max(0, top);
+  async function anchors(page){
+    if(!getPageData||!track)return [];
+    if(!anchorsByPage.has(page)){
+      const current=track;
+      anchorsByPage.set(page,getPageData(page).then(data=>lectureParagraphAnchors(current,page,data)));
+    }
+    return anchorsByPage.get(page);
   }
-
-  async function sync() {
-    if (!track) return;
-    const time = audio.currentTime || 0;
-    if (doc.activeElement !== seek) seek.value = String(Math.floor(time));
-    clock.textContent = formatClock(time);
-    const { index, active } = sentenceIndexAt(track, time);
-    if (index < 0) { if (last) { clearFocus(); caption.textContent = ''; } return; }
-    const focus = focusForTime(track.sentences[index], time, active);
-    const sentence = focus.sentence;
-    const page = pageForTime(sentence, time);
-    const key = `${sentence.sentence_focus ? sentence.sentence_id : index}|${page}|${focus.active}`;
-    if (key === last) return;
-    last = key;
-    caption.textContent = sentence.text;
-    caption.dataset.tone = toneFor(sentence, focus.active);
-    const boxes = lineBoxesOnPage(sentence, page);
-    if (!boxes.length) { clearFocus(); last = key; caption.dataset.unplaced = 'true'; return; }
-    delete caption.dataset.unplaced;
-    owning = true;
-    reader.highlight({ page, boxes, tone: toneFor(sentence, focus.active), text: sentence.text, lecture: sentence.id });
-    if (page !== getPage()) {
-      const turn = turning = showPage(page);
-      try { await turn; } catch { return; }
-      if (turn !== turning) return;
-      turning = null;
+  function reveal(){
+    const span=element.querySelector('.book-reader-playback-focus > span');if(!span||!viewport)return;
+    const view=viewport.getBoundingClientRect(),box=span.getBoundingClientRect();
+    const playerHeight=$('[data-lecture-player]')?.getBoundingClientRect().height??88;
+    if(box.top>=view.top+8&&box.bottom<=view.bottom-playerHeight-20)return;
+    const reduced=win.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const top=Math.max(0,viewport.scrollTop+box.top-view.top-view.height*.3);
+    if(viewport.scrollTo)viewport.scrollTo({top,behavior:reduced?'auto':'smooth'});else viewport.scrollTop=top;
+  }
+  async function sync(){
+    if(!track||signal.aborted||unified&&initialPosition)return;
+    const time=audio.currentTime||0;
+    if(doc.activeElement!==seek)seek.value=String(Math.floor(time));clock.textContent=formatClock(time);
+    const {index,active}=sentenceIndexAt(track,time);
+    if(index<0){if(last){clearFocus();caption.textContent='';}return;}
+    const focus=focusForTime(track.sentences[index],time,active),sentence=focus.sentence,page=pageForTime(sentence,time);
+    const key=`${sentence.sentence_focus?sentence.sentence_id:index}|${page}|${focus.active}`;
+    if(key===last)return;last=key;
+    caption.textContent=sentence.text;caption.dataset.tone=toneFor(sentence,focus.active);
+    const boxes=lineBoxesOnPage(sentence,page);
+    if(!boxes.length){clearFocus();last=key;caption.dataset.unplaced='true';return;}
+    delete caption.dataset.unplaced;owning=true;
+    reader.highlight({page,boxes,tone:toneFor(sentence,focus.active),text:sentence.text,lecture:sentence.id});
+    const revision=++syncRevision,token=loadToken;
+    if(page!==getPage()){
+      try{await showPage(page);}catch{return;}
+      if(signal.aborted||revision!==syncRevision||token!==loadToken)return;
     }
     reveal();
   }
-
-  async function start() {
-    if (!session?.audio_url) return;
-    if (skipIntro?.checked && audio.currentTime < (session.lecture_start || 0)) audio.currentTime = session.lecture_start;
-    onActivate();
-    try { await audio.play(); } catch (error) { say('پخش صوت ممکن نشد.'); }
-  }
-
-  async function open() {
-    bar.hidden = false; toggle.setAttribute('aria-expanded', 'true');
-    if (!session) {
-      await (listReady ??= loadList());
-      const chosen = sessionForPage(sessions, getPage()) ?? sessions[0];
-      if (chosen) await loadSession(chosen.session);
+  async function start(){
+    const action=++intent;
+    if(unified)await ensureForPage();
+    if(!session?.audio_url||signal.aborted||action!==intent)return;
+    const token=loadToken,revision=epoch;
+    if(unified&&initialPosition){
+      try{
+        const points=await anchors(getPage());if(!valid(token,revision)||action!==intent)return;
+        if(points.length)audio.currentTime=points[0].time;
+        else {
+          const cue=track.sentences.find(c=>pageForTime(c,c.speech_start??c.start)===getPage()&&lineBoxesOnPage(c,getPage()).length);
+          if(cue)audio.currentTime=cue.speech_start??cue.start;
+          else if(getPage()===sessions.find(s=>s.session===session.session)?.cover_page)audio.currentTime=session.lecture_start||0;
+          else{say('برای این صفحه زمان‌بندی صوت موجود نیست؛ صفحه یا جلسهٔ دیگری انتخاب کنید.');return;}
+        }
+      }catch{say('زمان‌بندی این صفحه بارگذاری نشد؛ دوباره پخش را بزنید.');return;}
     }
+    if(skipIntro?.checked&&audio.currentTime<(session.lecture_start||0))audio.currentTime=session.lecture_start;
+    initialPosition=false;onActivate();
+    try{await audio.play();if(!valid(token,revision)||action!==intent)audio.pause();else say('');}
+    catch{if(valid(token,revision))say('پخش صوت ممکن نشد؛ دوباره پخش را بزنید.');}
   }
-
-  toggle.addEventListener('click', () => {
-    if (bar.hidden) open().catch(() => say('بارگذاری درس‌گفتار ناموفق بود.'));
-    else { bar.hidden = true; toggle.setAttribute('aria-expanded', 'false'); }
-  }, { signal });
-  select.addEventListener('change', () => loadSession(Number(select.value)).catch(() => say('بارگذاری جلسه ناموفق بود.')), { signal });
-  play.addEventListener('click', () => { if (audio.paused) start(); else audio.pause(); }, { signal });
-  $('[data-lecture-back]')?.addEventListener('click', () => { audio.currentTime = Math.max(0, audio.currentTime - 10); }, { signal });
-  $('[data-lecture-forward]')?.addEventListener('click', () => { audio.currentTime = Math.min(session?.duration ?? Infinity, audio.currentTime + 10); }, { signal });
-  seek.addEventListener('input', () => { clock.textContent = formatClock(Number(seek.value)); }, { signal });
-  seek.addEventListener('change', () => { audio.currentTime = Number(seek.value); }, { signal });
-  for (const type of ['timeupdate', 'seeked']) audio.addEventListener(type, () => { sync(); }, { signal });
-  for (const type of ['play', 'pause', 'ended']) audio.addEventListener(type, setPlayState, { signal });
-  audio.addEventListener('error', () => { if (audio.getAttribute('src')) say('پخش صوت ناموفق بود.'); setPlayState(); }, { signal });
-
-  // A plain click on a highlighted-able sentence seeks the voice there.
-  $('.pdf-surface')?.addEventListener('click', event => {
-    if (!track || bar.hidden || !session?.audio_url) return;
-    if (!doc.getSelection()?.isCollapsed) return;
-    const point = reader.pointAt(getPage(), event.clientX, event.clientY);
-    const sentence = point && sentenceAtPoint(track, getPage(), point.x, point.y);
-    if (!sentence) return;
-    audio.currentTime = sentence.start;
-    last = '';
-    if (audio.paused) start(); else sync();
-  }, { signal });
-
-  listReady = loadList().catch(() => []);
+  function pause(){++intent;++epoch;++syncRevision;audio.pause();}
+  async function seekTo(time){
+    if(!session?.audio_url)return;
+    ++intent;++epoch;initialPosition=false;last='';audio.currentTime=Math.max(0,Math.min(session.duration||0,time));await sync();
+  }
+  async function skipParagraph(direction){
+    const action=++intent;
+    await ensureForPage();if(!session?.audio_url||action!==intent)return;
+    const token=loadToken,revision=epoch,page=getPage(),summary=sessions.find(s=>s.session===session.session);
+    try{
+      const points=await anchors(page);if(!valid(token,revision)||action!==intent)return;
+      let at=-1;
+      if(!initialPosition)for(let i=0;i<points.length;i++)if(points[i].time<=audio.currentTime+.05)at=i;
+      if(initialPosition)at=0;
+      let target=points[at+direction];
+      if(!target){
+        const first=summary?.cover_page??summary?.book_pages?.[0]??page,lastPage=summary?.book_pages?.[1]??page;
+        for(let n=page+direction;n>=first&&n<=lastPage;n+=direction){
+          const candidates=await anchors(n);if(!valid(token,revision)||action!==intent)return;
+          if(candidates.length){target=direction>0?candidates[0]:candidates.at(-1);break;}
+        }
+      }
+      if(!target){say(direction>0?'به آخرین پاراگراف زمان‌بندی‌شدهٔ جلسه رسیدید.':'به اولین پاراگراف زمان‌بندی‌شدهٔ جلسه رسیدید.');return;}
+      const playing=!audio.paused;initialPosition=false;++syncRevision;
+      if(target.page!==getPage())await showPage(target.page);
+      if(!valid(token,revision)||action!==intent)return;
+      audio.currentTime=target.time;last='';await sync();
+      if(playing&&audio.paused&&valid(token,revision))await start();say('');
+    }catch{if(valid(token,revision))say('زمان‌بندی پاراگراف بارگذاری نشد؛ دوباره تلاش کنید.');}
+  }
+  function setRate(value){if([.75,1,1.25,1.5,2].includes(value)){audio.playbackRate=value;if(rate)rate.value=String(value);}}
+  async function open(){
+    const moveFocus=doc.activeElement===toggle;
+    expanded=true;bar.hidden=false;toggle?.setAttribute('aria-expanded','true');onExpanded(true);
+    if(moveFocus)(select.disabled?$('[data-player-collapse]'):select)?.focus({preventScroll:true});
+    if(!session){await listReady;const chosen=sessionForPage(sessions,getPage())??(!unified?sessions[0]:null);if(chosen)await loadSession(chosen.session,{automatic:true});}
+  }
+  function collapse(){expanded=false;bar.hidden=true;toggle?.setAttribute('aria-expanded','false');onExpanded(false);}
+  const run=promise=>Promise.resolve(promise).catch(error=>{if(!signal.aborted&&error.name!=='AbortError')say('پخش صوت ممکن نشد؛ دوباره تلاش کنید.');});
+  toggle?.addEventListener('click',()=>expanded?collapse():run(open()),{signal});
+  $('[data-player-collapse]')?.addEventListener('click',()=>{collapse();toggle?.focus({preventScroll:true});},{signal});
+  select.addEventListener('change',()=>run((async()=>{
+    const number=Number(select.value),pending=loadSession(number),action=intent;await pending;
+    if(unified&&action===intent&&session?.session===number){
+      const chosen=sessions.find(s=>s.session===number),page=chosen?.cover_page??chosen?.book_pages?.[0];
+      if(page)await showPage(page);
+    }
+  })()),{signal});
+  play.addEventListener('click',()=>{if(audio.paused)run(start());else pause();},{signal});
+  previous?.addEventListener('click',()=>run(skipParagraph(-1)),{signal});next?.addEventListener('click',()=>run(skipParagraph(1)),{signal});
+  $('[data-lecture-back]')?.addEventListener('click',()=>run(seekTo(audio.currentTime-10)),{signal});
+  $('[data-lecture-forward]')?.addEventListener('click',()=>run(seekTo(audio.currentTime+10)),{signal});
+  rate?.addEventListener('change',()=>setRate(Number(rate.value)),{signal});
+  seek.addEventListener('input',()=>{clock.textContent=formatClock(Number(seek.value));},{signal});
+  seek.addEventListener('change',()=>run(seekTo(Number(seek.value))),{signal});
+  for(const type of ['timeupdate','seeked'])audio.addEventListener(type,()=>{run(sync());},{signal});
+  for(const type of ['play','pause','ended'])audio.addEventListener(type,setPlayState,{signal});
+  audio.addEventListener('error',()=>{if(audio.getAttribute('src'))say('پخش صوت ناموفق بود؛ دوباره جلسه را انتخاب کنید.');setPlayState();},{signal});
+  $('.pdf-surface')?.addEventListener('click',event=>{
+    if(!track||(!unified&&bar.hidden)||unified&&initialPosition||!session?.audio_url||!doc.getSelection()?.isCollapsed)return;
+    const point=reader.pointAt(getPage(),event.clientX,event.clientY),sentence=point&&sentenceAtPoint(track,getPage(),point.x,point.y);
+    if(!sentence)return;initialPosition=false;audio.currentTime=sentence.start;last='';if(audio.paused)run(start());else run(sync());
+  },{signal});
+  if(unified)setAvailable(false);
+  listReady=loadList().catch(()=>{if(!signal.aborted)say('دریافت جلسات ناموفق بود؛ کتاب‌خوان را دوباره باز کنید.');return [];});
+  const ready=unified?listReady.then(()=>ensureForPage()):listReady;
   setPlayState();
-  return {
-    open, loadSession, sync,
-    pause() { audio.pause(); },
-    get track() { return track; },
-    get audio() { return audio; },
-    get ready() { return listReady; },
-    dispose() { stopTicker(); audio.pause(); clearFocus(); life.abort(); audio.removeAttribute('src'); },
-  };
+  return {open,collapse,loadSession,sync,play:start,pause,seek:seekTo,skipParagraph,setRate,
+    async pageChanged(){pause();clearFocus();initialPosition=true;await ensureForPage();},
+    get track(){return track;},get audio(){return audio;},get sessions(){return sessions;},get expanded(){return expanded;},get ready(){return ready;},
+    dispose(){++intent;++loadToken;++epoch;stopTicker();audio.pause();clearFocus();life.abort();sessionRequest?.abort();audio.removeAttribute('src');}};
 }

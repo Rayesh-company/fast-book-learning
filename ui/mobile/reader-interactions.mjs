@@ -59,21 +59,45 @@ export function installReaderChrome({phone,getPage,getCount,goToPage,idleMs=5000
     phone.querySelector('[data-page-number]').textContent=String(page).replace(/\d/g,c=>'۰۱۲۳۴۵۶۷۸۹'[c]);
     phone.querySelector('[data-page-number]').closest('button').setAttribute('aria-label',`رفتن به صفحه؛ صفحهٔ ${page} از ${count}`);
     phone.querySelector('[name="page"]').value=String(page).replace(/\d/g,c=>'۰۱۲۳۴۵۶۷۸۹'[c]);
+    if(wheel.closest('[data-page-session-picker]'))return;
     wheel.setAttribute('aria-activedescendant',`wheel-page-${page}`);
     for(const item of wheel.children)item.setAttribute('aria-selected',String(Number(item.dataset.page)===page));
   }
   function populate(){
+    if(wheel.closest('[data-page-session-picker]'))return;
     if(wheel.children.length!==getCount())wheel.innerHTML=Array.from({length:getCount()},(_,i)=>`<div role="option" id="wheel-page-${i+1}" data-page="${i+1}" aria-selected="false">${String(i+1).replace(/\d/g,c=>'۰۱۲۳۴۵۶۷۸۹'[c])}</div>`).join('');
     sync();wheel.scrollTop=(getPage()-1)*44;
   }
   async function select(page){page=clamp(page,1,getCount());if(page!==getPage())await goToPage(page);sync();}
-  wheel.addEventListener('scroll',()=>{if(!open)return;clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>select(Math.round(wheel.scrollTop/44)+1),140);},{signal});
+  wheel.addEventListener('scroll',()=>{if(!open||wheel.closest('[data-page-session-picker]'))return;clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>select(Math.round(wheel.scrollTop/44)+1),140);},{signal});
   wheel.addEventListener('click',event=>{const item=event.target.closest('[data-page]');if(item){wheel.scrollTop=(Number(item.dataset.page)-1)*44;select(Number(item.dataset.page));}},{signal});
   wheel.addEventListener('keydown',event=>{
+    if(wheel.closest('[data-page-session-picker]'))return;
     const offset={ArrowUp:-1,ArrowDown:1,PageUp:-10,PageDown:10}[event.key];
     if(offset!==undefined||event.key==='Home'||event.key==='End'){event.preventDefault();const page=clamp(event.key==='Home'?1:event.key==='End'?getCount():getPage()+offset,1,getCount());wheel.scrollTop=(page-1)*44;select(page);}
   },{signal});
   show();return{sync,show,setOpen(value){open=value;if(value)populate();else clearTimeout(scrollTimer);show();},dispose(){clearTimeout(timer);clearTimeout(scrollTimer);life.abort();}};
+}
+
+/** Long holds expand even when they start on transport buttons; the following click is consumed. */
+export function installPlayerGestures({root,expand,holdMs=2000}) {
+  const win=root.ownerDocument.defaultView,life=new win.AbortController(),signal=life.signal;
+  let hold=null,timer,suppressClick=false;
+  const clear=()=>{clearTimeout(timer);hold=null;};
+  root.addEventListener('pointerdown',event=>{
+    suppressClick=false;
+    if(event.button!==0||event.target.closest('input,select')||event.target.closest('[data-lecture-bar]'))return;
+    hold={id:event.pointerId,x:event.clientX,y:event.clientY};
+    timer=setTimeout(()=>{if(hold){suppressClick=true;expand();}},holdMs);
+  },{signal});
+  root.addEventListener('pointermove',event=>{if(hold?.id===event.pointerId&&Math.hypot(event.clientX-hold.x,event.clientY-hold.y)>12)clear();},{signal});
+  win.addEventListener('pointerup',clear,{signal});
+  win.addEventListener('pointercancel',()=>{clear();suppressClick=false;},{signal});
+  root.addEventListener('click',event=>{
+    if(suppressClick){event.preventDefault();event.stopImmediatePropagation();suppressClick=false;return;}
+    if(!event.target.closest('button,input,select,label'))expand();
+  },{signal,capture:true});
+  return {dispose(){clear();life.abort();}};
 }
 
 /** The handle has a large hit area; dragging never starts on the textarea. */

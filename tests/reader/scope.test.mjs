@@ -78,7 +78,7 @@ test('transitioning from book reader to chat sets scope to page and current read
   // Visual styling and label
   const pill = f.doc.querySelector('.pages-button');
   assert.ok(pill, '.pages-button should exist in composer');
-  assert.ok(pill.classList.contains('scope-active'), 'active page scope should have .scope-active class');
+  assert.ok(pill.classList.contains('scope-neutral'), 'active page scope should have .scope-neutral class');
   assert.match(pill.textContent, /صفحه فعلی/);
 
   f.close();
@@ -102,7 +102,7 @@ test('new-chat from sidebar or switching books defaults to whole-book scope ("al
   // Acceptance criteria 2: new-chat sets scope to 'all'
   assert.equal(f.app.state.scope, 'all');
   const pillAfterNewChat = f.doc.querySelector('.pages-button');
-  assert.ok(pillAfterNewChat.classList.contains('scope-outline'), 'whole-book scope should have .scope-outline class');
+  assert.ok(pillAfterNewChat.classList.contains('scope-neutral'), 'whole-book scope should have .scope-neutral class');
   assert.match(pillAfterNewChat.textContent, /کل کتاب/);
 
   // Transition back to page scope
@@ -125,7 +125,7 @@ test('new-chat from sidebar or switching books defaults to whole-book scope ("al
   // Acceptance criteria 2: switching books defaults to whole-book scope
   assert.equal(f.app.state.scope, 'all');
   const pillAfterBookSwitch = f.doc.querySelector('.pages-button');
-  assert.ok(pillAfterBookSwitch.classList.contains('scope-outline'), 'switched book should have .scope-outline class');
+  assert.ok(pillAfterBookSwitch.classList.contains('scope-neutral'), 'switched book should have .scope-neutral class');
   assert.match(pillAfterBookSwitch.textContent, /کل کتاب/);
 
   f.close();
@@ -140,7 +140,7 @@ test('tapping the page pill toggles between active page scope and whole-book sco
   // Initially active page scope
   assert.equal(f.app.state.scope, 'page');
   const pill = f.doc.querySelector('.pages-button');
-  assert.ok(pill.classList.contains('scope-active'));
+  assert.ok(pill.classList.contains('scope-neutral'));
   assert.match(pill.textContent, /صفحه فعلی/);
 
   // Tap page pill -> toggle to 'all'
@@ -149,7 +149,7 @@ test('tapping the page pill toggles between active page scope and whole-book sco
 
   assert.equal(f.app.state.scope, 'all');
   const pillOutline = f.doc.querySelector('.pages-button');
-  assert.ok(pillOutline.classList.contains('scope-outline'));
+  assert.ok(pillOutline.classList.contains('scope-neutral'));
   assert.match(pillOutline.textContent, /کل کتاب/);
 
   // Tap page pill again -> toggle back to 'page'
@@ -158,7 +158,7 @@ test('tapping the page pill toggles between active page scope and whole-book sco
 
   assert.equal(f.app.state.scope, 'page');
   const pillActiveAgain = f.doc.querySelector('.pages-button');
-  assert.ok(pillActiveAgain.classList.contains('scope-active'));
+  assert.ok(pillActiveAgain.classList.contains('scope-neutral'));
   assert.match(pillActiveAgain.textContent, /صفحه فعلی/);
 
   f.close();
@@ -188,7 +188,7 @@ test('selecting custom page in modal sets scope to page, and clear-pages resets 
   assert.equal(f.app.state.scope, 'page');
   assert.deepEqual(f.app.state.pages, [25]);
   const pillCustom = f.doc.querySelector('.pages-button');
-  assert.ok(pillCustom.classList.contains('scope-active'));
+  assert.ok(pillCustom.classList.contains('scope-neutral'));
   assert.match(pillCustom.textContent, /۲۵/);
 
   // Re-open modal and click clear-pages
@@ -202,7 +202,7 @@ test('selecting custom page in modal sets scope to page, and clear-pages resets 
   assert.equal(f.app.state.scope, 'all');
   assert.deepEqual(f.app.state.pages, []);
   const pillCleared = f.doc.querySelector('.pages-button');
-  assert.ok(pillCleared.classList.contains('scope-outline'));
+  assert.ok(pillCleared.classList.contains('scope-neutral'));
   assert.match(pillCleared.textContent, /کل کتاب/);
 
   f.close();
@@ -311,7 +311,7 @@ test('expandQuestion sets scope to page and updates pill styling and aria-label'
   assert.deepEqual(f.app.state.pages, [42]);
 
   const pill = f.doc.querySelector('.pages-button');
-  assert.ok(pill.classList.contains('scope-active'), 'should have .scope-active class');
+  assert.ok(pill.classList.contains('scope-neutral'), 'should have .scope-neutral class');
   assert.match(pill.getAttribute('aria-label'), /تغییر دامنهٔ صفحه/);
 
   const optionsBtn = f.doc.querySelector('.pages-options-button');
