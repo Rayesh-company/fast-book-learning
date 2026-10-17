@@ -10,7 +10,11 @@ from pathlib import Path
 
 
 def _normalize_container_env() -> None:
-    in_docker = os.path.exists("/.dockerenv") or os.environ.get("SESSION_UI_HOST") == "0.0.0.0"
+    in_docker = (
+        os.path.exists("/.dockerenv")
+        or os.environ.get("IN_DOCKER") == "1"
+        or (os.name != "nt" and os.environ.get("SESSION_UI_HOST") == "0.0.0.0")
+    )
     if in_docker:
         for var in ("LLM_ENDPOINT", "EMBEDDING_ENDPOINT", "AVALAI_BASE_URL", "AVALAI_API_BASE_URL"):
             val = os.environ.get(var)

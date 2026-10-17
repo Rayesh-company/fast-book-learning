@@ -250,7 +250,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='contents')run((async()=>{const state=phone()?.bookReader;if(!state){toast('ابتدا صبر کنید کتاب باز شود.');return;}openSheet('contents');})());
   if(a==='outline-page'){const page=s.outline[Number(t.dataset.index)]?.page;if(page)sourcePage(s.book,page);else toast('مقصد این عنوان مشخص نیست.');}
   if(a==='search-page')sourcePage(s.book,t.dataset.page,t.dataset.text);
-  if(['pdf-pages','pdf-audio','pdf-zoom'].includes(a)){const trigger=s.menu||s.sheet?focusReturn:t;closeOverlay();phone()?.dispatchEvent(new win.CustomEvent('reader-tools-open',{bubbles:true,detail:{type:a,trigger}}));}
+  if(['pdf-pages','pdf-audio','pdf-zoom','open-audio-sheet'].includes(a)){const trigger=s.menu||s.sheet?focusReturn:t;closeOverlay();phone()?.dispatchEvent(new win.CustomEvent('reader-tools-open',{bubbles:true,detail:{type:a==='open-audio-sheet'?'pdf-audio':a,trigger}}));}
   if(a==='buy')run((async()=>{s.payment=await api.purchase();navigate('payment');})());
   if(a==='verify-payment')run((async()=>{const result=await api.verifyPayment(s.payment?.authority,s.paymentOutcome||'success');s.payment={...s.payment,...result};if(result.subscription)s.profile.subscription=result.subscription;render();})());
   if(a==='payment-outcome'){s.paymentOutcome=t.dataset.outcome;run((async()=>{const result=await api.verifyPayment(s.payment?.authority,s.paymentOutcome);s.payment={...s.payment,...result};render();})());}

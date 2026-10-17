@@ -15,7 +15,39 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
 
   function paintFocus(record) {
     record.overlay.replaceChildren();
-    if (!record.index || !focus || focus.page !== record.page) return;
+    if (!focus) return;
+    const pageEnd = focus.page_end || focus.page;
+    if (record.page < focus.page || record.page > pageEnd) return;
+
+    if (Array.isArray(focus.boxes) && focus.boxes.length > 0) {
+      for (const box of focus.boxes) {
+        if (!Array.isArray(box) || box.length < 5 || box[0] !== record.page) continue;
+        const unscaledWidth = (record.viewport && record.viewport.width && record.viewport.scale)
+          ? (record.viewport.width / record.viewport.scale)
+          : 411.024;
+        const surfaceWidth = record.surface.clientWidth || parseFloat(record.surface.style.width) || (record.viewport?.width) || unscaledWidth;
+        const scale = surfaceWidth / unscaledWidth;
+        const x1 = Math.min(box[1], box[3]) * scale;
+        const x2 = Math.max(box[1], box[3]) * scale;
+        const y1 = Math.min(box[2], box[4]) * scale;
+        const y2 = Math.max(box[2], box[4]) * scale;
+        const round2 = (n) => Math.round(n * 100) / 100;
+        const rect = {
+          left: round2(x1),
+          top: round2(y1),
+          width: round2(x2 - x1),
+          height: round2(y2 - y1),
+        };
+        if (rect.width > 0 && rect.height > 0) {
+          const span = record.surface.ownerDocument.createElement('span');
+          for (const [key, value] of Object.entries(rect)) span.style[key] = `${value}px`;
+          record.overlay.append(span);
+        }
+      }
+      return;
+    }
+
+    if (!record.index) return;
     const unit = { text: focus.text, range: { start: focus.start, end: focus.end },
       locatorParts: [{ locator: { kind: 'exact', page: focus.page }, segmentStart: 0,
         range: { start: focus.start, end: focus.end } }] };
@@ -49,7 +81,7 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
     const overlay = doc.createElement('div');
     overlay.className = 'book-reader-playback-focus';
     overlay.setAttribute('aria-hidden', 'true');
-    const record = { page: page.pageNumber, surface, layer, overlay, index: null, disposed: false };
+    const record = { page: page.pageNumber, surface, layer, overlay, index: null, disposed: false, viewport };
     const active = () => !record.disposed && isCurrent();
     pages.set(record.page, record);
     let renderTask;

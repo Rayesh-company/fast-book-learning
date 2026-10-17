@@ -230,6 +230,7 @@ services:
       # A Next-tier search can pass ten minutes; the relay waits on its
       # own leash (serve.py default 1200s).
       NEXT_TIER_TIMEOUT: ${NEXT_TIER_TIMEOUT:-1200}
+      IN_DOCKER: "1"
       SESSION_UI_HOST: 0.0.0.0
       SESSION_UI_PORT: "8765"
       SESSION_UI_QUOTA_DB: /data/usage.sqlite3

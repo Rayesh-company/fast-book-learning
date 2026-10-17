@@ -2,6 +2,7 @@ import { createBookReader, PDF_RENDER_OPTIONS } from '../book-reader/index.mjs';
 import { installNarrationControls } from '../book-reader/audio-controls.mjs';
 import { createPanelFocus } from './panel-focus.mjs';
 import { installContinuousAudio } from '../book-reader/continuous-audio.mjs';
+import { installLectureAudio } from '../book-reader/lecture-audio.mjs';
 import { pdfParagraphs } from '../book-reader/paragraphs.mjs';
 import { readPdfText } from '../book-reader/pdf-text.mjs';
 import { buildPdfTextIndex } from '../book-reader/pdf-content.mjs';
@@ -102,7 +103,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
     const oldScroll = state.viewport.scrollTop;
     const selected=keepContext?state.reader?.captureSelection():null;
     if (keepContext) state.reader?.removePage(state.page);
-    else { if(!audio)state.controls?.reset();
+    else { if(!audio && !state.controls?.isLecture)state.controls?.reset();
       if(state.product)state.reader?.removePage(state.page);else state.reader?.clear();state.selection = null; state.actionSelection = null;
       state.phone.querySelector('.reader-selection-actions').hidden = true;
       if (state.phone.readerQuestion&&!audio) state.phone.dispatchEvent(new doc.defaultView.CustomEvent('reader-question-reset', {bubbles:true}));
@@ -151,7 +152,10 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
     }
     await mounted.painted;
     if (current()) state.surface.querySelector('.pdf-placeholder')?.remove();
-    if (current()) state.phone.dispatchEvent(new doc.defaultView.CustomEvent('book-page-ready', {bubbles:true, detail:{page:state.page,numPages:pdf.numPages,outline:state.outline||[]}}));
+    if (current()) {
+      state.controls?.onPageChanged?.(state.page);
+      state.phone.dispatchEvent(new doc.defaultView.CustomEvent('book-page-ready', {bubbles:true, detail:{page:state.page,numPages:pdf.numPages,outline:state.outline||[]}}));
+    }
     } catch (error) { if (current()) fail(state,error); }
   }
 
@@ -181,25 +185,36 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
         onPaintError: () => fail(state, new Error('نمایش PDF این صفحه ممکن نشد.'))});
       phone.bookReader = state.reader;
       const audioFetch = phone.dataset.demo === 'true' ? async () => ({ok:false,json:async()=>({detail:'صوت نمونه تولید نمی‌شود؛ شنیدن واقعی کتاب در نسخهٔ متصل به سرویس در دسترس است.'})}) : fetchImpl;
-      if(state.product){
+      if (state.product) {
         const changePage=page=>{state.ready=render(state,page);return state.ready;};
-        const pageData=page=>{
-          if(!state.pageData.has(page))state.pageData.set(page,(async()=>{
-            const pdfPage=await state.pdf.getPage(page),content=await readPdfText(pdfPage,pdfjs.OPS.showText);
-            const data=buildPdfTextIndex(content,page);
-            return {index:data.index,paragraphs:pdfParagraphs(data.index,data.indexItems,page)};
-          })().catch(error=>{state.pageData.delete(page);throw error;}));
-          return state.pageData.get(page);
-        };
-        state.controls=installContinuousAudio({element:phone,fetchImpl:audioFetch,reader:state.reader,
-          getContext:()=>({doc:state.book,page:state.page,numPages:state.pdf.numPages}),getPageData:pageData,
-          showPage:async page=>{if(page===state.page){await state.ready;return;}await render(state,page,false,{audio:true});}});
+        const showPageForAudio=async page=>{if(page===state.page){await state.ready;return;}await render(state,page,false,{audio:true});};
+        if (state.book === 'tarhe-kolli') {
+          state.controls = installLectureAudio({
+            element: phone,
+            reader: state.reader,
+            getContext: () => ({ doc: state.book, page: state.page, numPages: state.pdf.numPages }),
+            showPage: showPageForAudio,
+            fetchImpl,
+          });
+        } else {
+          const pageData=page=>{
+            if(!state.pageData.has(page))state.pageData.set(page,(async()=>{
+              const pdfPage=await state.pdf.getPage(page),content=await readPdfText(pdfPage,pdfjs.OPS.showText);
+              const data=buildPdfTextIndex(content,page);
+              return {index:data.index,paragraphs:pdfParagraphs(data.index,data.indexItems,page)};
+            })().catch(error=>{state.pageData.delete(page);throw error;}));
+            return state.pageData.get(page);
+          };
+          state.controls=installContinuousAudio({element:phone,fetchImpl:audioFetch,reader:state.reader,
+            getContext:()=>({doc:state.book,page:state.page,numPages:state.pdf.numPages}),getPageData:pageData,
+            showPage:showPageForAudio});
+        }
         state.chrome=installReaderChrome({phone,getPage:()=>state.page,getCount:()=>state.pdf.numPages,goToPage:changePage});
         state.gestures=installReaderGestures({viewport:state.viewport,surface:state.surface,getZoom:()=>state.zoom,
           hasSelection:()=>!!state.reader.captureSelection()||!doc.getSelection()?.isCollapsed,
           turnPage:direction=>{const page=Math.max(1,Math.min(state.pdf.numPages,state.page+direction));if(page!==state.page)changePage(page);},
           setZoom:(zoom,anchor)=>{state.zoom=zoom;phone.dataset.pdfZoom=String(zoom);state.ready=render(state,state.page,true,{anchor});}});
-      }else state.controls = installNarrationControls({element: phone, fetchImpl:audioFetch,
+      } else state.controls = installNarrationControls({element: phone, fetchImpl:audioFetch,
         reader: {captureSelection: () => state.reader.captureSelection() ?? state.selection,
           getPageIndex: page => state.reader.getPageIndex(page), loadAudio: input => state.reader.loadAudio(input)},
         getContext: async () => { await state.ready; return records.get(phone) === state ? {doc:state.book,page:state.page} : null; }});
@@ -297,7 +312,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
       phone.querySelector('.reader-selection-actions').hidden = true;
     }
     if (target.matches('[data-pdf-dismiss]')) closeSheets(phone);
-    if (['pdf-pages','pdf-audio','pdf-zoom'].includes(target.dataset.action)&&!phone.classList.contains('product-shell'))openTools(phone,target.dataset.action,target);
+    if (['pdf-pages','pdf-audio','pdf-zoom','open-audio-sheet'].includes(target.dataset.action)&&!phone.classList.contains('product-shell'))openTools(phone,target.dataset.action==='open-audio-sheet'?'pdf-audio':target.dataset.action,target);
     if (target.matches('[data-pdf-prev],[data-pdf-next]') && state.pdf) {
       state.ready = render(state, state.page + (target.hasAttribute('data-pdf-next') ? 1 : -1)).catch(error => fail(state, error));
     }

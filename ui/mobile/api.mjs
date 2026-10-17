@@ -32,6 +32,13 @@ export function parseAgentCitations(text = '', defaultBook = '') {
 
 export async function readAgentStream(response, { signal, onStatus, onDelta } = {}) {
   if (!response.body || !response.body.getReader) {
+    if (typeof response.json === 'function') {
+      const data = await response.json();
+      return {
+        text: data.text || blocksText(data.blocks) || '',
+        outside: data.outside || [],
+      };
+    }
     throw new Error('ارتباط با عامل گفت‌وگو قطع شد؛ دوباره بپرسید.');
   }
   const reader = response.body.getReader();

@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import socket
 import sys
 import time
 import threading
@@ -209,6 +210,7 @@ try:
         turn_status_payload,
         with_references,
     )
+    from ui import lectures
     abort_phone_research = abort_account_research
 except ImportError:  # the container runs this file as a script beside the modules
     from agent_client import (
@@ -373,6 +375,7 @@ except ImportError:  # the container runs this file as a script beside the modul
         turn_status_payload,
         with_references,
     )
+    import lectures
     abort_phone_research = abort_account_research
 
 UI_DIR = Path(__file__).resolve().parent
@@ -405,7 +408,7 @@ RENDER_LOCK = threading.Lock()
 PDF_DOCS_CACHE: dict[str, object] = {}
 PDF_DOCS_CACHE_CAP = 2
 COGNEE_URL = os.environ.get("COGNEE_URL", "http://127.0.0.1:8000").rstrip("/")
-HOST = os.environ.get("SESSION_UI_HOST", "127.0.0.1")
+HOST = os.environ.get("SESSION_UI_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SESSION_UI_PORT", "8765"))
 PROXY_TIMEOUT = 600
 # A Next-tier search runs four chain-of-thought rounds and can pass ten
@@ -835,9 +838,54 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self._agent_chat_history()
             return
         if path.startswith("/books/"):
+            if "/lectures" in path:
+                self._book_lectures(path)
+                return
             self._book_file(path)
             return
         super().do_GET()
+
+    def _book_lectures(self, path: str) -> None:
+        """Lecture audio manifests, session timing data, and Range-enabled audio streaming."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        lectures_match = re.fullmatch(r"/books/([A-Za-z0-9_-]+)/lectures(?:/(\d+)(?:/(audio))?)?", path)
+        if not lectures_match:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        book_id = lectures_match.group(1)
+        session_str = lectures_match.group(2)
+        is_audio = bool(lectures_match.group(3))
+        if book_id not in BOOK_DATASETS:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        ext_dir = os.environ.get("LECTURE_AUDIO_DIR")
+        if not session_str:
+            summary = lectures.load_lectures_summary(BOOKS_DIR, book_id, ext_dir)
+            if summary is None:
+                self._drain_request_body()
+                self.send_error(404, "Not found")
+                return
+            self._send_json(200, summary)
+            return
+        session_num = int(session_str)
+        if not is_audio:
+            session_data = lectures.get_session_data(BOOKS_DIR, book_id, session_num, ext_dir)
+            if session_data is None:
+                self._drain_request_body()
+                self.send_error(404, "Not found")
+                return
+            self._send_json(200, session_data)
+            return
+        audio_file = lectures.get_session_audio_file(BOOKS_DIR, book_id, session_num, ext_dir)
+        if audio_file is None or not audio_file.is_file():
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        lectures.stream_audio_range(self, audio_file, head=False)
 
     def _book_file(self, path: str) -> None:
         """One Book asset — ``/books/<dataset>/book`` (the PDF, for the
@@ -3142,6 +3190,18 @@ def main() -> None:
             )
     server = SheetServer((HOST, PORT), SessionHandler)
     print(f"Session sheet http://{HOST}:{PORT}", flush=True)
+    if HOST in ("0.0.0.0", ""):
+        lan_ip = "127.0.0.1"
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                lan_ip = s.getsockname()[0]
+        except Exception:
+            pass
+        if lan_ip and lan_ip != "127.0.0.1":
+            print(f"  Local access:   http://localhost:{PORT}/", flush=True)
+            print(f"  Network access: http://{lan_ip}:{PORT}/", flush=True)
+            print(f"  Mobile UI:      http://{lan_ip}:{PORT}/mobile/", flush=True)
     print(f"Proxying /api/v1/recall and /health to {COGNEE_URL}", flush=True)
     print(f"Relaying /next-tier-recall to {NEXT_TIER_URL}", flush=True)
     print(f"Running Research Mode turns against {NEXT_TIER_URL}", flush=True)

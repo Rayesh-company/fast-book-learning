@@ -22,4 +22,8 @@ if (-not $env:LLM_API_KEY) {
     exit 1
 }
 
+if (-not $env:SESSION_UI_HOST) {
+    $env:SESSION_UI_HOST = "0.0.0.0"
+}
+
 python ui/serve.py
