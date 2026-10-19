@@ -85,6 +85,17 @@ jobs:
           bak="$VHOST.bak-$(date +%s)"
           cp "$VHOST" "$bak"
           cp "$CONF" "$VHOST"
+          echo "== the renewal deploy hook (a renewed cert must reach nginx) =="
+          # This cert was issued certonly --webroot: installer NONE, so
+          # a January renewal would land on disk while nginx kept
+          # serving the expiring one from memory. The deploy hook runs
+          # after EVERY renewal and reloads — idempotent to re-install.
+          mkdir -p /etc/letsencrypt/renewal-hooks-deploy
+          printf '#!/bin/sh\nsystemctl reload nginx\n' \
+            > /etc/letsencrypt/renewal-hooks-deploy/reload-nginx.sh
+          chmod +x /etc/letsencrypt/renewal-hooks-deploy/reload-nginx.sh
+          certbot renew --cert-name booksai.rayesh-team.ir --dry-run \
+            || echo "dry-run failed/skipped (informational only - network to LE staging)"
           echo "== nginx -t gates the reload =="
           if nginx -t 2>&1; then
             systemctl reload nginx
@@ -102,6 +113,9 @@ jobs:
 
       - name: Verify from the runner
         run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://booksai.rayesh-team.ir/livez)
+          echo "http livez -> $code (301 expected)"
+          [ "$code" = "301" ]
           curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
           echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
             -servername booksai.rayesh-team.ir 2>/dev/null | openssl x509 -noout -subject -dates
