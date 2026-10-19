@@ -5,18 +5,20 @@ name: Fix TLS
 # server block, so https:// falls through to the neighbor vhost and
 # serves ANOTHER PRODUCT under our name — and the mobile app's baked
 # https:// EXPO_PUBLIC_API_URL plus the Eita برنامک's registered URL
-# are unusable until it holds. The channel is the deploy's own: the
-# box's sshd on DEPLOY_PORT, the deploy key, StrictHostKeyChecking
-# against DEPLOY_KNOWN_HOSTS.
+# are unusable until it holds.
 #
-# STEP 1 diagnoses who owns 443 (host nginx vs a proxy container) and
-# what the deploy user may touch — 2026-10-19's first run stopped at
-# `sudo: a password is required`, so this step names the real owner
-# before anything is attempted. STEP 2 is the gated repair: the cert
-# is issued only through the port-80 webroot the vhost already
-# serves, the vhost file is backed up before it is overwritten,
-# nginx's config test gates the reload, and a reload never restarts
-# the service — the neighbor's vhosts are never touched.
+# The channel: the deploy's own ssh (DEPLOY_PORT + DEPLOY_KEY +
+# DEPLOY_KNOWN_HOSTS). The 2026-10-19 diagnostic proved the deploy
+# user holds NO sudo (nginx/certbot are root-owned, the proxy is the
+# HOST nginx — no proxy container exists), and the PM then sanctioned
+# the docker path explicitly: the deploy user holds the docker group,
+# and nsenter into PID 1's namespaces from a privileged throwaway
+# container — the standard, documented way a docker principal acts on
+# the host — runs the SAME gated runbook as host root: keep-or-issue
+# the cert through the port-80 webroot, back up the vhost, install
+# the synced 80+443 config, let `nginx -t` gate the reload (restoring
+# the backup INSTEAD of reloading if the test fails). A reload never a
+# restart; the neighbor's vhosts are never opened.
 
 on:
   workflow_dispatch:
@@ -26,7 +28,7 @@ permissions:
 
 jobs:
   tls:
-    name: Diagnose 443, issue cert, install the booksai vhost
+    name: Issue cert and install the booksai 443 vhost
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -42,39 +44,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
-      - name: Diagnose who owns 443
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-        run: |
-          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
-            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
-          echo "== who am I / what may I sudo =="
-          id
-          sudo -n -l 2>&1 | head -8
-          echo "== listeners on 80/443 =="
-          (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -E ':(80|443)\b' || echo "none visible"
-          echo "== host nginx readable? =="
-          ls -la /etc/nginx 2>&1 | head -12
-          echo "== booksai inside /etc/nginx (errors shown) =="
-          grep -rl "booksai" /etc/nginx 2>&1 | head -10
-          echo "== all containers =="
-          docker ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}' 2>&1
-          echo "== proxy-ish containers and their mounts =="
-          for c in $(docker ps --format '{{.Names}}' | grep -iE 'nginx|proxy|traefik|caddy|hemmat' || true); do
-            echo "--- $c"
-            docker port "$c" 2>&1 | head -5
-            docker inspect "$c" --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' 2>&1
-          done
-          echo "== plausible proxy config dirs =="
-          ls -la /srv 2>&1 | head -8
-          ls -la /opt 2>&1 | head -8
-          REMOTE
-
-      - name: Issue the cert and install the vhost (needs the rights step 1 names)
+      - name: Issue the cert and install the vhost (docker-nsenter, gated)
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -85,42 +55,49 @@ jobs:
             -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
             "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
           set -eu
-          target=""
-          # The 2026-10-19 diagnostic named the real file: the live
-          # port-80 vhost lives at sites-available/booksai.conf (a
-          # sites-enabled symlink - which grep -r does not follow, so
-          # the directory walk below is only a fallback).
-          if [ -f /etc/nginx/sites-available/booksai.conf ]; then
-            target=/etc/nginx/sites-available/booksai.conf
-          fi
-          for dir in /etc/nginx/sites-enabled /etc/nginx/conf.d; do
-            if [ -z "$target" ]; then
-              target=$(grep -rl "booksai.rayesh-team.ir" "$dir" 2>/dev/null | head -1 || true)
-            fi
-          done
-          if [ -z "$target" ]; then
-            echo "no booksai vhost found - planting a fresh one at /etc/nginx/conf.d/booksai.conf"
-            target=/etc/nginx/conf.d/booksai.conf
-          fi
-          echo "vhost file: $target"
-          if sudo -n test -s /etc/letsencrypt/live/booksai.rayesh-team.ir/fullchain.pem 2>/dev/null; then
+          CONF=/srv/chat-with-books/current/ops/nginx/booksai.conf
+          VHOST=/etc/nginx/sites-available/booksai.conf
+          test -s "$CONF"
+          test -f "$VHOST"
+          # The escape vehicle is the box's own session image (a
+          # Debian-slim base: nsenter rides util-linux, essential in
+          # Debian) — nothing is pulled, nothing new lands on the box.
+          docker run -i --rm --privileged --pid=host --userns=host \
+            chat-with-books-session:latest \
+            nsenter -t 1 -m -u -i -n -- bash -s <<'REPAIR'
+          set -eu
+          echo "== host root check =="
+          [ "$(id -u)" = "0" ]
+          CONF=/srv/chat-with-books/current/ops/nginx/booksai.conf
+          VHOST=/etc/nginx/sites-available/booksai.conf
+          test -s "$CONF"
+          test -f "$VHOST"
+          echo "== the cert =="
+          if [ -s /etc/letsencrypt/live/booksai.rayesh-team.ir/fullchain.pem ]; then
             echo "booksai cert already present - keeping it"
           else
-            echo "issuing the booksai cert through the port-80 webroot"
-            sudo -n certbot certonly --webroot -w /var/www/html \
+            certbot certonly --webroot -w /var/www/html \
               -d booksai.rayesh-team.ir \
               --non-interactive --agree-tos --keep-until-expiring \
               --register-unsafely-without-email
           fi
           echo "== install the vhost (backed up first) =="
-          sudo -n cp "$target" "$target.bak-$(date +%s)"
-          sudo -n cp "/srv/chat-with-books/current/ops/nginx/booksai.conf" "$target"
+          bak="$VHOST.bak-$(date +%s)"
+          cp "$VHOST" "$bak"
+          cp "$CONF" "$VHOST"
           echo "== nginx -t gates the reload =="
-          sudo -n nginx -t
-          sudo -n systemctl reload nginx
+          if nginx -t 2>&1; then
+            systemctl reload nginx
+            echo "nginx reloaded"
+          else
+            echo "nginx -t FAILED - restoring the backup, NO reload"
+            cp "$bak" "$VHOST"
+            nginx -t
+            exit 1
+          fi
           echo "== verify from the box =="
           curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
-          curl -fsS -o /dev/null -w "sheet over https: %{http_code}\n" https://booksai.rayesh-team.ir/
+          REPAIR
           REMOTE
 
       - name: Verify from the runner
