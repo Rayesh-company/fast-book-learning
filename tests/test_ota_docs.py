@@ -7,6 +7,8 @@ config, the /ota routes, the publish script, and the skill."""
 import json
 import sys
 
+import pytest
+
 from tests.conftest import REPO_ROOT
 
 sys.path.insert(0, str(REPO_ROOT))
@@ -54,10 +56,17 @@ def test_the_app_carries_the_updates_client():
     package = (REPO_ROOT / "mobile" / "package.json").read_text(encoding="utf-8")
     assert "expo-updates" in package
     # The native manifest carries the config plugin's stamps — the
-    # binary checks on every launch.
-    manifest = (
+    # binary checks on every launch. The manifest is the expo prebuild's
+    # OUTPUT (`npx expo prebuild --platform android` regenerates it) and
+    # rides no checkout but a working machine's: the committed-config
+    # pins above hold everywhere, the native stamps where the prebuild
+    # output exists.
+    manifest_path = (
         REPO_ROOT / "mobile" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
-    ).read_text(encoding="utf-8")
+    )
+    if not manifest_path.exists():
+        pytest.skip("no expo prebuild output in this checkout")
+    manifest = manifest_path.read_text(encoding="utf-8")
     assert "expo.modules.updates.ENABLED" in manifest
     assert 'EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"' in manifest
 

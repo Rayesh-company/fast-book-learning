@@ -6,6 +6,8 @@ picks the gate up and a trimmed-down command cannot sneak in."""
 import os
 from pathlib import Path
 
+import pytest
+
 from tests.conftest import REPO_ROOT
 
 HOOK = REPO_ROOT / "scripts" / "githooks" / "pre-push"
@@ -31,6 +33,10 @@ def test_readme_documents_the_one_command_install():
     assert "core.hooksPath scripts/githooks" in readme, "a fresh clone must pick the gate up with one command"
 
 
+@pytest.mark.skipif(
+    os.environ.get("GITHUB_ACTIONS") == "true",
+    reason="an ephemeral CI checkout never pushes — the gate is a developer-machine precondition",
+)
 def test_hookspath_installed_in_this_checkout():
     """This checkout itself is gated: core.hooksPath points at the committed
     hook, so the next push from here runs the suite."""
