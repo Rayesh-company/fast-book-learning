@@ -86,6 +86,13 @@ jobs:
             "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
           set -eu
           target=""
+          # The 2026-10-19 diagnostic named the real file: the live
+          # port-80 vhost lives at sites-available/booksai.conf (a
+          # sites-enabled symlink - which grep -r does not follow, so
+          # the directory walk below is only a fallback).
+          if [ -f /etc/nginx/sites-available/booksai.conf ]; then
+            target=/etc/nginx/sites-available/booksai.conf
+          fi
           for dir in /etc/nginx/sites-enabled /etc/nginx/conf.d; do
             if [ -z "$target" ]; then
               target=$(grep -rl "booksai.rayesh-team.ir" "$dir" 2>/dev/null | head -1 || true)
