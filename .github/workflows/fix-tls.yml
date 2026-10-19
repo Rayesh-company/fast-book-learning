@@ -94,7 +94,10 @@ jobs:
           # serving the expiring one from memory. The deploy hook runs
           # after EVERY renewal and reloads — idempotent to re-install.
           mkdir -p /etc/letsencrypt/renewal-hooks-deploy
-          printf '#!/bin/sh\nsystemctl reload nginx\n' \
+          # The direct signal first: 2026-10-19's evidence says
+          # `systemctl reload nginx` refuses on this box while
+          # `nginx -s reload` does the job.
+          printf '#!/bin/sh\nnginx -s reload 2>/dev/null || systemctl reload nginx\n' \
             > /etc/letsencrypt/renewal-hooks-deploy/reload-nginx.sh
           chmod +x /etc/letsencrypt/renewal-hooks-deploy/reload-nginx.sh
           certbot renew --cert-name booksai.rayesh-team.ir --dry-run \
