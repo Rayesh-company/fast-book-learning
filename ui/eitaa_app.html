@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<!--
+  The برنامک (the Eita client, ADR-0021): Eita's WebView opens this
+  page with the signed initData; the page exchanges it for the
+  Account's ordinary token (POST /eitaa/auth, or /eitaa/link at the
+  one door) and then speaks the SHARED API the sheet and the Expo app
+  already speak — /sessions, /ask, /quote-selection, /quoted-answer,
+  /usage/live — riding Authorization: Bearer like every native client
+  (ADR-0020's law, a third client, still one backend).
+
+  The official SDK loads FIRST in the head, from its own URL —
+  developer.eitaa.com pins the file and warns against vendoring it
+  (updates, security patches, client compatibility). Outside Eita's
+  client the object never appears and the page says so honestly.
+
+  DRAFT display vocabulary, pending PM approval: every string lives
+  in the S table below. Words the roster already carries are reused
+  verbatim («فهرست نشست‌ها» · «نشست تازه» · «بپرس» · «هزینۀ نشست:» ·
+  «حذف»); the NEW ones are the برنامک's own («برنامک نشست», the link
+  door's labels, the phase notes shared with the mobile app, the
+  outside note). CONTEXT.md's draft row pins the table.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>برنامک نشست</title>
+<script src="https://developer.eitaa.com/eitaa-web-app.js"></script>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --panel: #ffffff;
+    --ink: #1f2933;
+    --muted: #6b7686;
+    --line: #e3ddd2;
+    --accent: #14532d;
+    --accent-ink: #ffffff;
+    --mark: #f5e8c7;
+    --danger: #8a2b2b;
+  }
+  [data-theme="dark"] {
+    --bg: #17212b;
+    --panel: #1e2c3a;
+    --ink: #e8edf2;
+    --muted: #93a1b1;
+    --line: #2b3a4a;
+    --accent: #4fae6d;
+    --accent-ink: #0f1c14;
+    --mark: #3a3524;
+    --danger: #e08a8a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Vazirmatn, "Segoe UI", Tahoma, sans-serif;
+    font-size: 15px;
+    line-height: 1.9;
+  }
+  .view { display: none; padding: 16px; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .view.on { display: block; }
+  h1 { font-size: 18px; margin: 4px 0 14px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .note {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin: 10px 0;
+  }
+  .error { color: var(--danger); font-size: 13px; min-height: 1.6em; margin: 6px 0; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel); color: var(--ink); font: inherit; resize: vertical;
+  }
+  button {
+    font: inherit; cursor: pointer; border: none; border-radius: 10px;
+    padding: 10px 16px; background: var(--accent); color: var(--accent-ink);
+  }
+  button[disabled] { opacity: 0.55; cursor: default; }
+  button.ghost { background: transparent; color: var(--muted); padding: 6px 10px; }
+  button.row {
+    display: block; width: 100%; text-align: right; background: var(--panel);
+    border: 1px solid var(--line); color: var(--ink); margin: 8px 0; padding: 12px 14px;
+  }
+  button.row .muted { display: block; font-size: 12px; }
+  .bar { position: sticky; top: 0; background: var(--bg); padding: 8px 0; display: flex; gap: 8px; align-items: center; z-index: 2; }
+  .bar h1 { margin: 0; flex: 1; }
+  .turn { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
+  .turn.user { border-inline-start: 3px solid var(--accent); }
+  .turn p { margin: 6px 0; }
+  mark { background: var(--mark); color: inherit; border-radius: 4px; padding: 0 2px; }
+  .pages { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .composer { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0 4px; display: flex; gap: 8px; }
+  .composer textarea { flex: 1; min-height: 48px; }
+  .statusline { color: var(--muted); font-size: 12px; min-height: 1.6em; margin: 4px 0; }
+  .cost { color: var(--muted); font-size: 12px; text-align: left; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<section id="view-loading" class="view on">
+  <p class="muted">…</p>
+</section>
+
+<section id="view-outside" class="view" hidden>
+  <h1 id="outside-title"></h1>
+  <div class="note" id="outside-note"></div>
+</section>
+
+<section id="view-link" class="view" hidden>
+  <h1 id="link-title"></h1>
+  <p class="muted" id="link-greeting"></p>
+  <form id="link-form">
+    <label for="link-email" id="link-email-label"></label>
+    <input id="link-email" type="email" autocomplete="email" required>
+    <label for="link-password" id="link-password-label"></label>
+    <input id="link-password" type="password" autocomplete="current-password" required>
+    <p class="error" id="link-error"></p>
+    <button type="submit" id="link-submit"></button>
+  </form>
+</section>
+
+<section id="view-app" class="view" hidden>
+  <div class="bar"><h1 id="app-title"></h1><button type="button" class="ghost" id="new-session" hidden></button></div>
+  <div id="session-rows"></div>
+  <p class="muted" id="sessions-empty" hidden></p>
+  <p class="error" id="app-error"></p>
+  <p class="cost" id="usage-line" hidden></p>
+  <button type="button" class="ghost" id="unlink"></button>
+</section>
+
+<section id="view-sitting" class="view" hidden>
+  <div class="bar"><h1 id="sitting-title" class="muted"></h1></div>
+  <div id="turns"></div>
+  <p class="statusline" id="phase-note"></p>
+  <div class="composer">
+    <textarea id="ask-box" rows="2"></textarea>
+    <button type="button" id="ask-send"></button>
+  </div>
+  <p class="error" id="sitting-error"></p>
+</section>
+
+<script>
+"use strict";
+
+// The DRAFT strings (pending PM approval — CONTEXT.md's draft row
+// pins this table; a PM rename lands here in one line). Reused roster
+// words keep their sheet spellings exactly.
+const S = {
+  APP_TITLE: "برنامک نشست",              // NEW — the surface's own name
+  SESSION_LIST_TITLE: "فهرست نشست‌ها",    // the roster's own words
+  NEW_SESSION_LABEL: "نشست تازه",         // the roster's own words
+  EMPTY_SESSIONS: "هنوز نشستی نیست؛ یکی باز کن.", // the mobile app's row, verbatim
+  ASK_SEND_LABEL: "بپرس",                 // the roster's ASK_SEND_LABEL
+  COST_LABEL: "هزینۀ نشست:",              // the sheet's phrasing, verbatim
+  OFFLINE: "اتصال برقرار نیست؛ دوباره تلاش کنید.", // the mobile app's row, verbatim
+  SELECTION_FAILED: "انتخاب نقل‌قول‌ها آماده نشد.", // the mobile app's row, verbatim
+  QUOTED_RUNNING: "در حال نوشتن پاسخ استنادی…",    // the mobile app's row, verbatim
+  QUOTED_FAILED: "پاسخ استنادی آماده نشد؛ پاسخ اول معتبر می‌ماند.", // the mobile app's row, verbatim
+  LINK_TITLE: "ورود",                     // the roster's Login name
+  LINK_GREETING: "سلام {name}؛ برای پیوند حساب، یک بار وارد شوید.", // NEW
+  EMAIL_LABEL: "ایمیل",                   // NEW
+  PASSWORD_LABEL: "گذرواژه",              // NEW
+  LINK_SUBMIT: "ورود و پیوند",            // NEW
+  UNLINK_LABEL: "خروج از ایتا",           // NEW
+  UNLINK_DONE: "پیوند ایتا برداشته شد.",  // NEW
+  OUTSIDE_TITLE: "برنامک نشست",           // NEW — same face, honest context
+  OUTSIDE_NOTE: "این صفحه از داخل ایتا باز می‌شود؛ برنامک را از گفت‌وگوی بات نشست اجرا کنید.", // NEW
+  TAMPERED_NOTE: "ورود از ایتا تأیید نشد؛ برنامه را از داخل ایتا باز کنید.", // the server's EITAA_AUTH_401_DETAIL, mirrored
+  NOT_CONFIGURED_NOTE: "برنامک ایتا روی این سرور تنظیم نشده است.", // the server's 503 detail, mirrored
+};
+
+const TOKEN_KEY = "cwb_eitaa_token";
+
+let token = sessionStorage.getItem(TOKEN_KEY) || "";
+let currentSitting = null;
+let running = false;
+
+const $ = (id) => document.getElementById(id);
+
+function show(id) {
+  for (const view of document.querySelectorAll(".view")) {
+    view.classList.toggle("on", view.id === id);
+    view.hidden = view.id !== id;
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[ch]));
+}
+
+function haptic(kind) {
+  try { window.Eitaa?.WebApp?.HapticFeedback?.notificationOccurred(kind); } catch {}
+}
+
+async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json; charset=utf-8" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(path, {
+    method: options.method || "GET",
+    headers,
+    body: options.json !== undefined ? JSON.stringify(options.json) : undefined,
+  });
+  let payload = {};
+  try { payload = await response.json(); } catch {}
+  if (!response.ok) {
+    const error = new Error(payload?.detail || `${S.OFFLINE} (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
+// ---- the theme: Eita's own palette when it offers one -------------
+
+function applyTheme() {
+  const webApp = window.Eitaa?.WebApp;
+  if (!webApp) return;
+  document.documentElement.dataset.theme = webApp.colorScheme === "dark" ? "dark" : "light";
+  const p = webApp.themeParams || {};
+  const root = document.documentElement.style;
+  if (p.bg_color) root.setProperty("--bg", p.bg_color);
+  if (p.secondary_bg_color) root.setProperty("--panel", p.secondary_bg_color);
+  if (p.text_color) root.setProperty("--ink", p.text_color);
+  if (p.hint_color) root.setProperty("--muted", p.hint_color);
+  if (p.link_color) root.setProperty("--accent", p.link_color);
+  if (p.button_color) root.setProperty("--accent", p.button_color);
+  if (p.button_text_color) root.setProperty("--accent-ink", p.button_text_color);
+}
+
+// ---- the link door (the ONE login, asked once) ---------------------
+
+function showOutside(detail) {
+  $("outside-title").textContent = S.OUTSIDE_TITLE;
+  $("outside-note").textContent = detail || S.OUTSIDE_NOTE;
+  show("view-outside");
+}
+
+function showLink(user) {
+  $("link-title").textContent = S.LINK_TITLE;
+  const name = (user && user.first_name) || "";
+  $("link-greeting").textContent = name
+    ? S.LINK_GREETING.replace("{name}", name)
+    : S.LINK_GREETING.replace("سلام {name}؛ ", "");
+  $("link-email-label").textContent = S.EMAIL_LABEL;
+  $("link-password-label").textContent = S.PASSWORD_LABEL;
+  $("link-submit").textContent = S.LINK_SUBMIT;
+  $("link-error").textContent = "";
+  show("view-link");
+}
+
+async function linkSubmit(event) {
+  event.preventDefault();
+  $("link-error").textContent = "";
+  const email = $("link-email").value.trim();
+  const password = $("link-password").value;
+  if (!email || !password) return;
+  $("link-submit").disabled = true;
+  try {
+    const payload = await api("/eitaa/link", {
+      method: "POST",
+      json: { initData: window.Eitaa?.WebApp?.initData || "", email, password },
+    });
+    token = payload.token;
+    sessionStorage.setItem(TOKEN_KEY, token);
+    haptic("success");
+    await showApp();
+  } catch (error) {
+    $("link-error").textContent = error.message;
+  } finally {
+    $("link-submit").disabled = false;
+  }
+}
+
+// ---- the app: the Sessions list ------------------------------------
+
+async function showApp() {
+  show("view-app");
+  $("app-title").textContent = S.SESSION_LIST_TITLE;
+  $("new-session").textContent = S.NEW_SESSION_LABEL;
+  $("new-session").hidden = false;
+  $("unlink").textContent = S.UNLINK_LABEL;
+  window.Eitaa?.WebApp?.BackButton?.hide();
+  await loadSessions();
+}
+
+async function loadSessions() {
+  $("session-rows").innerHTML = "";
+  $("sessions-empty").hidden = true;
+  $("app-error").textContent = "";
+  try {
+    const payload = await api("/sessions");
+    const sessions = payload.sessions || [];
+    if (!sessions.length) {
+      $("sessions-empty").textContent = S.EMPTY_SESSIONS;
+      $("sessions-empty").hidden = false;
+      return;
+    }
+    for (const session of sessions) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "row";
+      row.innerHTML =
+        `${escapeHtml(session.title || "نشست")}<span class="muted">${escapeHtml(session.book || "")}</span>`;
+      row.addEventListener("click", () => openSitting(session.id));
+      $("session-rows").appendChild(row);
+    }
+  } catch (error) {
+    $("app-error").textContent = error.message;
+  }
+}
+
+async function newSession() {
+  try {
+    const session = await api("/sessions", { method: "POST", json: { book: "", title: S.NEW_SESSION_LABEL } });
+    await openSitting(session.id);
+  } catch (error) {
+    $("app-error").textContent = error.message;
+  }
+}
+
+async function unlinkNow() {
+  try {
+    await api("/eitaa/unlink", { method: "POST", json: { initData: window.Eitaa?.WebApp?.initData || "" } });
+    token = "";
+    sessionStorage.removeItem(TOKEN_KEY);
+    showLink(null);
+  } catch (error) {
+    $("app-error").textContent = error.message;
+  }
+}
+
+// ---- the sitting: the shared pipeline, the sheet's phases ----------
+
+function renderTurns(messages) {
+  const holder = $("turns");
+  holder.innerHTML = "";
+  for (const message of messages || []) {
+    const turn = document.createElement("div");
+    turn.className = `turn ${message.role === "user" ? "user" : ""}`;
+    const payload = message.payload || {};
+    const text = payload.text || payload.question || "";
+    if (text) {
+      const p = document.createElement("p");
+      p.textContent = text;
+      turn.appendChild(p);
+    }
+    for (const block of payload.blocks || []) {
+      if (block.type === "heading") {
+        const h = document.createElement("h2");
+        h.textContent = block.text || "";
+        turn.appendChild(h);
+        continue;
+      }
+      if (block.type === "paragraph") {
+        const p = document.createElement("p");
+        const pages = [];
+        for (const part of block.parts || []) {
+          if (part.quote) {
+            const mark = document.createElement("mark");
+            mark.textContent = part.quote;
+            if (part.reference) mark.title = part.reference;
+            p.appendChild(mark);
+          } else if (part.text) {
+            p.appendChild(document.createTextNode(part.text));
+          }
+          if (part.pages_label) pages.push(part.pages_label);
+        }
+        turn.appendChild(p);
+        if (pages.length) {
+          const footer = document.createElement("div");
+          footer.className = "pages";
+          footer.textContent = Array.from(new Set(pages)).join(" · ");
+          turn.appendChild(footer);
+        }
+      }
+    }
+    holder.appendChild(turn);
+  }
+}
+
+async function openSitting(sessionId) {
+  currentSitting = sessionId;
+  $("sitting-error").textContent = "";
+  $("phase-note").textContent = "";
+  $("ask-box").value = "";
+  $("ask-send").textContent = S.ASK_SEND_LABEL;
+  $("ask-send").disabled = false;
+  window.Eitaa?.WebApp?.BackButton?.show();
+  window.Eitaa?.WebApp?.BackButton?.onClick(backToApp);
+  show("view-sitting");
+  await loadSitting();
+}
+
+function backToApp() {
+  currentSitting = null;
+  window.Eitaa?.WebApp?.BackButton?.offClick(backToApp);
+  window.Eitaa?.WebApp?.BackButton?.hide();
+  showApp();
+}
+
+async function loadSitting() {
+  if (!currentSitting) return;
+  try {
+    const payload = await api(`/sessions/${currentSitting}`);
+    $("sitting-title").textContent = payload.session?.title || "نشست";
+    renderTurns(payload.messages);
+  } catch (error) {
+    $("sitting-error").textContent = error.message;
+  }
+}
+
+async function refreshUsage() {
+  try {
+    const usage = await api("/usage/live");
+    $("usage-line").hidden = false;
+    $("usage-line").textContent = `${S.COST_LABEL} ${usage.session_toman} تومان`;
+  } catch {}
+}
+
+async function askSubmit() {
+  const question = $("ask-box").value.trim();
+  if (!question || running) return;
+  running = true;
+  $("ask-send").disabled = true;
+  $("sitting-error").textContent = "";
+  $("phase-note").textContent = S.QUOTED_RUNNING;
+  try {
+    let sessionId = currentSitting;
+    if (!sessionId) {
+      const session = await api("/sessions", {
+        method: "POST",
+        json: { book: "", title: question.slice(0, 40) },
+      });
+      sessionId = session.id;
+      currentSitting = sessionId;
+    }
+    const reply = await api("/ask", { method: "POST", json: { query: question } });
+    await api(`/sessions/${sessionId}/messages`, {
+      method: "POST",
+      json: { role: "user", payload: { text: question } },
+    }).catch(() => {});
+    if (!reply.sources?.length) {
+      $("phase-note").textContent = S.SELECTION_FAILED;
+      await loadSitting();
+      return;
+    }
+    const askKey = `ask-${Date.now()}`;
+    const picked = await api("/quote-selection", {
+      method: "POST",
+      json: { question, sources: reply.sources, session_id: sessionId, ask_key: askKey },
+    });
+    if (!picked.selections?.length) $("phase-note").textContent = S.SELECTION_FAILED;
+    const doc = await api("/quoted-answer", {
+      method: "POST",
+      json: {
+        question,
+        sources: reply.sources,
+        session_id: sessionId,
+        ask_key: askKey,
+        chat_id: reply.chat_id,
+      },
+    });
+    if (!doc.blocks?.length) $("phase-note").textContent = S.QUOTED_FAILED;
+    else $("phase-note").textContent = "";
+    haptic(doc.blocks?.length ? "success" : "error");
+    await loadSitting();
+    await refreshUsage();
+  } catch (error) {
+    $("phase-note").textContent = "";
+    $("sitting-error").textContent = error.message;
+  } finally {
+    running = false;
+    $("ask-send").disabled = false;
+  }
+}
+
+// ---- the boot: initData in, the Account's token out ----------------
+
+async function boot() {
+  document.documentElement.lang = "fa";
+  $("new-session").addEventListener("click", newSession);
+  $("unlink").addEventListener("click", unlinkNow);
+  $("link-form").addEventListener("submit", linkSubmit);
+  $("ask-send").addEventListener("click", askSubmit);
+  const webApp = window.Eitaa?.WebApp;
+  if (!webApp) {
+    // Outside Eita's client the SDK object never appears — the page
+    // says so honestly and stops (the initData cannot exist here).
+    showOutside();
+    return;
+  }
+  applyTheme();
+  webApp.ready();
+  webApp.expand();
+  webApp.onEvent?.("themeChanged", applyTheme);
+  try {
+    const payload = await api("/eitaa/auth", {
+      method: "POST",
+      json: { initData: webApp.initData || "" },
+    });
+    if (payload.bound) {
+      token = payload.token;
+      sessionStorage.setItem(TOKEN_KEY, token);
+      await showApp();
+    } else {
+      showLink(payload.user);
+    }
+  } catch (error) {
+    showOutside(
+      error.status === 503 ? S.NOT_CONFIGURED_NOTE
+        : error.status === 401 ? S.TAMPERED_NOTE
+        : error.message
+    );
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#d8cbae" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#141821" media="(prefers-color-scheme: dark)" />
+    <!-- The PWA shell (ADR-0019): the sheet installs, the shell survives
+         offline, the API families are never cached. The iOS metas stand
+         beside the manifest because Safari still reads them. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="نشست" />
     <title>نشست · طرح کلی اندیشۀ اسلامی در قرآن · انسان ۲۵۰ ساله</title>
     <script>
       // The theme before first paint: no flash of the wrong paper.
@@ -24,6 +34,17 @@
       })();
     </script>
     <style>
+      /* The hidden attribute must hide, whatever the element's own
+         display: an author display rule (.browse-btn's inline-block)
+         beats the UA's [hidden] rule, and the topbar's toggled doors
+         showed themselves — the anonymous sheet carried a dead
+         «میز مدیریت», and the PWA's install chip started visible
+         (found live, the PWA wiring, 2026-10-02). JS's el.hidden
+         toggles keep working: the rule releases at hidden=false. */
+      [hidden] {
+        display: none !important;
+      }
+
       /* The UI's own Vazirmatn, self-hosted: the Google-CDN link is
          gone (impeccable critique, 2026-09-28) — an Iran-based audience
          should not lean on fonts.googleapis.com when the woff2 files
@@ -2632,6 +2653,11 @@
                  role that owns it — /auth/me's role decides on load; every
                  operator sees nothing here. DRAFT name (2026-09-19). -->
             <a id="admin-link" class="browse-btn" href="/admin" hidden>میز مدیریت</a>
+            <!-- The install chip (ADR-0019): hidden until Chromium answers
+                 beforeinstallprompt — no event, no chip (iOS installs
+                 through Safari's own share sheet). DRAFT label, the
+                 CONTEXT.md draft roster. -->
+            <button type="button" id="pwa-install" class="browse-btn" hidden></button>
             <button type="button" id="theme-toggle" class="browse-btn" aria-label="تغییر پوسته">شب</button>
           </div>
         </header>
@@ -2918,6 +2944,9 @@
       // new. The category list lives in ONE constant; the PM batch
       // fills it without touching the UI.
       const NOTEBOOK_LABEL = "دفتر یادداشت";
+      // The PWA's install chip (ADR-0019). DRAFT, pending PM approval —
+      // the markup stays string-free so a PM rename lands in one line.
+      const PWA_INSTALL_LABEL = "نصب برنامه";
       const NOTE_UNCATEGORIZED = "بدون دسته";
       const NOTE_OPINION_LABEL = "نظر من";
       const NOTE_DELETE_CONFIRM_LABEL = "حذف یادداشت؟";
@@ -8017,6 +8046,39 @@
             }
           })
           .catch(() => {});
+      })();
+
+      // The PWA shell (ADR-0019). The worker owns the shell only — the
+      // ask, the phases and the research are never cached — and the
+      // install chip shows itself only where the platform can actually
+      // install (Chromium's beforeinstallprompt; iOS installs through
+      // Safari's share sheet and needs no chip).
+      (function () {
+        if ("serviceWorker" in navigator) {
+          window.addEventListener("load", () => {
+            navigator.serviceWorker.register("/sw.js").catch(() => {});
+          });
+        }
+        const chip = document.getElementById("pwa-install");
+        if (!chip) return;
+        chip.textContent = PWA_INSTALL_LABEL;
+        let deferred = null;
+        window.addEventListener("beforeinstallprompt", (event) => {
+          event.preventDefault();
+          deferred = event;
+          chip.hidden = false;
+        });
+        chip.addEventListener("click", () => {
+          if (!deferred) return;
+          deferred.prompt();
+          deferred.userChoice.finally(() => {
+            deferred = null;
+            chip.hidden = true;
+          });
+        });
+        window.addEventListener("appinstalled", () => {
+          chip.hidden = true;
+        });
       })();
     </script>
   </body>

@@ -321,7 +321,7 @@ def test_commentary_renders_distinct_and_never_a_claim(tmp_path):
 def test_the_host_vocabulary_is_pinned():
     # The vocabulary home names the two-hop bound and the commentary
     # term; the sheet carries the tag the commentary renders under.
-    context = (REPO_ROOT / "CONTEXT.md").read_text(encoding="utf-8")
+    context = (REPO_ROOT / "docs" / "CONTEXT.md").read_text(encoding="utf-8")
     assert "at most two hops" in context
     assert "«برداشت»" in context
     html = (REPO_ROOT / "ui" / "index.html").read_text(encoding="utf-8")

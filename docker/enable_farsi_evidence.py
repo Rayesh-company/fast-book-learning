@@ -23,7 +23,10 @@ BULLET_IDS_AND_PAGES = (
     'f\'{_provenance_suffix(data_id, chunk_id)}{_pages_suffix(text)}: "{_snippet(text)}"\''
 )
 BULLET_FINAL = 'f\'{_pages_suffix(text)}: "{_snippet(text)}"\''
-HELPER_ANCHOR = "def _chunk_id(obj: Any, payload: dict) -> Optional[str]:"
+HELPER_ANCHORS = (
+    "def _chunk_id(obj: Any, payload: dict) -> Optional[str]:",
+    "def _chunk_id(obj: Any, payload: dict) -> str | None:",
+)
 PAGES_HELPER = r'''_PAGE_MARKER = re.compile(r"Page\s+(\d+)\s*[:：]", re.IGNORECASE)
 
 
@@ -55,12 +58,15 @@ def patch_references(source: str) -> str:
 def patch_bullets(source: str) -> str:
     if BULLET_FINAL in source:
         return source
-    if source.count(HELPER_ANCHOR) != 1:
+    helper_anchors = [anchor for anchor in HELPER_ANCHORS if source.count(anchor) == 1]
+    if len(helper_anchors) != 1:
         raise ValueError(
-            f"expected 1 Evidence helper anchor, found {source.count(HELPER_ANCHOR)}"
+            "expected 1 Evidence helper anchor, found "
+            f"{sum(source.count(anchor) for anchor in HELPER_ANCHORS)}"
         )
+    helper_anchor = helper_anchors[0]
     if "def _pages_suffix" not in source:
-        source = source.replace(HELPER_ANCHOR, PAGES_HELPER + HELPER_ANCHOR, 1)
+        source = source.replace(helper_anchor, PAGES_HELPER + helper_anchor, 1)
     for anchor in (BULLET_IDS_AND_PAGES, BULLET_ANCHOR):
         if source.count(anchor) == 1:
             return source.replace(anchor, BULLET_FINAL, 1)

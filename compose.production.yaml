@@ -1,0 +1,25 @@
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+    ports:
+      !override []
+
+  cognee:
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+    ports:
+      !override
+      - "127.0.0.1:18000:8000"
+
+  cognee-next-tier:
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+    ports:
+      !override
+      - "127.0.0.1:8001:8000"
+
+  session:
+    ports:
+      !override
+      - "127.0.0.1:8765:8765"

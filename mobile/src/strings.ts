@@ -1,0 +1,38 @@
+// The app's Farsi strings, DRAFT pending PM approval (ADR-0020) —
+// every user-facing word rides one constant so a PM rename lands in
+// one line. Where the sheet's roster already carries a word («نشست»,
+// «ورود», «حالت پژوهش»), the app reuses it verbatim.
+export const S = {
+  appName: "نشست",
+  loginTitle: "ورود",
+  loginEmail: "ایمیل",
+  loginPassword: "گذرواژه",
+  loginSubmit: "ورود",
+  loginFailed: "ورود ناموفق بود.",
+  sessionsTitle: "فهرست نشست‌ها",
+  newSession: "نشست تازه",
+  pickBook: "برای نشست تازه، یک کتاب برگزینید",
+  emptySessions: "هنوز نشستی نیست؛ یکی باز کن.",
+  offline: "اتصال برقرار نیست؛ دوباره تلاش کنید.",
+  askPlaceholder: "پرسش خود را بنویسید",
+  askSend: "بپرس",
+  phaseOne: "پاسخ اول",
+  phaseTwo: "پاسخ استنادی",
+  phaseThree: "حالت پژوهش",
+  phaseRunning: "در حال تولید…",
+  phaseSkipped: "بدون استناد، پاسخ استنادی ساخته نمی‌شود؛ پاسخ اول معتبر می‌ماند.",
+  poolTitle: "همۀ نقل‌قول‌های بازیابی‌شده",
+  selectionFailed: "انتخاب نقل‌قول‌ها آماده نشد.",
+  quotedRunning: "در حال نوشتن پاسخ استنادی…",
+  quotedFailed: "پاسخ استنادی آماده نشد؛ پاسخ اول معتبر می‌ماند.",
+  truncatedNote:
+    "سند به سقف طول مدل رسید؛ ممکن است بندهای پایانی ناتمام باشند.",
+  researchPlaceholder: "پیام پژوهش خود را بنویسید",
+  researchSend: "فرستادن",
+  researchFailed: "پیام پژوهش فرستاده نشد؛ دوباره تلاش کنید.",
+  references: "منابع",
+  logout: "خروج",
+  close: "بستن",
+  bookTarheKolli: "طرح کلی اندیشۀ اسلامی در قرآن",
+  bookEnsan250: "انسان ۲۵۰ ساله",
+};

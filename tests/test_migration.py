@@ -307,7 +307,7 @@ def test_architecture_chapter_11_is_rewritten_for_accounts():
     from tests.conftest import REPO_ROOT
 
     chapter = (
-        (REPO_ROOT / "ARCHITECTURE.md")
+        (REPO_ROOT / "docs" / "ARCHITECTURE.md")
         .read_text(encoding="utf-8")
         .split("## 11. Access control", 1)[1]
         .split("\n## ", 1)[0]

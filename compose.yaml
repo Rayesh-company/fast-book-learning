@@ -232,6 +232,18 @@ services:
       # this the notes land in /app inside the container and every
       # image rebuild throws them away.
       NOTES_DB: /data/notes.sqlite3
+      # The Eita binding store (ADR-0021): the برنامک's eita-user ↔
+      # Account links on the same persisted volume — a rebuild must
+      # not cut every Eita user off their Account and back to the
+      # login door.
+      EITAA_DB: /data/eitaa.sqlite3
+      # The برنامک's bot token (ADR-0021): the Eitaayar panel's token —
+      # the initData signature's key and sendMessage's credential.
+      # Unset, /eitaa/auth answers 503 and the page says so honestly.
+      EITAA_BOT_TOKEN: ${EITAA_BOT_TOKEN:-}
+      # The server→user push (ADR-0021): opt-in, off by default —
+      # Eita's daily message quota is not ours to spend.
+      EITAA_PUSH_ENABLED: ${EITAA_PUSH_ENABLED:-}
     volumes:
       - session_quota:/data
       # The Book set's PDFs + page indexes (ADR-0007), served by

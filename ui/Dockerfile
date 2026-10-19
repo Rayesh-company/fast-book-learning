@@ -19,7 +19,14 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY --from=narration-runtime /usr/local/bin/node /usr/local/bin/node
 RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 libatomic1 libgomp1 && rm -rf /var/lib/apt/lists/*
-COPY serve.py guard.py quotas.py composer.py picker.py dive.py ask.py chat_store.py research.py research_store.py recall_more.py page_resolver.py accounts.py audit.py console.py migrate.py report.py ledger.py session_store.py note_store.py narration.py narration_cache.py index.html ./
+COPY serve.py guard.py quotas.py composer.py picker.py dive.py ask.py chat_store.py research.py research_store.py recall_more.py page_resolver.py accounts.py audit.py console.py migrate.py report.py ledger.py session_store.py note_store.py narration.py narration_cache.py eitaa.py eitaa_store.py index.html eitaa_app.html manifest.webmanifest sw.js ./
+# The PWA's icon set (ADR-0019) — generated from source by
+# tools/make_pwa_icons.py, committed beside the manifest that serves it.
+COPY icons /app/icons
+# The OTA payload (rule 001): the mobile app's over-the-air updates —
+# ui/ota/.gitkeep keeps the dir in git; the publish script + the deploy
+# tree fill it (manifest.json + current/), never git itself.
+COPY ota /app/ota
 # The reader's client-side PDF engine (pdf.js, Apache-2.0) — vendored so
 # the sheet works on a LAN with no CDN (ADR-0007).
 COPY vendor /app/vendor

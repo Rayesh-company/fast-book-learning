@@ -193,7 +193,15 @@ def test_login_me_and_logout_over_the_real_server(tmp_path):
             base, "/auth/login", {"email": ADMIN_EMAIL, "password": TEST_PASSWORD}
         )
         assert status == 200
-        assert payload == {"email": ADMIN_EMAIL, "role": "admin"}
+        # The body also carries the signed token (ADR-0020): the native
+        # clients' credential for their secure store — verify_token
+        # takes it back.
+        assert payload["email"] == ADMIN_EMAIL
+        assert payload["role"] == "admin"
+        assert serve.verify_token(payload["token"]) == {
+            "email": ADMIN_EMAIL,
+            "role": "admin",
+        }
         cookie = cookie_for(base, ADMIN_EMAIL)
         status, payload = raw_get(base, "/auth/me", cookie=cookie)
         assert status == 200

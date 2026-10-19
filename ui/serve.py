@@ -18,6 +18,7 @@ import hmac
 import json
 import os
 from pathlib import Path
+import queue
 import re
 import secrets
 import sys
@@ -94,6 +95,8 @@ try:
     from ui import session_store
     from ui import note_store
     from ui import research_store
+    from ui import eitaa
+    from ui import eitaa_store
     from ui.picker import (
         QUOTE_SELECTION_FLOOR,
         build_picker_prompt,
@@ -238,6 +241,8 @@ except ImportError:  # the container runs this file as a script beside the modul
     import session_store
     import note_store
     import research_store
+    import eitaa
+    import eitaa_store
     from picker import (
         QUOTE_SELECTION_FLOOR,
         build_picker_prompt,
@@ -339,6 +344,12 @@ RENDER_CACHE_DIR = Path(
 # small disk, so once the total passes the cap the oldest rasters go
 # first. Overridable for tests and tight volumes.
 RENDER_CACHE_CAP = int(os.environ.get("SESSION_RENDER_CACHE_CAP", str(3 << 30)))
+# The OTA payload (rule 001, docs/rules/001-no-new-apks.md): the mobile
+# app's over-the-air updates — one manifest.json plus the current
+# bundle's files under current/. Published by scripts/publish_ota.py
+# from an `expo export`; an empty dir simply means "no update yet" and
+# /ota answers 204, the client keeps what it has.
+OTA_DIR = Path(os.environ.get("SESSION_OTA_DIR", str(UI_DIR / "ota")))
 # PDFium is not provably thread-safe across documents; renders are
 # serialized (one page takes a fraction of a second).
 RENDER_LOCK = threading.Lock()
@@ -353,6 +364,18 @@ COGNEE_URL = os.environ.get("COGNEE_URL", "http://127.0.0.1:8000").rstrip("/")
 HOST = os.environ.get("SESSION_UI_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SESSION_UI_PORT", "8765"))
 PROXY_TIMEOUT = 600
+
+
+def allowed_origins():
+    """The CORS allowlist (ADR-0020): SESSION_UI_ALLOWED_ORIGINS, a
+    comma-separated set of Origins that may call this API from a
+    BROWSER cross-origin — the Expo web dev server's origin in dev;
+    the deployed VPS shape stays empty (the sheet serves its own
+    origin only). Native clients (the Expo Android app) need no CORS:
+    their requests carry the Bearer token and no Origin check. Read
+    per request, so a test's monkeypatched env lands."""
+    raw = os.environ.get("SESSION_UI_ALLOWED_ORIGINS", "")
+    return {item.strip() for item in raw.split(",") if item.strip()}
 # A Next-tier search runs four chain-of-thought rounds and can pass ten
 # minutes (live logs, 2026-09-11) — past the shared 600s leash the relay
 # once gave up on a search the second service had already finished.
@@ -395,6 +418,25 @@ AUTH_BAD_CREDENTIALS_DETAIL = "ایمیل یا گذرواژه نادرست اس�
 AUTH_BAD_LOGIN_BODY_DETAIL = "ایمیل و گذرواژه را بفرستید."
 AUTH_LOGOUT_DETAIL = "خارج شدید."
 AUTH_EMAIL_TAKEN_DETAIL = "این ایمیل پیش‌تر حساب گرفته است."
+# The برنامک's own refusals (ADR-0021, DRAFT display vocabulary
+# pending PM approval — the CONTEXT.md draft row carries them): the
+# initData that fails the signature or the freshness bound refuses
+# one way — a tampered string and a stale one are never told apart —
+# and an unconfigured bot answers its own honest note. The link form's
+# bad credentials reuse AUTH_BAD_CREDENTIALS_DETAIL verbatim: the
+# ADR-0013 rule that an unknown email and a wrong password are never
+# an attacker's to tell apart holds at every door.
+EITAA_AUTH_401_DETAIL = (
+    "ورود از ایتا تأیید نشد؛ برنامه را از داخل ایتا باز کنید."
+)
+EITAA_NOT_CONFIGURED_503_DETAIL = "برنامک ایتا روی این سرور تنظیم نشده است."
+# The server→user push (ADR-0021): the settle that lands while the
+# operator is away rides eitaayar.ir's sendMessage to every Eita user
+# the Account has bound. Opt-in by env and off by default — the daily
+# message quota is Eita's, not ours, and the push is a bell, never a
+# record (the events law).
+EITAA_PUSH_ENABLED_ENV = "EITAA_PUSH_ENABLED"
+EITAA_PUSH_SETTLED_TEXT = "پاسخ نشست شما آماده شد؛ از برنامک ادامه دهید."
 AUTH_BAD_ACCOUNT_BODY_DETAIL = (
     "ایمیل و گذرواژهٔ حساب را بفرستید (گذرواژه خالی نباشد)."
 )
@@ -552,6 +594,23 @@ def verify_token(token: str):
     return {"email": email, "role": role}
 
 
+def _request_token(handler):
+    """The request's own token (ADR-0020): the HttpOnly cookie first —
+    the sheet's credential — then the Authorization: Bearer header,
+    the native clients' (the Expo app stores the login token in the
+    device's secure store and rides it on every call). One verify path
+    for both: the header never authenticates anything the cookie
+    wouldn't, and a Bearer string that is unsigned, expired, or
+    tampered refuses exactly like a bad cookie."""
+    token = handler._cookie_token()
+    if token:
+        return token
+    header = handler.headers.get("Authorization", "")
+    if header.startswith("Bearer "):
+        return header[len("Bearer ") :].strip()
+    return ""
+
+
 def resolve_identity(handler):
     """The gate flip (ADR-0013), finished (T21, GitLab #23): the
     Account's EMAIL — the identity every store now keys by — derived
@@ -568,7 +627,7 @@ def resolve_identity(handler):
     flow gives ui/migrate.py to carry pre-T21 rows onto their Accounts.
     Neither answer ever crashes: the gate's rejections keep the
     drain-first shape so the response never dies to a reset."""
-    claims = verify_token(handler._cookie_token())
+    claims = verify_token(_request_token(handler))
     if claims is not None:
         account = account_by_email(claims["email"])
     else:
@@ -584,10 +643,48 @@ def resolve_account(handler):
     behind the cookie, or None without answering — /auth/me turns None
     into the 401, the Admin-only account creation turns it into the
     same 401 before its role check."""
-    claims = verify_token(handler._cookie_token())
+    claims = verify_token(_request_token(handler))
     if claims is None:
         return None
     return account_by_email(claims["email"])
+
+
+# The live line (ADR-0020): one in-process hub — per-Account subscriber
+# queues, the turn registry's shape. A restart empties it; the client
+# reconnects (EventSource reconnects by itself) and nothing is lost:
+# the stores, not the stream, are the truth.
+_EVENT_LOCK = threading.Lock()
+_EVENT_CLIENTS = {}
+_EVENT_HEARTBEAT = 20.0
+
+
+def _publish_event(account: str, kind: str, **payload) -> None:
+    """Fan one settle out to the Account's live lines. Never raises —
+    a vanished subscriber must not break the reply that produced the
+    news (the store-failure rule)."""
+    event = json.dumps({"kind": kind, **payload}, ensure_ascii=False)
+    with _EVENT_LOCK:
+        clients = list(_EVENT_CLIENTS.get(account, ()))
+    for client in clients:
+        try:
+            client.put_nowait(event)
+        except Exception:
+            pass
+
+
+def _eitaa_push(account: str, text: str) -> None:
+    """The settle's second bell (ADR-0021): when the env opts in, the
+    Account's bound Eita users hear the news through eitaayar.ir's
+    sendMessage. Off by default (Eita's daily quota is not ours to
+    spend), never raising, never blocking the reply that produced the
+    news — a platform outage costs a bell, never the answer."""
+    enabled = str(os.environ.get(EITAA_PUSH_ENABLED_ENV, "") or "").strip().lower()
+    if enabled not in ("1", "true", "yes", "on"):
+        return
+    try:
+        eitaa.push_to_account(account, text)
+    except Exception:
+        pass
 
 
 def validated_datasets(raw):
@@ -681,6 +778,23 @@ def _gzipped_file(file_path: Path, mtime_ns: int) -> bytes:
 
 
 class SessionHandler(SimpleHTTPRequestHandler):
+    # The PWA's and the reader's static types, pinned (ADR-0019):
+    # SimpleHTTPRequestHandler falls back to mimetypes, and on Windows
+    # mimetypes consults the registry — a registry that answers
+    # text/plain for .js kills every service-worker registration (the
+    # worker must ride a JavaScript type) and a wrong .webmanifest type
+    # kills the install. The pinned types leave no registry in the path.
+    extensions_map = {
+        **SimpleHTTPRequestHandler.extensions_map,
+        ".js": "text/javascript; charset=utf-8",
+        ".mjs": "text/javascript; charset=utf-8",
+        ".webmanifest": "application/manifest+json",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+        ".woff2": "font/woff2",
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(UI_DIR), **kwargs)
 
@@ -696,7 +810,28 @@ class SessionHandler(SimpleHTTPRequestHandler):
             "Cache-Control",
             getattr(self, "_cache_policy", None) or "no-cache",
         )
+        # The CORS stamps (ADR-0020): only for a browser Origin on the
+        # env's allowlist, and only ever TO that origin — no allowlist,
+        # no stamps, the recorded production shape.
+        origin = self.headers.get("Origin", "") if self.headers else ""
+        if origin and origin in allowed_origins():
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Credentials", "true")
+            self.send_header(
+                "Access-Control-Allow-Headers", "Content-Type, Authorization"
+            )
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE")
         super().end_headers()
+
+    def do_OPTIONS(self):
+        # The browser clients' preflight (ADR-0020): the allowlisted
+        # origin's stamps ride end_headers; anything else answers a
+        # bare 204 — a preflight is a question about access, not an
+        # access itself.
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
@@ -755,6 +890,22 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path == "/chat/latest":
             self._chat_latest()
+            return
+        if path == "/ota":
+            self._ota_manifest()
+            return
+        if path.startswith("/ota/current/"):
+            self._ota_asset(path)
+            return
+        if path in ("/eitaa", "/eitaa/"):
+            # The برنامک page (ADR-0021): Eita's WebView opens it with
+            # the signed initData riding inside the client — the URL
+            # itself stays open to reach, the initData is the
+            # credential, never the address.
+            self._eitaa_page()
+            return
+        if path == "/events":
+            self._events()
             return
         if path == "/admin":
             # The «میز مدیریت» (T25): the Admin's server-rendered
@@ -1226,6 +1377,238 @@ class SessionHandler(SimpleHTTPRequestHandler):
     # to REACH (no token needed to be told 401) — the gate itself lives in
     # resolve_identity.
 
+    # ---- The برنامک (the Eita client, ADR-0021) -----------------------------
+    # Eita's WebView opens /eitaa carrying the signed initData; the page
+    # exchanges it here for the Account's ORDINARY signed token and then
+    # speaks the shared API the sheet and the Expo app already speak —
+    # no second backend, a third client (ADR-0020's law, extended). The
+    # Account stays the only identity: an unlinked initData is shown the
+    # ONE login door (/eitaa/link reuses /auth/login's own credential
+    # check verbatim), the binding it records is the next open's silent
+    # ride, and «خروج» removes only the caller's own row.
+
+    def _eitaa_page(self) -> None:
+        """The برنامک's page, read from disk per request (the
+        index.html rule): a redeployed page lands without a restart."""
+        try:
+            body = (UI_DIR / "eitaa_app.html").read_bytes()
+        except OSError:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _eitaa_init_data(self):
+        """(fields, payload) — the request body read ONCE, the initData
+        validated — or (None, None) after answering: an unconfigured
+        bot is the 503, a failed signature or stale stamp is the
+        برنامک's one 401, and the caller never learns which. The body
+        comes back beside the fields because the drain-first rule
+        gives it one read, never two."""
+        if not eitaa.bot_token():
+            self._send_json(
+                503, {"detail": EITAA_NOT_CONFIGURED_503_DETAIL}
+            )
+            return None, None
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            raw = payload.get("initData")
+        except (ValueError, TypeError):
+            payload, raw = {}, None
+        fields = eitaa.validate_init_data(raw) if isinstance(raw, str) else None
+        if fields is None:
+            self._send_json(401, {"detail": EITAA_AUTH_401_DETAIL})
+            return None, None
+        return fields, payload
+
+    def _eitaa_auth(self) -> None:
+        """The credential exchange: the signed initData in, the bound
+        Account's ordinary token out — the same issue_token payload
+        /auth/login mints, riding Authorization: Bearer on every call
+        after (the ADR-0020 native shape; the page is same-origin, so
+        CORS never enters). An unbound user is NOT an error: the 200
+        says bound:false and the page shows the one door."""
+        fields, _payload = self._eitaa_init_data()
+        if fields is None:
+            return
+        user = eitaa.init_data_user(fields)
+        binding = eitaa_store.get_binding(user["id"])
+        account = (
+            account_by_email(binding["account"]) if binding is not None else None
+        )
+        if binding is None or account is None:
+            # A binding whose Account was deleted rides nowhere: the
+            # door shows again, the stale row dies at the next link.
+            self._send_json(
+                200,
+                {"bound": False, "user": user},
+            )
+            return
+        token = issue_token(account["email"], account["role"])
+        self._send_json(
+            200,
+            {
+                "bound": True,
+                "token": token,
+                "email": account["email"],
+                "role": account["role"],
+                "user": user,
+            },
+        )
+
+    def _eitaa_link(self) -> None:
+        """The one door, asked once: the signed initData beside an
+        Account's real email and password. The credentials check is
+        /auth/login's own path — the identical 401 for an unknown
+        email and a wrong password — and the binding it records keys
+        every silent open after."""
+        fields, payload = self._eitaa_init_data()
+        if fields is None:
+            return
+        email = payload.get("email")
+        password = payload.get("password")
+        if not isinstance(email, str) or not isinstance(password, str):
+            # The body is already read above, so _send_json is safe.
+            self._send_json(400, {"detail": AUTH_BAD_LOGIN_BODY_DETAIL})
+            return
+        account = verify_login(email, password)
+        if account is None:
+            self._send_json(401, {"detail": AUTH_BAD_CREDENTIALS_DETAIL})
+            return
+        user = eitaa.init_data_user(fields)
+        eitaa_store.bind(
+            user["id"],
+            account["email"],
+            chat_id=user["id"],
+            first_name=user["first_name"],
+            last_name=user["last_name"],
+        )
+        token = issue_token(account["email"], account["role"])
+        self._send_json(
+            200,
+            {
+                "bound": True,
+                "token": token,
+                "email": account["email"],
+                "role": account["role"],
+                "user": user,
+            },
+        )
+
+    def _eitaa_unlink(self) -> None:
+        """«خروج از ایتا»: the caller's own binding goes — the caller's
+        token names the Account, the initData names the Eita user, and
+        only a row belonging to BOTH moves. A foreign id is silently
+        not theirs (the store's False), and the answer stays a 200:
+        unlinking an unlinked user is a finished act, not an error."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        fields, _payload = self._eitaa_init_data()
+        if fields is None:
+            return
+        user = eitaa.init_data_user(fields)
+        deleted = eitaa_store.unbind(user["id"], account)
+        self._send_json(200, {"deleted": deleted})
+
+    def _ota_manifest(self) -> None:
+        """The OTA handshake (rule 001): the expo-updates client polls
+        this on every cold start and foreground return. A published
+        manifest serves verbatim (the publish script owns its shape —
+        id, createdAt, runtimeVersion, launchAsset, assets); no payload
+        yet answers 204 No Content, the protocol's "you are current",
+        and the client keeps what it has. The route stays OPEN like
+        /health: it leaks nothing the manifest doesn't already name."""
+        manifest = OTA_DIR / "manifest.json"
+        try:
+            body = manifest.read_bytes()
+        except OSError:
+            self.send_response(204)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _ota_asset(self, path: str) -> None:
+        """One OTA bundle file, served immutable (rule 001): every
+        publish writes fresh hashed names, so a fetched byte range is
+        forever-valid content and the client's cache does the heavy
+        lifting. The path is constrained to OTA_DIR/current — a
+        traversal outside it is a plain 404."""
+        rel = path[len("/ota/current/") :]
+        target = (OTA_DIR / "current" / rel).resolve()
+        if not str(target).startswith(str((OTA_DIR / "current").resolve())):
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        try:
+            body = target.read_bytes()
+        except OSError:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        suffix = target.suffix.lower()
+        self._cache_policy = "public, max-age=31536000, immutable"
+        self.send_response(200)
+        self.send_header(
+            "Content-Type",
+            self.extensions_map.get(suffix, "application/octet-stream"),
+        )
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _events(self) -> None:
+        """The Account's live line (ADR-0020): a Server-Sent Events
+        stream of the settles this backend lands server-side — an ask's
+        chat row, the picker's selections, the Quoted answer, the
+        widen, a research turn's start, a saved note. The web sheet
+        keeps its own rhythms (its phases run in the browser); the
+        native clients subscribe here, so an ask on one device opens
+        the sitting on the other the moment it settles. The stream
+        never ends on its own: heartbeats hold it, a hung-up client
+        breaks the write and the finally unregisters it."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        subscriber = queue.Queue()
+        with _EVENT_LOCK:
+            _EVENT_CLIENTS.setdefault(account, set()).add(subscriber)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(b": connected\n\n")
+            self.wfile.flush()
+            while True:
+                try:
+                    event = subscriber.get(timeout=_EVENT_HEARTBEAT)
+                except queue.Empty:
+                    self.wfile.write(b": heartbeat\n\n")
+                else:
+                    self.wfile.write(f"data: {event}\n\n".encode("utf-8"))
+                self.wfile.flush()
+        except (ConnectionAbortedError, BrokenPipeError, OSError, TimeoutError):
+            pass  # the client hung up; the finally unregisters it
+        finally:
+            with _EVENT_LOCK:
+                clients = _EVENT_CLIENTS.get(account)
+                if clients is not None:
+                    clients.discard(subscriber)
+                    if not clients:
+                        _EVENT_CLIENTS.pop(account, None)
+            self.close_connection = True
+
     def _auth_login(self) -> None:
         """The one door: email + password in, the signed HttpOnly cookie
         out — plus the whoami body the sheet reloads against. An unknown
@@ -1248,7 +1631,15 @@ class SessionHandler(SimpleHTTPRequestHandler):
         token = issue_token(account["email"], account["role"])
         self._send_json(
             200,
-            {"email": account["email"], "role": account["role"]},
+            {
+                "email": account["email"],
+                "role": account["role"],
+                # The native clients' credential (ADR-0020): the same
+                # signed string the cookie carries, for the app's secure
+                # store — the web sheet never reads this field (its JS
+                # cannot touch the HttpOnly cookie, and shouldn't).
+                "token": token,
+            },
             extra_headers=[self._auth_cookie_header(token)],
         )
 
@@ -1374,6 +1765,19 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path == "/auth/accounts":
             self._auth_create_account()
+            return
+        if path == "/eitaa/auth":
+            # The برنامک's credential exchange (ADR-0021): the signed
+            # initData in, the Account's ordinary token out.
+            self._eitaa_auth()
+            return
+        if path == "/eitaa/link":
+            # The one door, asked once: the initData beside an
+            # Account's email and password records the binding.
+            self._eitaa_link()
+            return
+        if path == "/eitaa/unlink":
+            self._eitaa_unlink()
             return
         if path == "/ask":
             # The retrieval-only reference ask (ADR-0014): the T27
@@ -1647,6 +2051,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # write guarded by the owner's key, so a foreign chat_id
             # lands nowhere.
             chat_store.update_quoted(chat_id, account, blocks, truncated)
+        if blocks:
+            _publish_event(
+                account, "chat.quoted", chat_id=chat_id, blocks=len(blocks)
+            )
+            # The second bell (ADR-0021): the settled article is the
+            # moment the operator away from the برنامک is brought
+            # back — opt-in by env, silent without it.
+            _eitaa_push(account, EITAA_PUSH_SETTLED_TEXT)
         body = json.dumps(
             {"blocks": blocks, "truncated": truncated}, ensure_ascii=False
         ).encode("utf-8")
@@ -1683,6 +2095,13 @@ class SessionHandler(SimpleHTTPRequestHandler):
         sources = ask_pool(query.strip(), datasets)
         chat_id = secrets.token_hex(8)
         chat_store.create_chat(chat_id, account, query.strip(), datasets, sources)
+        _publish_event(
+            account,
+            "chat.asked",
+            chat_id=chat_id,
+            query=query.strip(),
+            pool_size=len(sources),
+        )
         self._send_json(
             200,
             {"chat_id": chat_id, "sources": sources, "pool_size": len(sources)},
@@ -1760,16 +2179,21 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"detail": "پرسش و شواهد فعلی را بفرستید."})
             return
         fresh = recall_more(question.strip(), sources, datasets)
+        chat_id = payload.get("chat_id")
+        if not isinstance(chat_id, str):
+            chat_id = None
         if fresh:
             # The widen's growth is part of the ask's record (ADR-0014):
             # the restored sheet's pool is the merged one, so the store
             # grows by the same fresh passages the reply carries —
             # phone-guarded, keyed by the chat_id the ask minted.
-            chat_id = payload.get("chat_id")
-            if isinstance(chat_id, str) and chat_id:
+            if chat_id:
                 chat_store.update_pool(
                     chat_id, account, sources + fresh
                 )
+        _publish_event(
+            account, "chat.widened", fresh=len(fresh), chat_id=chat_id
+        )
         body = json.dumps({"sources": fresh}, ensure_ascii=False).encode(
             "utf-8"
         )
@@ -1867,6 +2291,13 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 )
             except Exception:
                 sys.stderr.write("session settle failed (quote-selection)\n")
+        if selections:
+            _publish_event(
+                account,
+                "chat.selected",
+                chat_id=chat_id,
+                count=len(selections),
+            )
         if chat_id and selections:
             chat_store.update_selections(chat_id, account, selections)
         self._send_json(200, {"selections": selections, "pool_size": len(sources)})
@@ -2369,7 +2800,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # _evidence_fallback rule).
             self._send_json(400, {"detail": "درخواست نادرست است."})
             return
-        self._send_json(200, note_store.create_note(account, **fields))
+        note = note_store.create_note(account, **fields)
+        _publish_event(account, "note.saved", id=note.get("id") if isinstance(note, dict) else None)
+        self._send_json(200, note)
 
     def _note_update(self, note_id: int) -> None:
         """Edit the editable fields (category / opinion); the quote is
@@ -2539,6 +2972,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if turn is None:
             self._send_json(429, {"detail": busy_detail})
             return
+        _publish_event(
+            account, "research.started", turn_id=turn.id, session_id=session["id"]
+        )
         self._send_json(202, {"turn_id": turn.id, "session_id": session["id"]})
 
     def _research_decide(self, account: str) -> None:

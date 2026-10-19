@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [2book-ingest]
+  push:
+    branches: [2book-ingest]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # The narration tests speak through the isolated Node runtime the
+      # reader's narration rides — the suite needs its dependencies on
+      # disk (pdfjs-dist) exactly like a dev machine's.
+      - name: Install the narration runtime
+        working-directory: ui/narration
+        run: npm ci
+
+      # The page-raster and narration tests import pypdfium2 + Pillow;
+      # the pins are the image's own (ui/Dockerfile).
+      - name: Install development dependencies
+        run: python -m pip install pytest pyyaml pypdfium2==5.9.0 "pillow>=10,<12"
+
+      - name: Run tests
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: python -m pytest -q
+
+  reader:
+    name: Reader (node --test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests/reader
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/reader/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  mobile:
+    name: Mobile type check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  deploy:
+    name: Deploy to VPS
+    if: github.event_name == 'push'
+    needs: [backend, reader, mobile]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # The pre-deploy guard reads the LIVE entry: port 80 — the vhost
+      # ops/nginx/booksai.conf serves. Port 443 has no booksai TLS
+      # block yet and would 404 through the neighbor's default vhost,
+      # so https:// here would refuse a perfectly healthy origin.
+      - name: Verify production endpoint
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          python - <<'PY'
+          import os
+          import socket
+          addresses = {result[4][0] for result in socket.getaddrinfo(
+              "booksai.rayesh-team.ir", 443, type=socket.SOCK_STREAM
+          )}
+          expected = os.environ["DEPLOY_HOST"]
+          if addresses != {expected}:
+              raise SystemExit(f"DNS for booksai.rayesh-team.ir is {sorted(addresses)}, expected {expected}")
+          PY
+          curl --fail --silent --show-error http://booksai.rayesh-team.ir/livez
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Export Android OTA bundle
+        working-directory: mobile
+        run: |
+          mkdir -p ../.scratch
+          npx expo export --platform android --output-dir ../.scratch/ota-export
+        env:
+          EXPO_PUBLIC_API_URL: https://booksai.rayesh-team.ir
+
+      - name: Publish OTA payload
+        run: python scripts/publish_ota.py .scratch/ota-export
+
+      - name: Download session image wheels
+        run: |
+          mkdir -p ui/wheels
+          python -m pip download --dest ui/wheels --only-binary=:all: \
+            --platform manylinux_2_17_x86_64 --python-version 312 \
+            --implementation cp --abi cp312 \
+            pypdfium2==5.9.0 'pillow>=10,<12'
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+
+      - name: Sync source and deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh_transport="ssh -i $RUNNER_TEMP/cwb-ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/cwb-ssh/known_hosts"
+          rsync -az --delete \
+            -e "$ssh_transport" \
+            --exclude='.git/' \
+            --exclude='.scratch/' --exclude='.venv/' \
+            --exclude='mobile/' --exclude='*.apk' --exclude='*.aab' \
+            --exclude='**/__pycache__/' --exclude='*.pyc' --exclude='.pytest_cache/' \
+            --exclude='.env' --exclude='.env.*' \
+            --exclude='books/*.pdf' \
+            --exclude='render-cache/' \
+            --exclude='ui/*.sqlite3' \
+            ./ "${DEPLOY_USER}@${DEPLOY_HOST}:/srv/chat-with-books/current/"
+          ssh -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" "${DEPLOY_USER}@${DEPLOY_HOST}" 'set -e; cd /srv/chat-with-books/current; test -s .env; test -s books/tarhe-kolli.pdf; test -s books/70143-336.pdf; docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session pull postgres cognee cognee-next-tier || echo "registry pull skipped — building from the images already on the box"; docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session up -d --build; for i in $(seq 1 90); do curl -fsS http://127.0.0.1:8765/livez >/dev/null && exit 0; sleep 2; done; echo "Session UI did not become healthy" >&2; exit 1'

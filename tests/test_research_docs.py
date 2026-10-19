@@ -14,8 +14,8 @@ sys.path.insert(0, str(REPO_ROOT))
 from ui import research  # noqa: E402
 
 README = REPO_ROOT / "README.md"
-ARCHITECTURE = REPO_ROOT / "ARCHITECTURE.md"
-CONTEXT = REPO_ROOT / "CONTEXT.md"
+ARCHITECTURE = REPO_ROOT / "docs" / "ARCHITECTURE.md"
+CONTEXT = REPO_ROOT / "docs" / "CONTEXT.md"
 ADR = REPO_ROOT / "docs" / "adr" / "0008-research-mode-wayfinder.md"
 ADR9 = REPO_ROOT / "docs" / "adr" / "0009-research-mode-journey-layer.md"
 ADR12 = REPO_ROOT / "docs" / "adr" / "0012-research-skill-architecture.md"

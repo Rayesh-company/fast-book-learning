@@ -12,4 +12,4 @@ Canonical roles map 1:1 to `needs-triage`, `needs-info`, `ready-for-agent`, `rea
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: one `docs/CONTEXT.md` beside `docs/adr/`. See `docs/agents/domain.md`.

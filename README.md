@@ -2,6 +2,8 @@
 
 Farsi Q&A over a fixed Book set through Cognee. The whole memory layer stays on Postgres (ADR-0001). Chat runs on `glm-5.3-flash` through **AvalAI** at `https://api.avalai.ir/v1` (moved from Z.AI's GLM Coding Plan on 2026-09-13 — the coding-plan weekly quota was exhausted, error 1310, reset 2026-09-15 17:06; ADR-0002's Z.AI routing resumes by flipping `LLM_ENDPOINT` back in compose). Embeddings stay on AvalAI at `https://api.avalai.ir/v1` (ADR-0002).
 
+The full system walkthrough — architecture, flows, UML and flowcharts, data, and the zero-to-hundred bring-up — lives in **[docs/zero-to-hundred.md](docs/zero-to-hundred.md)**.
+
 The Book set is two Books: طرح کلی اندیشۀ اسلامی در قرآن (`tarhe-kolli.pdf`) and انسان ۲۵۰ ساله (`70143-336.pdf`). Keep both at the repo root. They are not committed.
 
 ## Local stack
@@ -34,6 +36,17 @@ docker compose --profile session up -d --build
 ```
 
 It builds from `ui/Dockerfile` (a stdlib-only image: the base interpreter plus `serve.py` and `index.html`, nothing installed), talks to `http://cognee:8000` and `http://cognee-next-tier:8000` by container-network name — next-tier's `8001` is only the host publish — and lifts `LLM_API_KEY` by compose interpolation from the compose-only `.env`, so the key never enters the image. The phone-gate quota and the research sessions live in the `session_quota` volume at `/data/usage.sqlite3` and `/data/research.sqlite3`; when switching from the host process, carry the counts over once with `docker cp ui/usage.sqlite3 chat-with-books-session:/data/usage.sqlite3` and the research store with `docker cp ui/research.sqlite3 chat-with-books-session:/data/research.sqlite3` (no restart needed — the sheet opens each DB per request). The container healthcheck is the local `/livez`; the sheet's `/health` still proxies to Cognee and stays the stack-level signal. Both runs serve `http://localhost:8765` — stop the host sheet before bringing the container up, one process per port.
+
+The sheet is a **PWA** (ADR-0019): installable from the browser's install affordance (the topbar's «نصب برنامه» chip, Chromium only — iOS installs through Safari's share sheet), standalone once installed. A service worker (`ui/sw.js`, one `cwb-shell-v1` cache) keeps the shell — the sheet HTML, the manifest, the icons, the vendored fonts and pdf.js — but the freshness contract stands: navigations are network-first, so a live server always wins and the cached shell is only the offline answer, and every product route (the ask, the phases, research, auth, books) passes through untouched, never cached. The static content types are pinned in `serve.py` (Windows registries have killed service workers with a `text/plain` `.js` before), and the icons are generated from source with `py tools/make_pwa_icons.py`.
+
+## The mobile client and the shared API
+
+ONE backend serves both clients (ADR-0020): the JSON API the sheet's own JavaScript speaks is the mobile app's API too — `mobile/` (Expo + TypeScript) holds the Android client, `mobile/README.md` its run. Three server-side doors open for the native client, all recorded and pinned by `tests/test_mobile_api.py`:
+
+- **The Bearer token**: `/auth/login`'s body carries the signed token beside the Set-Cookie; the app stores it (`expo-secure-store`) and rides `Authorization: Bearer` on every call. `resolve_identity` takes the cookie first, the header second — one `verify_token` path, and a tampered Bearer refuses exactly like a bad cookie.
+- **CORS, env-gated**: `SESSION_UI_ALLOWED_ORIGINS` (comma-separated Origins) stamps `Access-Control-Allow-*` for browser clients on the allowlist (the Expo web dev server) and `do_OPTIONS` answers the preflight; empty — the recorded production shape — stamps nothing.
+- **The live line**: `GET /events` is the Account's Server-Sent Events stream — `chat.asked`, `chat.selected`, `chat.quoted`, `chat.widened`, `research.started`, `note.saved`, heartbeats between. An ask that settles on one device re-renders the other's Sessions list the moment it lands. The hub is in-process (a restart empties it; clients reconnect; the stores stay the truth); a turn's completion still rides the `/research/turn` poll on every client.
+- **The Eita برنامک (ADR-0021)**: Eita's WebView opens `/eitaa` — a page this same server serves, speaking this same API with the same Bearer token. The WebView's signed `initData` is the credential (`ui/eitaa.py`'s documented HMAC check; `EITAA_BOT_TOKEN` from the Eitaayar panel keys it): a linked Eita user exchanges it for the Account's ordinary token at `POST /eitaa/auth` and rides silently; an unlinked one sees the product's ONE login door (`POST /eitaa/link`, `/auth/login`'s own credential check) and the resulting binding lands in `ui/eitaa_store.py`'s own SQLite file (`EITAA_DB`, `/data/eitaa.sqlite3` in deploys). The server→user push (`POST` to eitaayar.ir's `sendMessage` when a Quoted answer settles) is opt-in by `EITAA_PUSH_ENABLED=1` and off by default — Eita's daily message quota is not ours to spend. Pinned by `tests/test_eitaa_app.py`.
 
 Open `http://localhost:8765`. Cognee must already be up on port 8000 with both Books ingested.
 

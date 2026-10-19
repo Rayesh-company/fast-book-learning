@@ -572,7 +572,7 @@ def test_the_config_contract_is_pinned():
     # console renders «میز مدیریت» only because CONTEXT.md carries it
     # as DRAFT pending PM approval, and the page badge (pinned above)
     # says so to the reader.
-    context = (Path(audit.__file__).parent.parent / "CONTEXT.md").read_text(
+    context = (Path(audit.__file__).parent.parent / "docs" / "CONTEXT.md").read_text(
         encoding="utf-8"
     )
     assert "Admin console «میز مدیریت»" in context
