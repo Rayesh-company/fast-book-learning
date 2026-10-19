@@ -50,10 +50,13 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
-            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
+          set -o pipefail
+          {
+            echo '```text'
+            ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+              "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
           set -eu
           CONF=/srv/chat-with-books/current/ops/nginx/booksai.conf
           VHOST=/etc/nginx/sites-available/booksai.conf
@@ -98,8 +101,16 @@ jobs:
             || echo "dry-run failed/skipped (informational only - network to LE staging)"
           echo "== nginx -t gates the reload =="
           if nginx -t 2>&1; then
-            systemctl reload nginx
-            echo "nginx reloaded"
+            if systemctl reload nginx 2>&1; then
+              echo "nginx reloaded (systemd)"
+            elif nginx -s reload 2>&1; then
+              echo "nginx reloaded (direct signal)"
+            else
+              echo "BOTH reload paths failed - restoring the backup"
+              cp "$bak" "$VHOST"
+              nginx -t && nginx -s reload
+              exit 1
+            fi
           else
             echo "nginx -t FAILED - restoring the backup, NO reload"
             cp "$bak" "$VHOST"
@@ -108,14 +119,18 @@ jobs:
           fi
           echo "== verify from the box =="
           curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://booksai.rayesh-team.ir/livez || echo 000)
+          echo "http livez from the box -> $code (301 expected)"
           REPAIR
           REMOTE
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify from the runner
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' http://booksai.rayesh-team.ir/livez)
+          code=$(curl -s -m 25 --retry 3 --retry-delay 2 -o /dev/null -w '%{http_code}' http://booksai.rayesh-team.ir/livez)
           echo "http livez -> $code (301 expected)"
           [ "$code" = "301" ]
-          curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
+          curl -fsS -m 25 --retry 3 https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
           echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
             -servername booksai.rayesh-team.ir 2>/dev/null | openssl x509 -noout -subject -dates
