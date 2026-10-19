@@ -107,10 +107,10 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      # The pre-deploy guard reads the LIVE entry: port 80 — the vhost
-      # ops/nginx/booksai.conf serves. Port 443 has no booksai TLS
-      # block yet and would 404 through the neighbor's default vhost,
-      # so https:// here would refuse a perfectly healthy origin.
+      # The pre-deploy guard reads the live entry over https: the
+      # booksai 443 vhost took its Let's Encrypt cert on 2026-10-19
+      # (the fix-tls workflow), so the strict check - valid cert, our
+      # own origin - is the honest gate again.
       - name: Verify production endpoint
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -125,7 +125,7 @@ jobs:
           if addresses != {expected}:
               raise SystemExit(f"DNS for booksai.rayesh-team.ir is {sorted(addresses)}, expected {expected}")
           PY
-          curl --fail --silent --show-error http://booksai.rayesh-team.ir/livez
+          curl --fail --silent --show-error https://booksai.rayesh-team.ir/livez
 
       - name: Install mobile dependencies
         working-directory: mobile
