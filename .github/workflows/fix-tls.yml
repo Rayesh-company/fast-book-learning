@@ -1,0 +1,90 @@
+name: Fix TLS
+
+# One manual job (workflow_dispatch): give booksai.rayesh-team.ir its
+# 443 back. The migration to this box left the domain with no TLS
+# server block, so https:// falls through to the neighbor vhost and
+# serves ANOTHER PRODUCT under our name — and the mobile app's baked
+# https:// EXPO_PUBLIC_API_URL plus the Eita برنامک's registered URL
+# are unusable until it holds. The channel is the deploy's own: the
+# box's sshd on DEPLOY_PORT, the deploy key, StrictHostKeyChecking
+# against DEPLOY_KNOWN_HOSTS. Every mutation is gated: the cert is
+# issued only through the port-80 webroot the vhost already serves,
+# the vhost file is backed up before it is overwritten, nginx's config
+# test gates the reload, and a reload never restarts the service —
+# the neighbor's vhosts are never touched.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tls:
+    name: Issue cert and install the booksai 443 vhost
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+
+      - name: Diagnose, issue the cert, install the vhost, reload gated
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
+          set -eu
+          echo "== certbot certificates =="
+          sudo -n certbot certificates 2>/dev/null || echo "certbot not queryable"
+          echo "== the existing booksai vhost =="
+          target=""
+          for dir in /etc/nginx/sites-enabled /etc/nginx/conf.d; do
+            if [ -z "$target" ]; then
+              target=$(grep -rl "booksai.rayesh-team.ir" "$dir" 2>/dev/null | head -1 || true)
+            fi
+          done
+          if [ -z "$target" ]; then
+            echo "no booksai vhost found - planting a fresh one at /etc/nginx/conf.d/booksai.conf"
+            target=/etc/nginx/conf.d/booksai.conf
+          fi
+          echo "vhost file: $target"
+          echo "== the cert =="
+          if sudo -n test -s /etc/letsencrypt/live/booksai.rayesh-team.ir/fullchain.pem; then
+            echo "booksai cert already present - keeping it"
+          else
+            echo "issuing the booksai cert through the port-80 webroot"
+            sudo -n certbot certonly --webroot -w /var/www/html \
+              -d booksai.rayesh-team.ir \
+              --non-interactive --agree-tos --keep-until-expiring \
+              --register-unsafely-without-email
+          fi
+          echo "== install the vhost (backed up first) =="
+          sudo -n cp "$target" "$target.bak-$(date +%s)"
+          sudo -n cp "/srv/chat-with-books/current/ops/nginx/booksai.conf" "$target"
+          echo "== nginx -t gates the reload =="
+          sudo -n nginx -t
+          sudo -n systemctl reload nginx
+          echo "== verify from the box =="
+          curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
+          curl -fsS -o /dev/null -w "sheet over https: %{http_code}\n" https://booksai.rayesh-team.ir/
+          REMOTE
+
+      - name: Verify from the runner
+        run: |
+          curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
+          echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
+            -servername booksai.rayesh-team.ir 2>/dev/null | openssl x509 -noout -subject -dates
