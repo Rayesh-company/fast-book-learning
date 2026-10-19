@@ -7,11 +7,16 @@ name: Fix TLS
 # https:// EXPO_PUBLIC_API_URL plus the Eita برنامک's registered URL
 # are unusable until it holds. The channel is the deploy's own: the
 # box's sshd on DEPLOY_PORT, the deploy key, StrictHostKeyChecking
-# against DEPLOY_KNOWN_HOSTS. Every mutation is gated: the cert is
-# issued only through the port-80 webroot the vhost already serves,
-# the vhost file is backed up before it is overwritten, nginx's config
-# test gates the reload, and a reload never restarts the service —
-# the neighbor's vhosts are never touched.
+# against DEPLOY_KNOWN_HOSTS.
+#
+# STEP 1 diagnoses who owns 443 (host nginx vs a proxy container) and
+# what the deploy user may touch — 2026-10-19's first run stopped at
+# `sudo: a password is required`, so this step names the real owner
+# before anything is attempted. STEP 2 is the gated repair: the cert
+# is issued only through the port-80 webroot the vhost already
+# serves, the vhost file is backed up before it is overwritten,
+# nginx's config test gates the reload, and a reload never restarts
+# the service — the neighbor's vhosts are never touched.
 
 on:
   workflow_dispatch:
@@ -21,7 +26,7 @@ permissions:
 
 jobs:
   tls:
-    name: Issue cert and install the booksai 443 vhost
+    name: Diagnose 443, issue cert, install the booksai vhost
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -37,7 +42,39 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
-      - name: Diagnose, issue the cert, install the vhost, reload gated
+      - name: Diagnose who owns 443
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
+          echo "== who am I / what may I sudo =="
+          id
+          sudo -n -l 2>&1 | head -8
+          echo "== listeners on 80/443 =="
+          (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -E ':(80|443)\b' || echo "none visible"
+          echo "== host nginx readable? =="
+          ls -la /etc/nginx 2>&1 | head -12
+          echo "== booksai inside /etc/nginx (errors shown) =="
+          grep -rl "booksai" /etc/nginx 2>&1 | head -10
+          echo "== all containers =="
+          docker ps --format '{{.Names}}\t{{.Image}}\t{{.Ports}}' 2>&1
+          echo "== proxy-ish containers and their mounts =="
+          for c in $(docker ps --format '{{.Names}}' | grep -iE 'nginx|proxy|traefik|caddy|hemmat' || true); do
+            echo "--- $c"
+            docker port "$c" 2>&1 | head -5
+            docker inspect "$c" --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' 2>&1
+          done
+          echo "== plausible proxy config dirs =="
+          ls -la /srv 2>&1 | head -8
+          ls -la /opt 2>&1 | head -8
+          REMOTE
+
+      - name: Issue the cert and install the vhost (needs the rights step 1 names)
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -48,9 +85,6 @@ jobs:
             -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
             "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
           set -eu
-          echo "== certbot certificates =="
-          sudo -n certbot certificates 2>/dev/null || echo "certbot not queryable"
-          echo "== the existing booksai vhost =="
           target=""
           for dir in /etc/nginx/sites-enabled /etc/nginx/conf.d; do
             if [ -z "$target" ]; then
@@ -62,8 +96,7 @@ jobs:
             target=/etc/nginx/conf.d/booksai.conf
           fi
           echo "vhost file: $target"
-          echo "== the cert =="
-          if sudo -n test -s /etc/letsencrypt/live/booksai.rayesh-team.ir/fullchain.pem; then
+          if sudo -n test -s /etc/letsencrypt/live/booksai.rayesh-team.ir/fullchain.pem 2>/dev/null; then
             echo "booksai cert already present - keeping it"
           else
             echo "issuing the booksai cert through the port-80 webroot"
