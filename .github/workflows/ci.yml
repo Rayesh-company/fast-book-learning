@@ -160,6 +160,35 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
+      # The برنامک's credential (ADR-0021) is deploy-managed: the
+      # EITAA_BOT_TOKEN secret is upserted into the box's own .env (the
+      # file the rsync never touches) BEFORE the compose up, so every
+      # deploy guarantees the container carries the current token —
+      # and an .env change alone makes compose recreate the session.
+      # The value rides ssh stdin ONCE into a variable; it never
+      # appears in a command line.
+      - name: Ensure the برنامک token in the box env
+        env:
+          EITAA_BOT_TOKEN: ${{ secrets.EITAA_BOT_TOKEN }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          printf '%s' "$EITAA_BOT_TOKEN" | ssh -p "$DEPLOY_PORT" \
+            -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" '
+              set -eu
+              token=$(cat)
+              cd /srv/chat-with-books/current
+              touch .env
+              grep -v "^EITAA_BOT_TOKEN=" .env > .env.tmp || true
+              printf "EITAA_BOT_TOKEN=%s\n" "$token" >> .env.tmp
+              mv .env.tmp .env
+              grep -c "^EITAA_BOT_TOKEN=.." .env
+            '
+
       - name: Sync source and deploy
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
