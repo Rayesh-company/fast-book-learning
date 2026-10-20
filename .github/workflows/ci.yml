@@ -166,7 +166,11 @@ jobs:
       # deploy guarantees the container carries the current token —
       # and an .env change alone makes compose recreate the session.
       # The value rides ssh stdin ONCE into a variable; it never
-      # appears in a command line.
+      # appears in a command line. The write DOUBLES every `$` —
+      # compose interpolates .env VALUES, and the panel's token
+      # carries `$iDmYpyQ`: raw, the interpolation silently amputates
+      # that segment and every initData signature fails with a 401.
+      # `$$` is compose's own escape for a literal dollar.
       - name: Ensure the برنامک token in the box env
         env:
           EITAA_BOT_TOKEN: ${{ secrets.EITAA_BOT_TOKEN }}
@@ -181,10 +185,11 @@ jobs:
             "${DEPLOY_USER}@${DEPLOY_HOST}" '
               set -eu
               token=$(cat)
+              escaped=$(printf "%s" "$token" | sed "s/\$/\$\$/g")
               cd /srv/chat-with-books/current
               touch .env
               grep -v "^EITAA_BOT_TOKEN=" .env > .env.tmp || true
-              printf "EITAA_BOT_TOKEN=%s\n" "$token" >> .env.tmp
+              printf "EITAA_BOT_TOKEN=%s\n" "$escaped" >> .env.tmp
               mv .env.tmp .env
               grep -c "^EITAA_BOT_TOKEN=.." .env
             '
