@@ -687,6 +687,85 @@ def _eitaa_push(account: str, text: str) -> None:
         pass
 
 
+def _eitaa_refusal_diagnostic(raw: str) -> tuple[str, str]:
+    """The refused exchange's verdict: try a battery of check-string
+    constructions (raw/decoded pairs, with and without device_id and
+    query_id, newline or ampersand joins, canonical re-serialized user
+    JSON) against four key derivations, and report ONLY which
+    candidate matched the carried hash — never a single value. A
+    NO-CANDIDATE verdict after the structure is known-good (the doc
+    param set) names the credential itself as the stranger, which is
+    exactly what 2026-10-20's wrong-token hunt needed stated in
+    writing."""
+    from urllib.parse import quote
+
+    pieces = {}
+    for p in raw.split("&"):
+        if "=" in p:
+            key, value = p.split("=", 1)
+            pieces[key] = value
+    received = pieces.get("hash", "")
+    shape = " ".join(
+        f"{p.split('=', 1)[0]}:{len(p)}" for p in sorted({p for p in raw.split("&") if p})
+    )
+    if not received:
+        return shape, "no-hash-carried"
+    token = eitaa.bot_token()
+    decoded = eitaa.parse_init_data(raw)
+
+    forms = {}
+
+    def collect(tag, items):
+        forms[f"{tag} nl"] = "\n".join(sorted(items))
+        forms[f"{tag} amp"] = "&".join(sorted(items))
+
+    collect("raw", [f"{k}={v}" for k, v in pieces.items() if k != "hash"])
+    collect("decoded", [f"{k}={v}" for k, v in decoded.items() if k != "hash"])
+    collect(
+        "raw-no-device",
+        [f"{k}={v}" for k, v in pieces.items() if k not in ("hash", "device_id")],
+    )
+    collect(
+        "raw-no-query",
+        [f"{k}={v}" for k, v in pieces.items() if k not in ("hash", "query_id")],
+    )
+    collect(
+        "decoded-no-device",
+        [f"{k}={v}" for k, v in decoded.items() if k not in ("hash", "device_id")],
+    )
+    collect(
+        "decoded-no-query",
+        [f"{k}={v}" for k, v in decoded.items() if k not in ("hash", "query_id")],
+    )
+    if "user" in decoded:
+        try:
+            parsed_user = json.loads(decoded["user"])
+        except ValueError:
+            parsed_user = None
+        if isinstance(parsed_user, dict):
+            for ascii_flag, tag in ((False, "utf8"), (True, "ascii")):
+                canon = json.dumps(
+                    parsed_user, ensure_ascii=ascii_flag, separators=(",", ":")
+                )
+                others_raw = [f"{k}={v}" for k, v in pieces.items() if k not in ("hash", "user")]
+                others_dec = [f"{k}={v}" for k, v in decoded.items() if k not in ("hash", "user")]
+                collect(f"raw-user-{tag}", others_raw + ["user=" + quote(canon, safe="")])
+                collect(f"dec-user-{tag}", others_dec + [f"user={canon}"])
+
+    keys = {
+        "k-webappdata": hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest(),
+        "k-rawtoken": token.encode(),
+        "k-swapped": hmac.new(token.encode(), b"WebAppData", hashlib.sha256).digest(),
+        "k-shatoken": hashlib.sha256(token.encode()).digest(),
+    }
+    for fname, form in forms.items():
+        for kname, key in keys.items():
+            hexdigest = hmac.new(key, form.encode("utf-8"), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(hexdigest, received):
+                return shape, f"MATCH: {fname} with {kname}"
+    return shape, "NO-CANDIDATE (the credential itself is the stranger)"
+
+
 def validated_datasets(raw):
     """The ask's Book selection (ADR-0010): the client's list
     intersected with the Book set, in the set's stable order — a name
@@ -1430,11 +1509,10 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # difference between their initData and anything the tests
             # can synthesize.
             if eitaa.bot_token() and isinstance(raw, str) and raw:
-                pieces = [p for p in raw.split("&") if p]
-                shape = " ".join(
-                    f"{p.split('=', 1)[0]}:{len(p)}" for p in sorted(pieces)
+                shape, verdict = _eitaa_refusal_diagnostic(raw)
+                sys.stderr.write(
+                    f"eitaa-auth-401 pieces=[{shape}] verdict={verdict}\n"
                 )
-                sys.stderr.write(f"eitaa-auth-401 len={len(raw)} pieces=[{shape}]\n")
             self._send_json(401, {"detail": EITAA_AUTH_401_DETAIL})
             return None, None
         return fields, payload
