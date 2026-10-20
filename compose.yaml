@@ -239,8 +239,14 @@ services:
       EITAA_DB: /data/eitaa.sqlite3
       # The برنامک's bot token (ADR-0021): the Eitaayar panel's token —
       # the initData signature's key and sendMessage's credential.
-      # Unset, /eitaa/auth answers 503 and the page says so honestly.
+      # Deploys carry it as a FILE on the volume (EITAA_BOT_TOKEN_FILE,
+      # written by the deploy's docker exec) — the panel's token
+      # contains `$` sequences and the env layer interpolates them, so
+      # the raw bytes only survive on a filesystem path. The file wins
+      # over EITAA_BOT_TOKEN; either unset, /eitaa/auth answers 503
+      # and the page says so honestly.
       EITAA_BOT_TOKEN: ${EITAA_BOT_TOKEN:-}
+      EITAA_BOT_TOKEN_FILE: /data/eitaa-bot-token
       # The server→user push (ADR-0021): opt-in, off by default —
       # Eita's daily message quota is not ours to spend.
       EITAA_PUSH_ENABLED: ${EITAA_PUSH_ENABLED:-}

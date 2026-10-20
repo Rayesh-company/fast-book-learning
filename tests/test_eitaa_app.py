@@ -152,6 +152,26 @@ def _login_token(base):
     return payload["token"]
 
 
+def test_the_token_prefers_the_file_over_the_env(tmp_path, monkeypatch):
+    # The deploy path: the panel's token carries `$` sequences the env
+    # layer interpolates, so deploys write the raw bytes to a file and
+    # point EITAA_BOT_TOKEN_FILE at it. The file wins when it holds
+    # anything; a missing or empty file falls back to the env — and a
+    # poisoned env value behind a live file can never leak through.
+    env_token = "123:env-token"
+    file_token = "BqZ7/with-$dollar-and-@at"
+    token_file = tmp_path / "eitaa-bot-token"
+    monkeypatch.setenv("EITAA_BOT_TOKEN", env_token)
+    monkeypatch.setenv("EITAA_BOT_TOKEN_FILE", str(token_file))
+    assert eitaa.bot_token() == env_token  # no file yet: the env path
+    token_file.write_text(file_token + "\n", encoding="utf-8")
+    assert eitaa.bot_token() == file_token  # the file wins, stripped
+    token_file.write_text("", encoding="utf-8")
+    assert eitaa.bot_token() == env_token  # empty file: the env path
+    monkeypatch.setenv("EITAA_BOT_TOKEN_FILE", str(tmp_path / "missing"))
+    assert eitaa.bot_token() == env_token  # unreadable file: env path
+
+
 def test_init_data_hmac_accepts_and_refuses(monkeypatch):
     monkeypatch.setenv("EITAA_BOT_TOKEN", TEST_TOKEN)
     fields = eitaa.validate_init_data(_init_data())

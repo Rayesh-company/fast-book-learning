@@ -1,19 +1,19 @@
 name: Bernamek check
 
-# The برنامک's layered self-test (manual, workflow_dispatch). 2026-10-20
-# taught why this exists: the panel's token reached the box but arrived
-# STRANGER - compose interpolates .env VALUES, so the token's own
-# `$iDmYpyQ` segment was read as an undefined variable and amputated,
-# and every genuine initData signature failed a 401 that told us only
-# "some token is set". This workflow names the failing LAYER instead of
-# the symptom, one gated step each, conclusions readable from the jobs
-# API alone:
-#   layer 1 - compose resolves the secret verbatim
-#             (docker compose config, fingerprinted - the value itself
-#             is never printed: a mangled value would not be a secret
-#             and would sail past GitHub's masking unmasked)
-#   layer 2 - the container carries the resolved value
-#   layer 3 - production validates a genuine signature
+# The برنامک's self-test (manual, workflow_dispatch). It exists because
+# 2026-10-20's hunt showed a 401 names only the symptom — "some token
+# is set, wrongly" — and the failing LAYER stayed invisible: compose
+# interpolates .env VALUES, so the panel's token (it carries
+# `$iDmYpyQ`) reached the container amputated, and this machine cannot
+# reliably read Actions logs to inspect anything. The token therefore
+# rides as a raw-bytes FILE on the volume (EITAA_BOT_TOKEN_FILE), and
+# this check verifies each layer through step CONCLUSIONS alone, every
+# one readable from the jobs API:
+#   layer 1 - the token file in the container matches the secret
+#             (fingerprinted — the value itself is never printed: a
+#             mangled stranger would sail past GitHub's masking
+#             unmasked)
+#   layer 2 - production validates a genuine signature
 #             (the runner signs a fresh initData with the secret and
 #             demands the 200 bound:false exchange)
 
@@ -40,7 +40,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
-      - name: "layer 1: compose resolves the secret verbatim"
+      - name: "layer 1: the token file in the container matches the secret"
         env:
           EITAA_BOT_TOKEN: ${{ secrets.EITAA_BOT_TOKEN }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -52,30 +52,12 @@ jobs:
             -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            'cd /srv/chat-with-books/current && docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session config --format json | python3 -c "import sys,json,hashlib; v=json.load(sys.stdin)[\"services\"][\"session\"][\"environment\"][\"EITAA_BOT_TOKEN\"]; print(len(v), hashlib.sha256(v.encode()).hexdigest()[:16])"')
-          echo "secret   : $expected"
-          echo "resolved : $actual"
+            'docker exec chat-with-books-session sh -c "cat /data/eitaa-bot-token 2>/dev/null || true" | python3 -c "import sys,hashlib; v=sys.stdin.read().strip(); print(len(v), hashlib.sha256(v.encode()).hexdigest()[:16] if v else \"(no file)\")"')
+          echo "secret  : $expected"
+          echo "file    : $actual"
           [ "$expected" = "$actual" ]
 
-      - name: "layer 2: the container carries the resolved value"
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-        run: |
-          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
-            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            'docker exec chat-with-books-session python -c "import os,hashlib; v=os.environ.get(\"EITAA_BOT_TOKEN\",\"\"); print(len(v), hashlib.sha256(v.encode()).hexdigest()[:16])" > /tmp/bernamek-fp && test -s /tmp/bernamek-fp'
-          actual=$(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
-            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" 'cat /tmp/bernamek-fp; rm -f /tmp/bernamek-fp')
-          echo "container: $actual"
-          grep -qE '^[0-9]+ [0-9a-f]{16}$' <<< "$actual"
-
-      - name: "layer 3: production validates a genuine signature"
+      - name: "layer 2: production validates a genuine signature"
         env:
           EITAA_BOT_TOKEN: ${{ secrets.EITAA_BOT_TOKEN }}
         run: |
@@ -104,5 +86,5 @@ jobs:
           except urllib.error.HTTPError as exc:
               status, payload = exc.code, json.loads(exc.read())
           print(status, payload)
-          assert status == 200 and payload.get("bound") is False, "the exchange refused a genuine signature - the container holds a stranger"
+          assert status == 200 and payload.get("bound") is False, "the exchange refused a genuine signature - the server holds a stranger"
           PY

@@ -160,18 +160,18 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
-      # The برنامک's credential (ADR-0021) is deploy-managed: the
-      # EITAA_BOT_TOKEN secret is upserted into the box's own .env (the
-      # file the rsync never touches) BEFORE the compose up, so every
-      # deploy guarantees the container carries the current token —
-      # and an .env change alone makes compose recreate the session.
-      # The value rides ssh stdin ONCE into a variable; it never
-      # appears in a command line. The write DOUBLES every `$` —
-      # compose interpolates .env VALUES, and the panel's token
-      # carries `$iDmYpyQ`: raw, the interpolation silently amputates
-      # that segment and every initData signature fails with a 401.
-      # `$$` is compose's own escape for a literal dollar.
-      - name: Ensure the برنامک token in the box env
+      # The برنامک's credential (ADR-0021) is deploy-managed — and it
+      # NEVER rides the env layer: compose interpolates .env VALUES (an
+      # undefined `$VAR` amputates silently, no escape exists there),
+      # and the panel's token carries exactly such a `$iDmYpyQ`. So the
+      # secret is written THROUGH the running container (docker exec,
+      # no interpolation anywhere) onto the persisted volume as the
+      # raw-bytes file EITAA_BOT_TOKEN_FILE points at; bot_token()
+      # reads it per call — no restart needed for a rotation. The env
+      # var in the box .env is scrubbed empty so the poisoned
+      # interpolated value behind it can never win. The value rides
+      # ssh stdin ONCE into a variable; it never hits a command line.
+      - name: Ensure the برنامک token file in the container
         env:
           EITAA_BOT_TOKEN: ${{ secrets.EITAA_BOT_TOKEN }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -185,13 +185,18 @@ jobs:
             "${DEPLOY_USER}@${DEPLOY_HOST}" '
               set -eu
               token=$(cat)
-              escaped=$(printf "%s" "$token" | sed "s/\$/\$\$/g")
+              # The file lands on the volume through the container —
+              # the deploy user holds docker, not root.
+              printf "%s" "$token" | docker exec -i chat-with-books-session \
+                sh -c "cat > /data/eitaa-bot-token && chmod 600 /data/eitaa-bot-token"
+              # The env fallback dies: an interpolated stranger must
+              # never sit behind the file for a future fallback to find.
               cd /srv/chat-with-books/current
-              touch .env
-              grep -v "^EITAA_BOT_TOKEN=" .env > .env.tmp || true
-              printf "EITAA_BOT_TOKEN=%s\n" "$escaped" >> .env.tmp
-              mv .env.tmp .env
-              grep -c "^EITAA_BOT_TOKEN=.." .env
+              if grep -q "^EITAA_BOT_TOKEN=.." .env 2>/dev/null; then
+                sed -i "s/^EITAA_BOT_TOKEN=.*/EITAA_BOT_TOKEN=/" .env
+              fi
+              docker exec chat-with-books-session \
+                sh -c "test -s /data/eitaa-bot-token && echo token-file-present"
             '
 
       - name: Sync source and deploy

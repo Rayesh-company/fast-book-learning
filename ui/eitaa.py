@@ -27,6 +27,7 @@ import hmac
 import hashlib
 import json
 import os
+from pathlib import Path
 from urllib.parse import parse_qsl
 from urllib.request import Request, urlopen
 
@@ -35,6 +36,15 @@ from urllib.request import Request, urlopen
 # per call, the auth_secret() rule, so a test's monkeypatch.setenv is
 # enough and a running server needs no restart to pick a new value up.
 EITAA_BOT_TOKEN_ENV = "EITAA_BOT_TOKEN"
+
+# The deploy path: the panel's token carries `$` sequences (a real one
+# carried `$iDmYpyQ`), and the env layer mangles them — compose
+# interpolates .env VALUES (an undefined `$VAR` amputates silently)
+# and offers no escape there. So deploys write the token to a FILE on
+# the persisted volume (docker exec, no interpolation anywhere) and
+# point EITAA_BOT_TOKEN_FILE at it; the file wins over the env, and a
+# token rotation is a file rewrite — no restart, no env layer.
+EITAA_BOT_TOKEN_FILE_ENV = "EITAA_BOT_TOKEN_FILE"
 
 # A minted initData is accepted for one hour. Eita's own verify API is
 # stricter (one minute, single use) but that endpoint spends a round
@@ -52,6 +62,18 @@ SEND_URL = "https://eitaayar.ir/api/app/sendMessage"
 
 
 def bot_token() -> str:
+    """The credential: the token FILE when one is configured and
+    readable (the deploy path — raw bytes, no env layer to mangle
+    them), else the plain env var (tests, dev). Empty answers empty —
+    the server answers the برنامک's honest 503."""
+    file_path = str(os.environ.get(EITAA_BOT_TOKEN_FILE_ENV, "") or "").strip()
+    if file_path:
+        try:
+            value = Path(file_path).read_text(encoding="utf-8").strip()
+        except OSError:
+            value = ""
+        if value:
+            return value
     return str(os.environ.get(EITAA_BOT_TOKEN_ENV, "") or "").strip()
 
 
