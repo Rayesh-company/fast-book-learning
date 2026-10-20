@@ -1,4 +1,5 @@
 import { Agent } from "@mastra/core/agent";
+import { ToolCallFilter } from "@mastra/core/processors";
 import { Memory } from "@mastra/memory";
 import { searchBooksTool } from "../tools/search-books";
 import { webSearchTool } from "../tools/web-search";
@@ -10,11 +11,15 @@ const AVALAI_BASE_URL = (
 export interface UserProfileContext {
   usage_purpose?: string;
   martyr_leader_familiarity?: string;
+  martyr_works_familiarity?: string;
+  knowledge_level?: string;
   age?: string | number;
   politics_familiarity?: string;
   religion_familiarity?: string;
   job?: string;
+  occupation?: string;
   tone?: string;
+  assistant_tone?: string;
 }
 
 export function buildPersonalizedDirectives(
@@ -24,27 +29,81 @@ export function buildPersonalizedDirectives(
 
   const parts: string[] = [];
 
-  // ۱. لحن دستیار
-  const tone = profile.tone?.trim();
-  if (tone === "حرفه‌ای" || tone === "حرفه ای") {
+  // ۱. لحن همراه هوشمند (Agent Tone)
+  const tone = (profile.assistant_tone || profile.tone)?.trim();
+  if (tone === "حرفه‌ای" || tone === "حرفه ای" || tone === "professional") {
     parts.push(
-      "- لحن دستیار: کاملاً حرفه‌ای، رسمی، آکادمیک، پیراسته و ساختاریافته. از شوخی یا عبارات عامیانه بپرهیز و زبان استوار و علمی به کار ببر.",
+      "- لحن همراه: کاملاً حرفه‌ای، رسمی، آکادمیک، عمیقاً تحلیلی و مستدل با زبانی ساختاریافته و عینی. از هرگونه شوخی یا تعابیر عامیانه بپرهیز و متن را با وقار علمی ارائه بده.",
     );
-  } else if (tone === "آموزشی" || tone === "اموزشی") {
+  } else if (tone === "آموزشی" || tone === "اموزشی" || tone === "educational") {
     parts.push(
-      "- لحن دستیار: آموزشی، مشفقانه، صبور و گام‌به‌گام. با آوردن تمثیل‌ها و تعاریف روشن، زمینهٔ یادگیری عمیق را فراهم کن.",
+      "- لحن همراه: آموزشی، مشفقانه، صبور، همراه با هدایت گام‌به‌گام و شیوهٔ سقراطی. تعاریف روشن از مفاهیم پایه ارائه بده و یادگیرنده را به تفکر فعالانه تشویق کن.",
     );
-  } else if (tone === "برای نوجوان و کودک" || tone === "برای نو جوان و کودک") {
+  } else if (
+    tone === "برای نوجوان و کودک" ||
+    tone === "برای نو جوان و کودک" ||
+    tone === "kids"
+  ) {
     parts.push(
-      "- لحن دستیار: صمیمی، شیوا، جذاب و پرانرژی متناسب با ردهٔ سنی نوجوان و نونهال. از به کار بردن اصطلاحات پیچیده کلامی یا حوزوی سنگین پرهیز کن و مفاهیم را به صورت داستانی، ملموس و زنده بازگو کن.",
+      "- لحن همراه: بسیار صمیمی، گرم، پرانرژی و متناسب با ردهٔ سنی کودک و نوجوان. از اصطلاحات سنگین کلامی، فقهی و حوزوی کاملاً پرهیز کن، از تمثیل‌های ملموس، داستان‌واره و جذاب روزمره استفاده کن و با ریتمی گیرا و ترغیب‌کننده پاسخ بده.",
     );
-  } else if (tone === "ساده و روان") {
+  } else if (tone === "ساده و روان" || tone === "simple") {
     parts.push(
-      "- لحن دستیار: بسیار ساده، روان، همه‌فهم و بدون تکلف‌های ادبی و لغات مهجور.",
+      "- لحن همراه: بسیار ساده، صمیمی، روان، همه‌فهم و مکالمه‌ای. از پیچیدگی‌های ادبی، جملات تو در تو، کلمات مهجور و تکلف‌های زبانی دوری کن.",
     );
   }
 
-  // ۲. هدف استفاده
+  // ۲. سن یادگیرنده و داربست‌بندی شناختی متناسب با سن (Age-Adapted Scaffolding)
+  if (profile.age != null && String(profile.age).trim() !== "") {
+    const ageNum = Number(profile.age);
+    if (!Number.isNaN(ageNum)) {
+      if (ageNum < 15) {
+        parts.push(
+          `- سن یادگیرنده: ${ageNum} سال (کودک/نوجوان زیر ۱۵ سال) — داربست‌بندی شناختی متناسب: توضیحات بسیار ملموس، همراه با مثال‌های عینی و تجربی از دنیای واقعی، واژگان ساده و پرهیز کامل از اصطلاحات انتزاعی پیچیده.`,
+        );
+      } else if (ageNum <= 22) {
+        parts.push(
+          `- سن یادگیرنده: ${ageNum} سال (نوجوان/جوان ۱۵ تا ۲۲ سال) — داربست‌بندی شناختی متناسب: درگیر کردن ذهن نقاد و پرسش‌گر، پیوند مباحث با دغدغه‌های جوانی، دانشجویی و زندگی امروزی، همراه با استدلال‌های پویا.`,
+        );
+      } else {
+        parts.push(
+          `- سن یادگیرنده: ${ageNum} سال (بزرگسال ۲۲+ سال) — تحلیل‌های ژرف، استدلال‌های دقیق، مستند و موشکافانه، تبیین ابعاد ساختاری و چندوجهی مباحث.`,
+        );
+      }
+    } else {
+      parts.push(
+        `- سن یادگیرنده: ${profile.age} سال — مطالب، لحن و تمثیل‌ها با این رده سنی هماهنگ باشد.`,
+      );
+    }
+  }
+
+  // ۳. میزان آشنایی و دانش با مباحث کتاب‌ها (Knowledge Scaffolding)
+  const knowledge = (
+    profile.knowledge_level ||
+    profile.martyr_works_familiarity ||
+    profile.martyr_leader_familiarity
+  )?.trim();
+  if (
+    knowledge === "کم" ||
+    knowledge === "آشنایی ندارم" ||
+    knowledge === "اشنایی ندارم" ||
+    knowledge === "low" ||
+    knowledge === "none"
+  ) {
+    parts.push(
+      "- سطح آشنایی و دانش: مقدماتی/کم — مفاهیم پایه و کلیدی را از صفر و با تعاریف روشن و همه‌فهم تبیین کن و هیچ پیش‌فرضی از آشنایی قبلی مخاطب با اصطلاحات خاص متن کتاب قرار نده.",
+    );
+  } else if (knowledge === "متوسط" || knowledge === "medium") {
+    parts.push(
+      "- سطح آشنایی و دانش: متوسط — روی پیوند و انسجام ساختاری مفاهیم و تحلیل نکات اصلی تمرکز کن، بدون آنکه وقت را صرف بازگویی تعاریف بدیهی و اولیه کنی.",
+    );
+  } else if (knowledge === "زیاد" || knowledge === "high") {
+    parts.push(
+      "- سطح آشنایی و دانش: پیشرفته/زیاد — مستقیماً به عمق تحلیل، ظرایف کلامی و فلسفی و مقایسهٔ اندیشه‌ها ورود کن و از تکرار مقدمات و تعاریف ابتدایی عبور کن.",
+    );
+  }
+
+  // ۴. هدف استفاده (در صورت وجود، سازگاری پیشین)
   const purpose = profile.usage_purpose?.trim();
   if (purpose === "اکادمیک") {
     parts.push(
@@ -72,22 +131,7 @@ export function buildPersonalizedDirectives(
     );
   }
 
-  // ۳. میزان آشنایی‌ها
-  const familiarityLeader = profile.martyr_leader_familiarity?.trim();
-  if (
-    familiarityLeader === "کم" ||
-    familiarityLeader === "آشنایی ندارم" ||
-    familiarityLeader === "اشنایی ندارم"
-  ) {
-    parts.push(
-      "- آشنایی با آثار مؤلف: کم/مقدماتی — مفاهیم محوری (مثل توحید، نبوت، جهاد و انسان ۲۵۰ ساله) را همراه با تبیین معنای پایه توضیح بده و فرضی بر آشنایی قبلی مخاطب با اصطلاحات خاص قرار نده.",
-    );
-  } else if (familiarityLeader === "زیاد") {
-    parts.push(
-      "- آشنایی با آثار مؤلف: پیشرفته — نیاز به تکرار کلیات و تعاریف ابتدایی نیست؛ مستقیماً به عمق تحلیل و ظرایف متن و مقایسهٔ اندیشه‌ها ورود کن.",
-    );
-  }
-
+  // ۵. سایر زمینه‌های اختیاری (سازگاری پیشین)
   const familiarityPol = profile.politics_familiarity?.trim();
   if (familiarityPol === "زیاد") {
     parts.push(
@@ -118,15 +162,10 @@ export function buildPersonalizedDirectives(
     );
   }
 
-  // ۴. سن و شغل
-  if (profile.age) {
+  const job = (profile.job || profile.occupation)?.trim();
+  if (job) {
     parts.push(
-      `- سن یادگیرنده: ${profile.age} سال (مطالب و لحن و مثال‌ها با این سن متناسب باشد).`,
-    );
-  }
-  if (profile.job) {
-    parts.push(
-      `- شغل/نقش یادگیرنده: ${profile.job} (در صورت لزوم مثال‌ها و کاربردها را به این حیطه نزدیک کن).`,
+      `- شغل/نقش یادگیرنده: ${job} (در صورت لزوم مثال‌ها و کاربردها را به این حیطه نزدیک کن).`,
     );
   }
 
@@ -372,7 +411,7 @@ export const chatAgent = new Agent({
     );
   },
   model: {
-    get id() {
+    get id(): `${string}/${string}` {
       let m = (
         process.env.CHAT_AGENT_MODEL ||
         process.env.AGENT_MODEL ||
@@ -393,7 +432,7 @@ export const chatAgent = new Agent({
       } else if (!m.startsWith("openai/") && !m.startsWith("avalai/") && !m.startsWith("google/")) {
         m = `openai/${m}`;
       }
-      return m;
+      return m as `${string}/${string}`;
     },
     get url() {
       let u = (
@@ -419,11 +458,20 @@ export const chatAgent = new Agent({
     },
   },
   tools: { searchBooksTool, webSearchTool },
+  inputProcessors: [
+    new ToolCallFilter({
+      exclude: ["searchBooksTool", "webSearchTool"],
+    }),
+  ],
   memory: new Memory({
     options: {
       // The durable conversation (ADR-0014's persistence leg): the
       // thread history rides the Mastra storage, keyed per Learner.
-      lastMessages: parseInt(process.env.CHAT_AGENT_LAST_MESSAGES || "6", 10),
+      lastMessages: parseInt(process.env.CHAT_AGENT_LAST_MESSAGES || "10", 10),
+      messageHistory: {
+        maxTokens: 8000,
+        atMaxRemoveTokens: 2000,
+      },
       workingMemory: {
         enabled: process.env.MASTRA_WORKING_MEMORY !== "false",
         scope: "resource",

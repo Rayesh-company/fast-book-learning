@@ -87,7 +87,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   const turn=s.messages[at];delete turn.payload.failed;delete turn.payload.failure;
   if(!rq||s.view==='chat'){s.drafts[book]='';s.follow=true;render();}
   try{
-   if(!s.sessionId){const row=await api.createSession(book,question.slice(0,42));if(controller.signal.aborted)return;s.sessionId=row.id;}
+   if(!s.sessionId){const row=await api.createSession(book,(rq?.selection?.text||question).slice(0,42));if(controller.signal.aborted)return;s.sessionId=row.id;}
    const id=s.sessionId;
    if(turn.payload.pending_store){await api.append(id,'user',{...context,failed:undefined,failure:undefined,pending_store:undefined});if(controller.signal.aborted)return;delete turn.payload.pending_store;}
    if(rq){rq.lastDraft=question;rq.draft='';rq.busy=true;rq.error='';if(rq.inChat)s.drafts[book]='';renderFloating();}else{s.drafts[book]='';s.follow=true;render();}
@@ -144,7 +144,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  }
  const listenerOptions={signal:lifecycle.signal};
  root.addEventListener('book-selection',e=>{if(e.detail?.text)dismissReaderGuide();},{...listenerOptions,capture:true});
- root.addEventListener('reader-question',e=>{dismissReaderGuide();s.readerQuestion={selection:structuredClone(e.detail),draft:''};renderFloating();root.querySelector('[name="reader-question"]')?.focus({preventScroll:true});},listenerOptions);
+ root.addEventListener('reader-question',e=>{dismissReaderGuide();abortJob();s.sessionId=null;s.messages=[];s.chatScroll=0;s.follow=true;s.readerQuestion={selection:structuredClone(e.detail),draft:''};renderFloating();root.querySelector('[name="reader-question"]')?.focus({preventScroll:true});},listenerOptions);
  root.addEventListener('reader-question-reset',()=>{if(s.readerQuestion){s.readerQuestion.minimised=true;renderFloating();}},listenerOptions);
  root.addEventListener('reader-selection-action',e=>{if(e.detail.action==='highlight')run(highlightSelection(e.detail.selection));else if(e.detail.action==='copy-selection')copy(e.detail.selection.text);},listenerOptions);
  root.addEventListener('book-page-ready',e=>{s.positions[s.book]={...s.positions[s.book],page:e.detail.page};s.outline=e.detail.outline||[];persist();const pendingSource=s.pendingSource;if(!pendingSource)return;s.pendingSource=null;
@@ -169,16 +169,20 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(form.matches('[data-book-search]'))run(searchBook(form.elements.search.value));
   if(form.matches('[data-onboarding-form],[data-profile-form]'))run((async()=>{
    s.error='';
-   const usage_purpose=form.elements.usage_purpose?.value;
-   if(!usage_purpose){s.error='لطفاً هدف استفاده را انتخاب کنید.';render();return;}
-   const martyr_works_familiarity=form.elements.martyr_works_familiarity?.value||undefined;
+   const assistant_tone=form.elements.assistant_tone?.value;
+   if(!assistant_tone){s.error='لطفاً لحن همراه را انتخاب کنید.';render();return;}
    const rawAge=form.elements.age?.value;
    const age=rawAge?number(rawAge)||undefined:undefined;
-   const political_familiarity=form.elements.political_familiarity?.value||undefined;
-   const religious_familiarity=form.elements.religious_familiarity?.value||undefined;
-   const occupation=form.elements.occupation?.value?.trim()||undefined;
-   const assistant_tone=form.elements.assistant_tone?.value||undefined;
-   const payload={usage_purpose,martyr_works_familiarity,age,political_familiarity,religious_familiarity,occupation,assistant_tone};
+   const knowledge_level=form.elements.knowledge_level?.value||form.elements.martyr_works_familiarity?.value||undefined;
+   const usage_purpose=form.elements.usage_purpose?.value||'learning';
+   const payload={
+    assistant_tone,
+    tone:assistant_tone,
+    age,
+    knowledge_level,
+    martyr_works_familiarity:knowledge_level,
+    usage_purpose
+   };
    for(const[k,v]of Object.entries(payload)){if(v===undefined||v==='')delete payload[k];}
    try{
     const res=await api.saveProfile(payload);

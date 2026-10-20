@@ -245,6 +245,19 @@ class LearnerTurnContext:
         thread_id = f"learner-{phone}"
         resource_id = f"learner-{account or phone}"
         user_profile = (get_profile(account) if account else {}) or {}
+        if user_profile:
+            user_profile = dict(user_profile)
+            if "assistant_tone" in user_profile and "tone" not in user_profile:
+                user_profile["tone"] = user_profile["assistant_tone"]
+            elif "tone" in user_profile and "assistant_tone" not in user_profile:
+                user_profile["assistant_tone"] = user_profile["tone"]
+            if "knowledge_level" in user_profile and "martyr_leader_familiarity" not in user_profile:
+                user_profile["martyr_leader_familiarity"] = user_profile["knowledge_level"]
+                user_profile["martyr_works_familiarity"] = user_profile["knowledge_level"]
+            elif "martyr_works_familiarity" in user_profile and "knowledge_level" not in user_profile:
+                user_profile["knowledge_level"] = user_profile["martyr_works_familiarity"]
+            elif "martyr_leader_familiarity" in user_profile and "knowledge_level" not in user_profile:
+                user_profile["knowledge_level"] = user_profile["martyr_leader_familiarity"]
         book = payload.get("book") or (datasets[0] if datasets else None)
         page = payload.get("page")
         pages = payload.get("pages")

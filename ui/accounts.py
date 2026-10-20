@@ -150,7 +150,14 @@ def _row_to_account(row) -> dict:
         "role": row[2],
         "created_at": row[3],
         "profile": profile,
-        "profile_completed": bool(profile and profile.get("usage_purpose")),
+        "profile_completed": bool(
+            profile
+            and (
+                profile.get("assistant_tone")
+                or profile.get("tone")
+                or profile.get("usage_purpose")
+            )
+        ),
     }
 
 
@@ -208,7 +215,14 @@ def verify_login(email, password):
         "role": row[3],
         "created_at": row[4],
         "profile": profile,
-        "profile_completed": bool(profile and profile.get("usage_purpose")),
+        "profile_completed": bool(
+            profile
+            and (
+                profile.get("assistant_tone")
+                or profile.get("tone")
+                or profile.get("usage_purpose")
+            )
+        ),
     }
 
 
@@ -269,14 +283,30 @@ FAMILIARITY_MAP = {
 
 def save_profile(email: str, profile: dict) -> dict:
     """Save or update the learning profile for the Account."""
-    purpose = str(profile.get("usage_purpose") or "").strip()
-    if not purpose:
-        raise ValueError("انتخاب نحوه استفاده الزامی است.")
-    purpose = PURPOSE_MAP.get(purpose, purpose)
-    if purpose not in VALID_USAGE_PURPOSES:
+    tone = str(profile.get("assistant_tone") or profile.get("tone") or "").strip()
+    tone = TONE_MAP.get(tone, tone)
+    if tone and tone not in VALID_TONES:
+        raise ValueError(f"لحن نامعتبر است: {tone}")
+
+    raw_purpose = str(profile.get("usage_purpose") or "").strip()
+    purpose = PURPOSE_MAP.get(raw_purpose, raw_purpose)
+    if purpose and purpose not in VALID_USAGE_PURPOSES:
         raise ValueError(f"نحوه استفاده نامعتبر است: {purpose}")
 
-    martyr = str(profile.get("martyr_leader_familiarity") or profile.get("martyr_works_familiarity") or "").strip()
+    if not purpose and not tone:
+        raise ValueError("انتخاب نحوه استفاده الزامی است.")
+
+    if not purpose:
+        purpose = "یادگیری"
+    if not tone:
+        tone = "آموزشی"
+
+    martyr = str(
+        profile.get("knowledge_level")
+        or profile.get("martyr_leader_familiarity")
+        or profile.get("martyr_works_familiarity")
+        or ""
+    ).strip()
     martyr = FAMILIARITY_MAP.get(martyr, martyr)
     if martyr and martyr not in VALID_FAMILIARITY:
         raise ValueError(f"میزان آشنایی با آثار نامعتبر است: {martyr}")
@@ -307,13 +337,9 @@ def save_profile(email: str, profile: dict) -> dict:
 
     job = str(profile.get("job") or profile.get("occupation") or "").strip()
 
-    tone = str(profile.get("tone") or profile.get("assistant_tone") or "").strip()
-    tone = TONE_MAP.get(tone, tone)
-    if tone and tone not in VALID_TONES:
-        raise ValueError(f"لحن نامعتبر است: {tone}")
-
     cleaned = {
         "usage_purpose": purpose,
+        "knowledge_level": martyr,
         "martyr_leader_familiarity": martyr,
         "martyr_works_familiarity": martyr,
         "age": age_val,
@@ -323,8 +349,8 @@ def save_profile(email: str, profile: dict) -> dict:
         "religious_familiarity": religion,
         "job": job,
         "occupation": job,
-        "tone": tone or "آموزشی",
-        "assistant_tone": tone or "آموزشی",
+        "tone": tone,
+        "assistant_tone": tone,
         "updated_at": _now(),
     }
     conn = _connect()

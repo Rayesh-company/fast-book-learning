@@ -152,7 +152,7 @@ try:
     from ui.report import research_session_report
     from ui import chat_store
     from ui.chat_store import latest_chat
-    from ui.ask import ask_pool
+    from ui.ask import ask_pool, distill_pool
     from ui.research import (
         COMMAND_AUDIT,
         COMMAND_BRIEF,
@@ -267,7 +267,7 @@ except ImportError:  # the container runs this file as a script beside the modul
     import audit, migrate
     from console import console_html
     from report import research_session_report
-    from ask import ask_pool
+    from ask import ask_pool, distill_pool
     from chat_store import latest_chat
     import chat_store
     from composer import (
@@ -2009,7 +2009,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # The body is already read above, so _send_json is safe.
             self._send_json(400, {"detail": "query is required"})
             return
-        self._send_json(200, {"passages": ask_pool(query.strip(), datasets)})
+        raw_pool = ask_pool(query.strip(), datasets)
+        distilled = distill_pool(query.strip(), raw_pool)
+        self._send_json(200, {"passages": distilled})
 
     def _chat_latest(self) -> None:
         """The reload's restore read (ADR-0014): the Account's newest ask
@@ -2556,7 +2558,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
             {
                 "email": account,
                 "profile": profile,
-                "profile_completed": bool(profile and profile.get("usage_purpose")),
+                "profile_completed": bool(
+                    profile
+                    and (
+                        profile.get("assistant_tone")
+                        or profile.get("tone")
+                        or profile.get("usage_purpose")
+                    )
+                ),
             },
         )
 

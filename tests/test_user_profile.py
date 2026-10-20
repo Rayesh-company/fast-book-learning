@@ -100,6 +100,31 @@ def test_save_profile_full_valid_and_normalization(tmp_path, monkeypatch):
     assert saved["assistant_tone"] == "آموزشی"
 
 
+def test_save_profile_streamlined_three_questions(tmp_path, monkeypatch):
+    """The 3 streamlined onboarding questions: tone (required), age, and knowledge_level."""
+    monkeypatch.setattr(accounts, "ACCOUNTS_DB", tmp_path / "accounts.sqlite3")
+    ensure_account(TEST_PHONE)
+
+    data = {
+        "assistant_tone": "simple",
+        "age": "24",
+        "knowledge_level": "medium",
+    }
+
+    saved = accounts.save_profile(ACCOUNT_EMAIL, data)
+    assert saved["assistant_tone"] == "ساده و روان"
+    assert saved["tone"] == "ساده و روان"
+    assert saved["age"] == "24"
+    assert saved["knowledge_level"] == "متوسط"
+    assert saved["martyr_works_familiarity"] == "متوسط"
+    assert saved["usage_purpose"] == "یادگیری"
+
+    acc = accounts.account_by_email(ACCOUNT_EMAIL)
+    assert acc["profile_completed"] is True
+    assert acc["profile"]["assistant_tone"] == "ساده و روان"
+    assert acc["profile"]["knowledge_level"] == "متوسط"
+
+
 def test_save_profile_validates_optional_fields(tmp_path, monkeypatch):
     monkeypatch.setattr(accounts, "ACCOUNTS_DB", tmp_path / "accounts.sqlite3")
     ensure_account(TEST_PHONE)
@@ -208,6 +233,44 @@ def test_get_and_post_user_profile_lifecycle(tmp_path):
         assert status == 200
         assert me_after["profile_completed"] is True
         assert me_after["profile"]["usage_purpose"] == "مطالعه آزاد"
+    finally:
+        stop_gate(server, originals)
+
+
+def test_streamlined_profile_http_lifecycle(tmp_path):
+    base, server, originals = with_gate(tmp_path, None)
+    try:
+        # POST the 3 streamlined onboarding questions
+        streamlined = {
+            "assistant_tone": "kids",
+            "age": "14",
+            "knowledge_level": "low",
+        }
+        status, post_body = post(
+            base,
+            "/api/user/profile",
+            streamlined,
+            phone=TEST_PHONE,
+        )
+        assert status == 200
+        assert post_body["profile_completed"] is True
+        assert post_body["profile"]["assistant_tone"] == "برای نوجوان و کودک"
+        assert post_body["profile"]["age"] == "14"
+        assert post_body["profile"]["knowledge_level"] == "کم"
+        assert post_body["profile"]["usage_purpose"] == "یادگیری"
+
+        # GET /api/user/profile
+        status, get_body = get(base, "/api/user/profile", phone=TEST_PHONE)
+        assert status == 200
+        assert get_body["profile_completed"] is True
+        assert get_body["profile"]["assistant_tone"] == "برای نوجوان و کودک"
+        assert get_body["profile"]["knowledge_level"] == "کم"
+
+        # GET /auth/me
+        status, me_body = get(base, "/auth/me", phone=TEST_PHONE)
+        assert status == 200
+        assert me_body["profile_completed"] is True
+        assert me_body["profile"]["assistant_tone"] == "برای نوجوان و کودک"
     finally:
         stop_gate(server, originals)
 

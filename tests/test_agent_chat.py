@@ -916,11 +916,45 @@ def test_learner_turn_context_from_request_coordination(tmp_path):
         assert turn.thread_id == "learner-09121112233"
         assert turn.resource_id == "learner-learner@example.com"
         assert turn.user_profile.get("tone") == "حرفه‌ای"
+        assert turn.user_profile.get("assistant_tone") == "حرفه‌ای"
         assert turn.selection_text == {
             "text": "فراز منتخب",
             "page": 2,
             "book": "tarhe-kolli",
         }
+    finally:
+        accounts.ACCOUNTS_DB = orig_db
+
+
+def test_learner_turn_context_from_request_streamlined_profile(tmp_path):
+    from ui import accounts
+
+    orig_db = accounts.ACCOUNTS_DB
+    accounts.ACCOUNTS_DB = tmp_path / "accounts.sqlite3"
+    try:
+        accounts.create_account("streamlined@example.com", "pass12345", phone="09129998877")
+        accounts.save_profile(
+            "streamlined@example.com",
+            {"assistant_tone": "kids", "age": "14", "knowledge_level": "low"},
+        )
+
+        payload = {"query": "داستان این بخش چیست؟"}
+        turn = agent_client.LearnerTurnContext.from_request(
+            phone="09129998877",
+            account="streamlined@example.com",
+            payload=payload,
+        )
+        assert turn.user_profile.get("assistant_tone") == "برای نوجوان و کودک"
+        assert turn.user_profile.get("tone") == "برای نوجوان و کودک"
+        assert turn.user_profile.get("age") == "14"
+        assert turn.user_profile.get("knowledge_level") == "کم"
+        assert turn.user_profile.get("martyr_works_familiarity") == "کم"
+        assert turn.user_profile.get("martyr_leader_familiarity") == "کم"
+
+        body = turn.to_request_body()
+        assert body["requestContext"]["userProfile"]["assistant_tone"] == "برای نوجوان و کودک"
+        assert body["requestContext"]["userProfile"]["tone"] == "برای نوجوان و کودک"
+        assert body["requestContext"]["userProfile"]["knowledge_level"] == "کم"
     finally:
         accounts.ACCOUNTS_DB = orig_db
 
