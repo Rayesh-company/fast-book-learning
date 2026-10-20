@@ -1,0 +1,108 @@
+name: Bernamek check
+
+# The برنامک's layered self-test (manual, workflow_dispatch). 2026-10-20
+# taught why this exists: the panel's token reached the box but arrived
+# STRANGER - compose interpolates .env VALUES, so the token's own
+# `$iDmYpyQ` segment was read as an undefined variable and amputated,
+# and every genuine initData signature failed a 401 that told us only
+# "some token is set". This workflow names the failing LAYER instead of
+# the symptom, one gated step each, conclusions readable from the jobs
+# API alone:
+#   layer 1 - compose resolves the secret verbatim
+#             (docker compose config, fingerprinted - the value itself
+#             is never printed: a mangled value would not be a secret
+#             and would sail past GitHub's masking unmasked)
+#   layer 2 - the container carries the resolved value
+#   layer 3 - production validates a genuine signature
+#             (the runner signs a fresh initData with the secret and
+#             demands the 200 bound:false exchange)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+
+      - name: "layer 1: compose resolves the secret verbatim"
+        env:
+          EITAA_BOT_TOKEN: ${{ secrets.EITAA_BOT_TOKEN }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          expected=$(printf '%s' "$EITAA_BOT_TOKEN" | python3 -c "import sys,hashlib; v=sys.stdin.read(); print(len(v), hashlib.sha256(v.encode()).hexdigest()[:16])")
+          actual=$(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'cd /srv/chat-with-books/current && docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session config --format json | python3 -c "import sys,json,hashlib; v=json.load(sys.stdin)[\"services\"][\"session\"][\"environment\"][\"EITAA_BOT_TOKEN\"]; print(len(v), hashlib.sha256(v.encode()).hexdigest()[:16])"')
+          echo "secret   : $expected"
+          echo "resolved : $actual"
+          [ "$expected" = "$actual" ]
+
+      - name: "layer 2: the container carries the resolved value"
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'docker exec chat-with-books-session python -c "import os,hashlib; v=os.environ.get(\"EITAA_BOT_TOKEN\",\"\"); print(len(v), hashlib.sha256(v.encode()).hexdigest()[:16])" > /tmp/bernamek-fp && test -s /tmp/bernamek-fp'
+          actual=$(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" 'cat /tmp/bernamek-fp; rm -f /tmp/bernamek-fp')
+          echo "container: $actual"
+          grep -qE '^[0-9]+ [0-9a-f]{16}$' <<< "$actual"
+
+      - name: "layer 3: production validates a genuine signature"
+        env:
+          EITAA_BOT_TOKEN: ${{ secrets.EITAA_BOT_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, hmac, json, time, urllib.request, urllib.error
+          from urllib.parse import urlencode
+          import os
+
+          token = os.environ["EITAA_BOT_TOKEN"]
+          user = json.dumps({"id": 279058397, "first_name": "selftest",
+                             "last_name": "", "language_code": "fa",
+                             "allows_write_to_pm": True})
+          pairs = [("auth_date", str(int(time.time()))),
+                   ("chat_instance", "-3788475317572404878"),
+                   ("chat_type", "private"), ("user", user)]
+          check = "\n".join(f"{k}={v}" for k, v in sorted(pairs))
+          secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
+          sig = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+          body = json.dumps({"initData": urlencode(pairs) + "&hash=" + sig}).encode()
+          req = urllib.request.Request(
+              "https://booksai.rayesh-team.ir/eitaa/auth", data=body,
+              headers={"Content-Type": "application/json"})
+          try:
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  status, payload = r.status, json.loads(r.read())
+          except urllib.error.HTTPError as exc:
+              status, payload = exc.code, json.loads(exc.read())
+          print(status, payload)
+          assert status == 200 and payload.get("bound") is False, "the exchange refused a genuine signature - the container holds a stranger"
+          PY
