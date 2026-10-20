@@ -52,7 +52,7 @@
 
 ---
 
-### Task 1 — The request id, minted and stamped in Python
+### Task 1: The request id, minted and stamped in Python
 
 **Files**
 - Modify `ui/agent_client.py` (`LearnerTurnContext`, `to_request_body`, `from_request`)
@@ -89,7 +89,7 @@
 
 ---
 
-**Task 2: Cognee's session leg — stamp the read, write the answer**
+### Task 2: Cognee's session leg — stamp the read, write the answer
 
 **Files**
 - Modify `ui/ask.py` (`only_context_request`, `_dataset_passages`, `ask_pool`)
@@ -120,7 +120,7 @@
 
 ---
 
-**Task 3: Mastra observability enabled**
+### Task 3: Mastra observability enabled
 
 **Files**
 - Modify `agent/package.json` — add `@mastra/observability` (same version line as the other `@mastra/*` deps)
@@ -150,7 +150,7 @@ export const observability = new Observability({
 
 ---
 
-**Task 4: Cognee's work as a span inside the tool**
+### Task 4: Cognee's work as a span inside the tool
 
 **Files**
 - Modify `agent/src/mastra/tools/search-books.ts`
@@ -176,7 +176,7 @@ export const observability = new Observability({
 
 ---
 
-**Task 5: The join page in `serve.py`**
+### Task 5: The join page in `serve.py`
 
 **Files**
 - Extend `ui/telemetry.py` (readers + HTML)
@@ -213,7 +213,7 @@ export const observability = new Observability({
 
 ---
 
-**Task 6: Studio in the container, and the wiring**
+### Task 6: Studio in the container, and the wiring
 
 **Files**
 - Modify `agent/Dockerfile` (`mastra build --studio`, `MASTRA_STUDIO_PATH`)
@@ -235,7 +235,7 @@ export const observability = new Observability({
 
 ---
 
-**Task 7: End-to-end proof against the live stack**
+### Task 7: End-to-end proof against the live stack
 
 **Files**
 - Create `tests/test_telemetry_live.py` (skipped unless `TELEMETRY_LIVE=1`)
