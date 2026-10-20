@@ -73,7 +73,11 @@ jobs:
           pairs = [("auth_date", str(int(time.time()))),
                    ("chat_instance", "-3788475317572404878"),
                    ("chat_type", "private"), ("user", user)]
-          check = "\n".join(f"{k}={v}" for k, v in sorted(pairs))
+          # The client signs the URL-ENCODED pairs exactly as they
+          # travel — the 2026-10-20 live-401 lesson (a decoded-form
+          # signature can never validate).
+          encoded = [urllib.parse.urlencode({k: v}) for k, v in pairs]
+          check = "\n".join(sorted(encoded))
           secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
           sig = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
           body = json.dumps({"initData": urlencode(pairs) + "&hash=" + sig}).encode()

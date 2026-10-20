@@ -94,37 +94,47 @@ def validate_init_data(
     now: float | None = None,
 ) -> dict | None:
     """The fields behind a genuine, fresh initData — or None. The
-    six-step documented check: split, sort, join with newlines, key =
-    HMAC-SHA256("WebAppData", bot_token), hexdigest = HMAC-SHA256(key,
-    joined), compare. A missing hash, an unknown signer, a tampered
-    field, a stale auth_date, and an unconfigured bot all refuse the
-    same None — the caller answers one 401 and never distinguishes
-    why (the verify_token rule)."""
+    documented check signs the pairs EXACTLY as they travel: the raw
+    ``key=value`` pieces, percent-encoding and all, sorted and
+    newline-joined, keyed by HMAC-SHA256("WebAppData", bot_token) and
+    compared to the carried hash. 2026-10-20's live 401s taught the
+    sharp edge: decoding first (parse_qsl) and signing the decoded
+    form is self-consistent with a client that does the same — and
+    can NEVER validate the real client, which signs the encoded form
+    (every user JSON carries ``%7B%22...``). Decoding happens only
+    AFTER the signature, for the payload's own extraction. A missing
+    hash, an unknown signer, a tampered field, a stale auth_date, and
+    an unconfigured bot all refuse the same None — the caller answers
+    one 401 and never distinguishes why (the verify_token rule)."""
     token = bot_token() if token is None else token
-    if not token:
+    if not token or not isinstance(raw, str) or not raw.strip():
         return None
-    pairs = parse_init_data(raw)
-    received_hash = pairs.get("hash", "")
-    if not received_hash:
+    received_hash = ""
+    signed_pieces = []
+    for piece in raw.split("&"):
+        if piece.startswith("hash="):
+            received_hash = piece[len("hash=") :]
+        else:
+            signed_pieces.append(piece)
+    if not received_hash or not signed_pieces:
         return None
-    check_string = "\n".join(
-        f"{key}={value}" for key, value in sorted(pairs.items()) if key != "hash"
-    )
+    check_string = "\n".join(sorted(signed_pieces))
     secret = hmac.new(b"WebAppData", token.encode("utf-8"), hashlib.sha256).digest()
     expected = hmac.new(secret, check_string.encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, received_hash):
         return None
+    # The signature vouches for the RAW string; only now do the fields
+    # get decoded — extraction, never signing.
+    fields = parse_init_data(raw)
     try:
-        auth_date = int(pairs.get("auth_date", ""))
+        auth_date = int(fields.get("auth_date", ""))
     except ValueError:
         return None
     moment = time_now() if now is None else now
     if abs(moment - auth_date) > max_age:
         return None
-    fields = dict(pairs)
-    fields.pop("hash", None)
     try:
-        fields["user"] = json.loads(pairs.get("user", ""))
+        fields["user"] = json.loads(fields.get("user", ""))
     except ValueError:
         return None
     if not isinstance(fields.get("user"), dict):
@@ -132,6 +142,7 @@ def validate_init_data(
     user = fields["user"]
     if not isinstance(user.get("id"), int):
         return None
+    fields.pop("hash", None)
     fields["auth_date"] = auth_date
     return fields
 

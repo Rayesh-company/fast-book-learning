@@ -79,7 +79,11 @@ def _init_data(
     auth_date=None,
     omit_hash=False,
 ):
-    """One minted initData string, the Eita client's shape."""
+    """One minted initData string — the Eita CLIENT's shape: the
+    signature is computed over the URL-ENCODED pairs exactly as they
+    travel (2026-10-20's live 401s proved the encoded form is what
+    the real client signs; a decoded-form signature can never
+    validate, since every user JSON carries ``%7B%22...``)."""
     user = json.dumps(
         {
             "id": user_id,
@@ -96,10 +100,10 @@ def _init_data(
         ("chat_type", "private"),
         ("user", user),
     ]
-    encoded = urllib.parse.urlencode(pairs)
-    check = "\n".join(f"{key}={value}" for key, value in sorted(pairs))
+    encoded = [urllib.parse.urlencode({key: value}) for key, value in pairs]
+    check = "\n".join(sorted(encoded))
     suffix = "" if omit_hash else "&hash=" + _sign(check, token)
-    return encoded + suffix
+    return "&".join(encoded) + suffix
 
 
 def _tamper(raw: str) -> str:
@@ -188,6 +192,28 @@ def test_init_data_hmac_accepts_and_refuses(monkeypatch):
         _init_data(auth_date=int(time.time()) - 7201)
     ) is None
     assert eitaa.validate_init_data(_init_data(omit_hash=True)) is None
+    # The 2026-10-20 production bug, pinned: a signature over the
+    # DECODED pairs (parse_qsl's world) must never validate — the
+    # client signs the ENCODED pairs, and every user JSON carries
+    # ``%7B%22...`` so the two forms never agree.
+    user = json.dumps(
+        {"id": 279058397, "first_name": "مهدی", "last_name": "",
+         "language_code": "fa", "allows_write_to_pm": True},
+        ensure_ascii=False,
+    )
+    pairs = [
+        ("auth_date", str(int(time.time()))),
+        ("chat_instance", "-3788475317572404878"),
+        ("chat_type", "private"),
+        ("user", user),
+    ]
+    decoded_check = "\n".join(f"{key}={value}" for key, value in sorted(pairs))
+    encoded = [urllib.parse.urlencode({key: value}) for key, value in pairs]
+    decoded_sig = _sign(decoded_check)
+    monkeypatch.setenv("EITAA_BOT_TOKEN", TEST_TOKEN)
+    assert eitaa.validate_init_data(
+        "&".join(encoded) + "&hash=" + decoded_sig
+    ) is None
     monkeypatch.setenv("EITAA_BOT_TOKEN", "")
     assert eitaa.validate_init_data(_init_data()) is None
 
