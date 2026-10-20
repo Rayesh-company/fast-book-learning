@@ -1422,6 +1422,19 @@ class SessionHandler(SimpleHTTPRequestHandler):
             payload, raw = {}, None
         fields = eitaa.validate_init_data(raw) if isinstance(raw, str) else None
         if fields is None:
+            # One diagnostic line per refused exchange: the initData's
+            # SHAPE — param names and raw piece lengths, sorted — never
+            # a single value (the user field carries the operator's own
+            # data). 2026-10-20: Eita's genuine opens were refusing and
+            # the shape is the only thing that names the structural
+            # difference between their initData and anything the tests
+            # can synthesize.
+            if eitaa.bot_token() and isinstance(raw, str) and raw:
+                pieces = [p for p in raw.split("&") if p]
+                shape = " ".join(
+                    f"{p.split('=', 1)[0]}:{len(p)}" for p in sorted(pieces)
+                )
+                sys.stderr.write(f"eitaa-auth-401 len={len(raw)} pieces=[{shape}]\n")
             self._send_json(401, {"detail": EITAA_AUTH_401_DETAIL})
             return None, None
         return fields, payload
