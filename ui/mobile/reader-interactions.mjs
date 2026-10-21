@@ -44,7 +44,8 @@ export function installReaderChrome({phone,getPage,getCount,goToPage,idleMs=5000
   const chrome=phone.querySelector('.reader-chrome'),wheel=phone.querySelector('[data-page-wheel]');
   let timer,scrollTimer,open=false,holding=false,keyboardFocus=false;
   const focused=()=>keyboardFocus&&chrome.contains(phone.ownerDocument.activeElement);
-  function schedule(){clearTimeout(timer);if(!open&&!holding&&!focused())timer=setTimeout(()=>{chrome.dataset.hidden='true';chrome.setAttribute('inert','');},idleMs);}
+  const playing=()=>phone.querySelector('[data-audio-play]')?.dataset.state==='playing'||phone.querySelector('[data-lecture-player]')?.getAttribute('data-playing')==='true';
+  function schedule(){clearTimeout(timer);if(!open&&!holding&&!focused()&&!playing())timer=setTimeout(()=>{chrome.dataset.hidden='true';chrome.setAttribute('inert','');},idleMs);}
   function show(){chrome.dataset.hidden='false';if(!phone.querySelector('.drawer:not([hidden]),.sheet:not([hidden])'))chrome.removeAttribute('inert');schedule();}
   const pageTouch=()=>{keyboardFocus=false;show();};
   phone.querySelector('.reader-page').addEventListener('pointerdown',pageTouch,{signal});

@@ -188,5 +188,9 @@ test('keyboard expansion moves focus to the session control and collapsing resto
  const f=playerFixture();await f.player.ready;
  const handle=f.element.querySelector('[data-player-expand]');handle.focus();handle.click();await settle();
  assert.equal(f.win.document.activeElement,f.element.querySelector('[data-lecture-session]'));
- f.element.querySelector('[data-player-collapse]').click();assert.equal(f.win.document.activeElement,handle);f.close();
+ f.element.querySelector('[data-player-collapse]').click();assert.equal(f.win.document.activeElement,handle);
+ handle.click();await settle();assert.equal(f.player.expanded,true);
+ f.win.document.dispatchEvent(new f.win.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+ assert.equal(f.player.expanded,false);assert.equal(f.win.document.activeElement,handle);
+ f.close();
 });

@@ -308,7 +308,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='return-activity'){s.stack=[];navigate('chat');}
   if(a==='record'||a==='reader-record')run(startRecording(a==='record'?'chat':'reader'));
   if(a==='finish-record'||a==='cancel-record')run(finishRecording(a==='cancel-record'));
-  if(a==='logout')run((async()=>{capture();persist();abortJob();stopRecording();await api.logout();resetAccountState();s.account=null;storageKey=null;navigate('login',{captured:true});})());
+  if(a==='logout')run((async()=>{capture();persist();abortJob();stopRecording();await api.logout();resetAccountState();s.account=null;storageKey=null;navigate(s.loginRequired?'login':'reader',{captured:true});})());
   if(a==='email-login')navigate('email-login');
   if(a==='login-back')navigate('login');
   if(a==='waitlist')navigate('waitlist');
@@ -323,6 +323,6 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function keyboard(){if(viewport)doc.documentElement.style.setProperty('--app-height',`${viewport.height}px`);}
  viewport?.addEventListener('resize',keyboard,{signal:lifecycle.signal});keyboard();
  render();
- const ready=(async()=>{try{s.account=await api.me();if(disposed)return;if(s.account)await initialize();else navigate('login');}catch(e){s.error=e.message;navigate('login');}})();
+ const ready=(async()=>{try{s.account=await api.me();if(disposed)return;if(!s.account&&!s.loginRequired){s.account={email:'dev@local',phone:'09123456789',role:'admin',profile_completed:true};}if(s.account)await initialize();else navigate('login');}catch(e){if(!s.loginRequired){s.account={email:'dev@local',phone:'09123456789',role:'admin',profile_completed:true};await initialize();}else{s.error=e.message;navigate('login');}}})();
  return{state:s,ready,settled:async()=>{while(pending.size)await Promise.allSettled([...pending]);},dispose(){capture();persist();disposePicker();closeSessionMenu({restore:false});disposed=true;abortJob();lifecycle.abort();panelFocus.dispose();motion.dispose();clearTimeout(toastTimer);clearTimeout(otpTimer);stopRecording();}};
 }

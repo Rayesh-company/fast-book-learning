@@ -1,28 +1,34 @@
 .product-shell .reader-page{bottom:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}
 .reader-page::-webkit-scrollbar{display:none}
-.product-shell .pdf-surface{margin-bottom:88px}
-.reader-chrome{position:absolute;inset:auto 0 calc(12px + env(safe-area-inset-bottom));z-index:3;pointer-events:none;transition:opacity 200ms ease-out}
+.product-shell .pdf-surface{margin-bottom:calc(var(--reader-player-height,52px) + 8px)}
+.reader-chrome{position:absolute;inset:auto 0 calc(10px + env(safe-area-inset-bottom));z-index:3;pointer-events:none;transition:opacity 200ms ease-out;display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:0 12px;direction:rtl}
 .reader-chrome[data-hidden="true"]{opacity:0}
 .reader-chrome[data-hidden="true"]>*{pointer-events:none}
 .reader-chrome button{pointer-events:auto}
-.lecture-player{position:relative;pointer-events:auto;width:152px;max-width:calc(100% - 112px);margin:auto;background:var(--surface);border-radius:26px;box-shadow:0 3px 14px var(--shadow)}
-.lecture-player[data-expanded="true"]{width:calc(100% - 32px);max-width:420px;border-radius:24px}
-.audio-widget{display:flex;flex-direction:column;align-items:center;justify-content:center;direction:ltr;width:144px;height:88px;margin:auto}
-.audio-transport{display:flex;align-items:center;justify-content:center;gap:2px}
-.player-expand{height:44px;width:100%;display:grid;place-items:center;border-radius:26px 26px 0 0}
-.player-expand span{width:28px;height:3px;background:var(--muted);border-radius:2px}
-.lecture-player[data-expanded="true"] .audio-widget{height:56px}
+.lecture-player{position:relative;pointer-events:auto;width:fit-content;max-width:min(340px,calc(100% - 64px));margin:0;background:var(--surface);border-radius:28px;box-shadow:0 8px 24px var(--shadow);overflow:hidden;transition:border-radius 240ms ease,box-shadow 240ms ease}
+.lecture-player[data-expanded="true"]{width:100% !important;max-width:420px !important;border-radius:26px}
+.lecture-player[data-expanded="true"]~.reader-page-badge{display:none}
+.player-mini-progress{position:absolute;top:0;right:0;left:0;height:2.5px;background:var(--accent);transform-origin:right center;transform:scaleX(var(--player-progress,0));transition:transform 120ms linear;border-radius:999px;pointer-events:none;z-index:2}
+.audio-widget{display:flex;align-items:center;justify-content:center;gap:10px;direction:rtl;width:fit-content;height:52px;padding:0 12px 0 10px;box-sizing:border-box}
+.player-expand{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:0 4px;height:44px;min-width:0;flex:0 0 auto;text-align:right;border-radius:20px}
+.mini-session-meta{display:flex;align-items:center;gap:6px;min-width:0}
+.mini-session-badge{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-chevron{display:grid;place-items:center;width:16px;height:16px;color:var(--muted);opacity:.65;transform:rotate(180deg)}
+.expand-handle-pill{width:3px;height:16px;background:var(--line);border-radius:999px;opacity:.7}
+.audio-transport{display:flex;align-items:center;gap:4px;direction:ltr;flex-shrink:0}
+.lecture-player[data-expanded="true"] .audio-widget{display:flex;justify-content:center;align-items:center;height:58px;padding:0 16px 12px}
 .lecture-player[data-expanded="true"] .player-expand{display:none}
-.audio-widget [data-audio-previous] svg{transform:rotate(90deg)}
-.audio-widget [data-audio-next] svg{transform:rotate(-90deg)}
-.audio-play{background:var(--ink);color:var(--surface);width:44px;height:44px;position:relative}
+/* Transport Step Icons */
+.audio-widget .step-icon{width:16px;height:16px;fill:currentColor}
+.audio-widget .step-text{display:none}
+.audio-play{background:var(--accent);color:#fff;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;position:relative}
 .audio-play:before{content:"";position:absolute;inset:-2px}
-.audio-play .play-symbol{width:20px;height:20px;fill:currentColor;stroke-width:1}
-.audio-play .pause-symbol{display:none}
+.audio-play .play-symbol{width:18px;height:18px;fill:currentColor;stroke-width:1}
+.audio-play .pause-symbol{display:none;width:18px;height:18px;fill:currentColor}
 .audio-play[data-state="playing"] .play-symbol,.audio-play[data-state="waiting"] .play-symbol{display:none}
 .audio-play[data-state="playing"] .pause-symbol,.audio-play[data-state="waiting"] .pause-symbol{display:block}
-.reader-page-badge{position:absolute;right:12px;bottom:2px;width:44px;height:44px;display:grid;place-items:center;font-size:12px;font-weight:600}
-.reader-page-badge span{display:grid;place-items:center;min-width:32px;height:32px;padding:0 5px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:0 2px 10px var(--shadow)}
+.reader-page-badge{position:static;width:44px;height:44px;display:grid;place-items:center;font-size:12px;font-weight:600;flex-shrink:0;order:-1}
+.reader-page-badge span{display:grid;place-items:center;min-width:36px;height:36px;padding:0 6px;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:0 2px 10px var(--shadow)}
 .reader-chrome [data-reader-audio-status]{margin:8px 16px 0;padding:6px 12px;background:var(--surface);border-radius:12px;font-size:12px;line-height:1.8;pointer-events:auto}
 .reader-chrome [data-reader-audio-status]:empty{display:none}
 .product-shell .reader-floating{bottom:calc(var(--reader-player-height,88px) + 28px + env(safe-area-inset-bottom));z-index:4}
@@ -80,6 +86,7 @@
 .lecture-caption:empty,.lecture-status:empty{display:none}
 .lecture-caption[data-tone="rough"],.lecture-caption[data-tone="held"]{color:var(--muted)}
 .lecture-caption[data-unplaced="true"]{font-style:italic}
+.lecture-caption.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .lecture-status{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:min(300px,calc(100vw - 32px));margin-bottom:8px;padding:8px 12px;border-radius:12px;background:var(--surface);color:var(--muted);font-size:12px;line-height:1.8}
 .lecture-player[data-expanded="true"] .lecture-status{position:static;transform:none;width:auto;margin:0;padding:0 16px 12px}
 .picker-columns{display:flex;direction:rtl;gap:16px;max-width:400px;margin:16px auto}
@@ -95,3 +102,738 @@
 .page-session-picker .picker-column p{margin:0}
 .pdf-page-sheet .primary-action{width:100%;min-height:48px;margin-top:12px}
 @media(max-width:360px){.lecture-details{padding-inline:12px}.lecture-options label{gap:4px}.lecture-options button{padding-inline:2px}.lecture-player select{padding-inline:4px}.picker-columns{gap:8px}}
+
+/* ==========================================================================
+   Apple Design: Reader Controls & Floating Audio Player (Podcasts / Music)
+   ========================================================================== */
+
+/* ==========================================================================
+   Apple Design: iOS Fluid Springs & Micro-Interactions (Music / Podcasts)
+   ========================================================================== */
+
+/* Keyframe Animations for iOS Fluid Motion */
+@keyframes iosSheetEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes iosItemSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes iosLivePulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.38;
+    transform: scale(0.8);
+  }
+}
+
+/* 1. Apple Floating Audio Mini-Player */
+.lecture-player {
+  background: var(--apple-glass-bg, rgba(255, 254, 250, 0.94)) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid var(--apple-glass-border, rgba(0, 0, 0, 0.08)) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 8px 24px rgba(27, 40, 35, 0.1), inset 0 1px 0 var(--apple-glass-rim, rgba(255, 255, 255, 0.8)) !important;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 300ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 300ms ease,
+              background 240ms ease !important;
+}
+
+body.dark .lecture-player {
+  background: var(--apple-glass-bg, rgba(36, 42, 40, 0.92)) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.lecture-player[data-expanded="true"] {
+  border-radius: 26px !important;
+  box-shadow: 0 18px 44px rgba(27, 40, 35, 0.16), inset 0 1px 0 var(--apple-glass-rim, rgba(255, 255, 255, 0.8)) !important;
+}
+body.dark .lecture-player[data-expanded="true"] {
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Page badge transition syncing with player expansion */
+.reader-page-badge {
+  transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1), transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.lecture-player[data-expanded="true"] ~ .reader-page-badge {
+  opacity: 0;
+  transform: scale(0.8);
+  pointer-events: none;
+}
+
+/* Mini Player Tactile Tap Feedback */
+.player-expand {
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), opacity 150ms ease;
+}
+.player-expand:active {
+  transform: scale(0.96);
+  opacity: 0.82;
+}
+
+/* Apple Podcasts / Music Play/Pause Button with Icon Morphing */
+.audio-play {
+  position: relative !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 8px rgba(27, 40, 35, 0.22) !important;
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 200ms ease !important;
+}
+body.dark .audio-play {
+  color: #122822 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45) !important;
+}
+
+.audio-play:active {
+  transform: scale(0.88) !important;
+  box-shadow: 0 1px 3px rgba(27, 40, 35, 0.15) !important;
+}
+
+/* Play/Pause icon morphing physics */
+.audio-play .play-symbol,
+.audio-play .pause-symbol {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 180ms ease;
+}
+.audio-play .play-symbol {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+.audio-play .pause-symbol {
+  display: block !important;
+  opacity: 0;
+  transform: scale(0.65) rotate(-15deg);
+  pointer-events: none;
+}
+.audio-play[data-state="playing"] .play-symbol,
+.audio-play[data-state="waiting"] .play-symbol {
+  display: block !important;
+  opacity: 0;
+  transform: scale(0.65) rotate(15deg);
+  pointer-events: none;
+}
+.audio-play[data-state="playing"] .pause-symbol,
+.audio-play[data-state="waiting"] .pause-symbol {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  pointer-events: auto;
+}
+
+/* Transport Skip Buttons */
+.audio-transport .icon-button {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease;
+}
+.audio-transport .icon-button:active {
+  transform: scale(0.88);
+  background: rgba(0, 0, 0, 0.06);
+}
+body.dark .audio-transport .icon-button:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Expanded Sheet Staggered Entrance */
+.lecture-details:not([hidden]) {
+  animation: iosSheetEnter 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.lecture-details:not([hidden]) .lecture-sheet-handle {
+  animation: iosItemSlideUp 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.lecture-details:not([hidden]) .lecture-heading {
+  animation: iosItemSlideUp 300ms cubic-bezier(0.16, 1, 0.3, 1) 35ms both;
+}
+.lecture-details:not([hidden]) .lecture-timeline-wrap {
+  animation: iosItemSlideUp 340ms cubic-bezier(0.16, 1, 0.3, 1) 70ms both;
+}
+.lecture-details:not([hidden]) .lecture-options {
+  animation: iosItemSlideUp 380ms cubic-bezier(0.16, 1, 0.3, 1) 105ms both;
+}
+.lecture-details:not([hidden]) .lecture-footer-row {
+  animation: iosItemSlideUp 420ms cubic-bezier(0.16, 1, 0.3, 1) 140ms both;
+}
+
+/* Expanded Sheet Styles */
+.lecture-details {
+  padding: 14px 18px 8px;
+  font-size: 12px;
+}
+.lecture-sheet-handle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2px 0 10px;
+}
+.lecture-sheet-handle span {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--muted);
+  opacity: 0.55;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+.lecture-sheet-handle:active span {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+
+.lecture-heading-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.lecture-historical-tag {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lecture-session-picker-wrap select {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 4px 10px;
+  min-height: 40px;
+  width: 100%;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.lecture-session-picker-wrap select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.collapse-button {
+  display: none !important;
+}
+body.dark .collapse-button {
+  background: rgba(255, 255, 255, 0.08);
+}
+.collapse-button:active {
+  transform: scale(0.9);
+}
+
+/* 2. Refined Apple Timeline Capsule */
+.lecture-timeline-wrap {
+  margin: 4px 0 10px;
+}
+.lecture-timeline-capsule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  direction: ltr;
+  background: rgba(0, 0, 0, 0.032);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+body.dark .lecture-timeline-capsule {
+  background: rgba(255, 255, 255, 0.05);
+}
+.timeline-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 36px;
+  text-align: center;
+  user-select: none;
+}
+.scrubber-track-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 20px;
+}
+.lecture-timeline-capsule input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  min-height: 4px !important;
+  border-radius: 999px;
+  outline: none;
+  border: none;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--seek-progress, 0%), rgba(0, 0, 0, 0.1) var(--seek-progress, 0%), rgba(0, 0, 0, 0.1) 100%);
+  cursor: pointer;
+}
+body.dark .lecture-timeline-capsule input[type="range"] {
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--seek-progress, 0%), rgba(255, 255, 255, 0.16) var(--seek-progress, 0%), rgba(255, 255, 255, 0.16) 100%);
+}
+.lecture-timeline-capsule input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 150ms ease;
+}
+.lecture-timeline-capsule input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.lecture-timeline-capsule input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.lecture-timeline-capsule input[type="range"]::-moz-range-track {
+  background: transparent;
+  height: 4px;
+  border: none;
+}
+
+/* Accessibility: Keyboard Focus for Timeline Scrubber */
+.lecture-timeline-capsule:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.lecture-timeline-capsule input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  transform: scale(1.25);
+}
+.lecture-timeline-capsule input[type="range"]:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  transform: scale(1.25);
+}
+
+/* Seek & Options */
+.lecture-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+.seek-skip-btn {
+  flex: 1;
+  max-width: 104px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease;
+}
+.seek-skip-btn:active {
+  transform: scale(0.94);
+  background: rgba(0, 0, 0, 0.05);
+}
+body.dark .seek-skip-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lecture-rate-chip {
+  flex: 1;
+  max-width: 104px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 8px;
+  background: var(--bg);
+}
+.lecture-rate-chip select {
+  border: none !important;
+  background: none !important;
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 11.5px;
+  padding: 0 !important;
+  min-height: unset !important;
+  cursor: pointer;
+}
+
+/* Skip Intro Toggle with iOS Switch Physics */
+.lecture-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.lecture-skip-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: none;
+}
+.lecture-skip-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.toggle-track {
+  width: 36px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--line);
+  position: relative;
+  display: inline-block;
+  transition: background-color 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toggle-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+              width 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.lecture-skip-toggle:active .toggle-thumb {
+  width: 22px; /* iOS switch elongation while pressing */
+}
+.lecture-skip-toggle input:checked + .toggle-track {
+  background: var(--accent);
+}
+.lecture-skip-toggle input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(-14px);
+}
+.lecture-skip-toggle:active input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(-14px);
+  width: 22px;
+}
+
+/* Transport Skip Buttons & Expanded Audio Widget */
+.audio-transport .transport-step {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease;
+}
+.audio-transport .transport-step:disabled {
+  opacity: 0.32;
+  pointer-events: none;
+}
+.audio-transport .transport-step:active {
+  transform: scale(0.9);
+  background: rgba(0, 0, 0, 0.05);
+}
+body.dark .audio-transport .transport-step:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Expanded Audio Widget Layout */
+.lecture-player[data-expanded="true"] .audio-widget {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  height: auto !important;
+  min-height: 62px;
+  padding: 6px 16px 14px !important;
+}
+.lecture-player[data-expanded="true"] .player-expand {
+  display: none !important;
+}
+.lecture-player[data-expanded="true"] .audio-transport {
+  gap: 12px;
+  width: 100%;
+  justify-content: center;
+}
+.lecture-player[data-expanded="true"] .audio-transport .step-text {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.lecture-player[data-expanded="true"] .audio-transport .transport-step {
+  width: auto;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.035);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+body.dark .lecture-player[data-expanded="true"] .audio-transport .transport-step {
+  background: rgba(255, 255, 255, 0.06);
+}
+.lecture-player[data-expanded="true"] .audio-transport .transport-step:active {
+  transform: scale(0.95);
+  background: rgba(0, 0, 0, 0.07);
+}
+body.dark .lecture-player[data-expanded="true"] .audio-transport .transport-step:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+.lecture-player[data-expanded="true"] .audio-play {
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+  box-shadow: 0 4px 14px rgba(27, 40, 35, 0.22) !important;
+}
+
+/* 3. Apple Translucent Reader Floating Query Bar */
+.product-shell .reader-floating:not([data-state="minimised"]) {
+  background: var(--apple-glass-bg, rgba(255, 254, 250, 0.9)) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid var(--apple-glass-border, rgba(0, 0, 0, 0.08)) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 12px 36px rgba(27, 40, 35, 0.12), inset 0 1px 0 var(--apple-glass-rim, rgba(255, 255, 255, 0.8)) !important;
+}
+body.dark .product-shell .reader-floating:not([data-state="minimised"]) {
+  background: var(--apple-glass-bg, rgba(36, 42, 40, 0.9)) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.question-handle span {
+  width: 36px !important;
+  height: 5px !important;
+  border-radius: 999px !important;
+  opacity: 0.2 !important;
+}
+
+/* 4. Restore Response Floating Pill */
+.restore-response {
+  background: var(--apple-glass-bg, rgba(255, 254, 250, 0.88)) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid var(--apple-glass-border, rgba(0, 0, 0, 0.08)) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 4px 16px rgba(27, 40, 35, 0.08), inset 0 1px 0 var(--apple-glass-rim, rgba(255, 255, 255, 0.8)) !important;
+}
+body.dark .restore-response {
+  background: var(--apple-glass-bg, rgba(36, 42, 40, 0.88)) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 5. Reader Page Badge */
+.reader-page-badge span {
+  background: var(--apple-glass-bg, rgba(255, 254, 250, 0.85)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid var(--apple-glass-border, rgba(0, 0, 0, 0.08)) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+body.dark .reader-page-badge span {
+  background: var(--apple-glass-bg, rgba(36, 42, 40, 0.85)) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 6. Apple iOS UIPickerView Wheels */
+.wheel-frame {
+  position: relative;
+  border-radius: 16px;
+}
+.wheel-frame:before {
+  content: "" !important;
+  position: absolute !important;
+  top: 88px !important;
+  left: 6px !important;
+  right: 6px !important;
+  height: 44px !important;
+  background: var(--accent-soft) !important;
+  border-radius: 12px !important;
+  pointer-events: none !important;
+  border: 1px solid var(--line) !important;
+}
+body.dark .wheel-frame:before {
+  border-color: var(--line) !important;
+}
+
+.page-wheel {
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 25%, #000 75%, transparent 100%) !important;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 25%, #000 75%, transparent 100%) !important;
+}
+
+.page-wheel [role="option"] {
+  font-variant-numeric: tabular-nums;
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+/* Accessibility: WCAG 2.5.5 / 2.5.8 Touch Target Clearance (44x44px minimum) */
+.collapse-button,
+.audio-transport .transport-step,
+.seek-skip-btn,
+.lecture-rate-chip {
+  position: relative;
+}
+.collapse-button::before,
+.audio-transport .transport-step::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+}
+.seek-skip-btn::before,
+.lecture-rate-chip::before {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+  border-radius: inherit;
+}
+
+body.dark .toggle-thumb {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* Scrim overlay for outside tap */
+.lecture-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  background: rgba(18, 24, 22, 0.35);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  animation: iosScrimFadeIn 220ms ease-out forwards;
+}
+.lecture-scrim[hidden] {
+  display: none !important;
+}
+@keyframes iosScrimFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Exit Keyframes for smooth collapse */
+@keyframes iosSheetExit {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+}
+.lecture-player[data-closing="true"] .lecture-details {
+  animation: iosSheetExit 190ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  pointer-events: none;
+}
+.lecture-player[data-closing="true"] {
+  border-radius: 28px !important;
+  box-shadow: 0 8px 24px rgba(27, 40, 35, 0.1) !important;
+}
+
+/* Non-Neon Dark Mode Palette (Muted Pine & Ink) */
+body.dark .audio-play {
+  background: #16786e !important;
+  color: #faf8f3 !important;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45) !important;
+}
+body.dark .player-mini-progress {
+  background: #1e8276 !important;
+}
+body.dark .lecture-timeline-capsule input[type="range"] {
+  background: linear-gradient(to right, #16786e 0%, #16786e var(--seek-progress, 0%), rgba(255, 255, 255, 0.12) var(--seek-progress, 0%), rgba(255, 255, 255, 0.12) 100%) !important;
+}
+body.dark .lecture-timeline-capsule input[type="range"]::-webkit-slider-thumb {
+  background: #16786e !important;
+  border-color: #272d2b !important;
+}
+body.dark .lecture-timeline-capsule input[type="range"]::-moz-range-thumb {
+  background: #16786e !important;
+  border-color: #272d2b !important;
+}
+body.dark .lecture-skip-toggle input:checked + .toggle-track {
+  background: #16786e !important;
+}
+body.dark .toggle-thumb {
+  background: #f0eee8 !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4) !important;
+}
+body.dark .lecture-timeline-capsule:focus-within {
+  border-color: #16786e !important;
+  box-shadow: 0 0 0 2px rgba(22, 120, 110, 0.3) !important;
+}
+body.dark .caption-dot {
+  background: #16786e !important;
+}
+
+/* Smooth handle interaction */
+.lecture-sheet-handle {
+  touch-action: none;
+  cursor: grab;
+}
+.lecture-sheet-handle:active {
+  cursor: grabbing;
+}

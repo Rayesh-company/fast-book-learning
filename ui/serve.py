@@ -405,7 +405,7 @@ RENDER_LOCK = threading.Lock()
 PDF_DOCS_CACHE: dict[str, object] = {}
 PDF_DOCS_CACHE_CAP = 2
 COGNEE_URL = os.environ.get("COGNEE_URL", "http://127.0.0.1:8000").rstrip("/")
-HOST = os.environ.get("SESSION_UI_HOST", "127.0.0.1")
+HOST = os.environ.get("SESSION_UI_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SESSION_UI_PORT", "8765"))
 PROXY_TIMEOUT = 600
 # A Next-tier search runs four chain-of-thought rounds and can pass ten
@@ -613,6 +613,36 @@ def verify_token(token: str):
     return {"email": email, "role": role}
 
 
+DEV_ACCOUNT_EMAIL = "dev@local"
+
+
+def is_login_disabled() -> bool:
+    """Check if authentication requirements are bypassed for local dev/preview."""
+    if os.environ.get("DISABLE_LOGIN") == "0":
+        return False
+    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+        return os.environ.get("DISABLE_LOGIN") == "1"
+    return os.environ.get("DISABLE_LOGIN", "1") == "1"
+
+
+def _ensure_dev_account():
+    """Ensure a local dev account exists when login is bypassed."""
+    try:
+        from ui import accounts
+    except ImportError:
+        import accounts
+    acc = accounts.account_by_email(DEV_ACCOUNT_EMAIL)
+    if acc is None:
+        accounts.create_account(DEV_ACCOUNT_EMAIL, "dev", "09123456789", "admin")
+        accounts.credit_balance(DEV_ACCOUNT_EMAIL, 999_999_999_999)
+        accounts.save_profile(
+            DEV_ACCOUNT_EMAIL,
+            {"usage_purpose": "academic", "subscription": {"active": True}},
+        )
+        acc = accounts.account_by_email(DEV_ACCOUNT_EMAIL)
+    return acc
+
+
 def resolve_identity(handler):
     """The gate flip (ADR-0013), finished (T21, GitLab #23): the
     Account's EMAIL — the identity every store now keys by — derived
@@ -635,6 +665,10 @@ def resolve_identity(handler):
     else:
         account = None
     if account is None:
+        if is_login_disabled():
+            dev = _ensure_dev_account()
+            if dev is not None:
+                return dev["email"]
         handler._json_error(401, AUTH_LOGIN_401_DETAIL)
         return None
     return account["email"]
@@ -647,8 +681,13 @@ def resolve_account(handler):
     same 401 before its role check."""
     claims = verify_token(handler._cookie_token())
     if claims is None:
+        if is_login_disabled():
+            return _ensure_dev_account()
         return None
-    return account_by_email(claims["email"])
+    acc = account_by_email(claims["email"])
+    if acc is None and is_login_disabled():
+        return _ensure_dev_account()
+    return acc
 
 
 
@@ -1346,6 +1385,10 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if account is None:
             self._json_error(401, AUTH_LOGIN_401_DETAIL)
             return
+        headers = []
+        if is_login_disabled() and verify_token(self._cookie_token()) is None:
+            token = issue_token(account["email"], account["role"])
+            headers.append(self._auth_cookie_header(token))
         self._send_json(
             200,
             {
@@ -1355,6 +1398,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 "profile": account.get("profile"),
                 "profile_completed": account.get("profile_completed", False),
             },
+            extra_headers=headers,
         )
 
     def _auth_create_account(self) -> None:

@@ -3,7 +3,7 @@ export function createInterfaceMotion(root){
  const doc=root.ownerDocument,win=doc.defaultView;
  const preference=win.matchMedia?.('(prefers-reduced-motion: reduce)');
  const active=new Set(),ghosts=new Set(),byNode=new WeakMap();
- const ease='cubic-bezier(0.22, 1, 0.36, 1)';
+ const ease='cubic-bezier(0.32, 0.72, 0, 1)';
  let disposed=false;
  const canAnimate=()=>!disposed&&!preference?.matches&&typeof win.Element.prototype.animate==='function';
  const shell=()=>root.querySelector('.product-shell');

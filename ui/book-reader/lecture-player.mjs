@@ -14,6 +14,7 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
   const seek=$('[data-lecture-seek]'),clock=$('[data-lecture-time]'),total=$('[data-lecture-duration]');
   const caption=$('[data-lecture-caption]'),status=$('[data-lecture-status]'),skipIntro=$('[data-lecture-skip-intro]');
   const previous=$('[data-audio-previous]'),next=$('[data-audio-next]'),rate=$('[data-lecture-rate]');
+  const miniProgress=$('[data-lecture-mini-progress]'),miniSession=$('[data-mini-session]');
   const viewport=$('.reader-page'),audio=createAudio?createAudio():doc.createElement('audio');
   audio.preload='metadata';audio.playbackRate=1;
   let sessions=[],session=null,track=null,last='',owning=false,loadToken=0,epoch=0,ticker=null,sessionRequest=null;
@@ -24,7 +25,8 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
   function setPlayState(){
     const playing=!audio.paused&&!audio.ended;
     play.dataset.state=playing?'playing':'paused';play.setAttribute('aria-label',playing?'مکث درس‌گفتار':'پخش درس‌گفتار');
-    if(playing&&ticker===null){ticker=setInterval(()=>{sync();},20);ticker?.unref?.();}
+    element.querySelector('[data-lecture-player]')?.setAttribute('data-playing',String(playing));
+    if(playing&&ticker===null){ticker=setInterval(()=>{sync();},50);ticker?.unref?.();}
     else if(!playing)stopTicker();
   }
   function clearFocus(){if(owning)reader.highlight(null);owning=false;last='';}
@@ -35,7 +37,7 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
     if(!response.ok){if(response.status!==404)throw new Error('دریافت جلسات ناموفق بود.');say('برای این کتاب صوت جلسه موجود نیست.');return [];}
     const body=await response.json();if(signal.aborted)return [];
     sessions=body.sessions??[];
-    select.replaceChildren(...sessions.map(s=>{const option=doc.createElement('option');option.value=String(s.session);option.textContent=`جلسهٔ ${digits(s.session)}${s.audio_available?'':' (بدون صوت)'}`;return option;}));
+    select.replaceChildren(...sessions.map(s=>{const option=doc.createElement('option');option.value=String(s.session);const pages=s.book_pages?` (ص ${digits(s.book_pages[0])} تا ${digits(s.book_pages[1])})`:'';option.textContent=`جلسهٔ ${digits(s.session)}${pages}${s.audio_available?'':' (بدون صوت)'}`;return option;}));
     select.disabled=!sessions.length;
     if(toggle&&!unified)toggle.hidden=!sessions.length;
     if(!sessions.length)say('برای این کتاب صوت جلسه موجود نیست.');
@@ -45,13 +47,15 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
     if(signal.aborted)return;if(!automatic)++intent;
     const token=++loadToken;++epoch;++syncRevision;sessionRequest?.abort();sessionRequest=new win.AbortController();
     audio.pause();audio.removeAttribute('src');audio.currentTime=0;session=null;track=null;anchorsByPage=new Map();clearFocus();setAvailable(false);
-    initialPosition=true;caption.textContent='';seek.value='0';clock.textContent=formatClock(0);total.textContent=formatClock(0);
+    initialPosition=true;caption.textContent='';seek.value='0';clock.textContent=formatClock(0);total.textContent=formatClock(0);seek.setAttribute('aria-valuetext',formatClock(0));
     say('در حال بارگذاری جلسه…');
     try{
       const response=await fetchImpl(`/books/${encodeURIComponent(book)}/lectures/${number}`,{signal:sessionRequest.signal});
       const body=await response.json();if(signal.aborted||token!==loadToken)return;
       if(!response.ok)throw new Error(body.detail||'بارگذاری جلسه ناموفق بود.');
       session=body;track=createLectureTrack(body);select.value=String(number);
+      if(miniSession)miniSession.textContent=`جلسهٔ ${digits(number)}`;
+      if(miniProgress)miniProgress.style.setProperty('--player-progress','0');
       seek.max=String(Math.ceil(body.duration||0));total.textContent=formatClock(body.duration);
       if(body.audio_url){audio.src=body.audio_url;setAvailable(true);say('');}
       else say('صوت این جلسه روی سرور نیست.');
@@ -85,7 +89,8 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
   async function sync(){
     if(!track||signal.aborted||unified&&initialPosition)return;
     const time=audio.currentTime||0;
-    if(doc.activeElement!==seek)seek.value=String(Math.floor(time));clock.textContent=formatClock(time);
+    if(doc.activeElement!==seek)seek.value=String(Math.floor(time));clock.textContent=formatClock(time);seek.setAttribute('aria-valuetext',formatClock(time));
+    if(session?.duration){const pct=Math.min(100,Math.max(0,(time/session.duration)*100));if(miniProgress)miniProgress.style.setProperty('--player-progress',String(pct/100));seek.style.setProperty('--seek-progress',`${pct}%`);}
     const {index,active}=sentenceIndexAt(track,time);
     if(index<0){if(last){clearFocus();caption.textContent='';}return;}
     const focus=focusForTime(track.sentences[index],time,active),sentence=focus.sentence,page=pageForTime(sentence,time);
@@ -157,15 +162,57 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
   }
   function setRate(value){if([.75,1,1.25,1.5,2].includes(value)){audio.playbackRate=value;if(rate)rate.value=String(value);}}
   async function open(){
+    const player=element.querySelector('[data-lecture-player]');
+    if(player)delete player.dataset.closing;
+    const scrim=doc.querySelector('[data-player-scrim]');
+    if(scrim)scrim.hidden=false;
     const moveFocus=doc.activeElement===toggle;
     expanded=true;bar.hidden=false;toggle?.setAttribute('aria-expanded','true');onExpanded(true);
     if(moveFocus)(select.disabled?$('[data-player-collapse]'):select)?.focus({preventScroll:true});
     if(!session){await listReady;const chosen=sessionForPage(sessions,getPage())??(!unified?sessions[0]:null);if(chosen)await loadSession(chosen.session,{automatic:true});}
   }
-  function collapse(){expanded=false;bar.hidden=true;toggle?.setAttribute('aria-expanded','false');onExpanded(false);}
+  function collapse(){
+    if(!expanded)return;
+    expanded=false;toggle?.setAttribute('aria-expanded','false');onExpanded(false);
+    const scrim=doc.querySelector('[data-player-scrim]');
+    if(scrim)scrim.hidden=true;
+    const player=element.querySelector('[data-lecture-player]');
+    if(!win.matchMedia?.('(prefers-reduced-motion: reduce)').matches&&player){
+      player.dataset.closing='true';
+      setTimeout(()=>{delete player.dataset.closing;bar.hidden=true;},190);
+    }else{bar.hidden=true;}
+  }
   const run=promise=>Promise.resolve(promise).catch(error=>{if(!signal.aborted&&error.name!=='AbortError')say('پخش صوت ممکن نشد؛ دوباره تلاش کنید.');});
   toggle?.addEventListener('click',()=>expanded?collapse():run(open()),{signal});
   $('[data-player-collapse]')?.addEventListener('click',()=>{collapse();toggle?.focus({preventScroll:true});},{signal});
+  doc.querySelector('[data-player-scrim]')?.addEventListener('click',()=>collapse(),{signal});
+  doc.addEventListener('pointerdown',event=>{
+    if(!expanded)return;
+    const player=element.querySelector('[data-lecture-player]');
+    if(player&&!player.contains(event.target)&&!event.target.closest('[data-player-expand]'))collapse();
+  },{signal});
+  const sheetHandle=element.querySelector('[data-lecture-handle]')??element.querySelector('.lecture-sheet-handle');
+  if(sheetHandle){
+    let startY=0,currentY=0,dragging=false;
+    const playerNode=element.querySelector('[data-lecture-player]');
+    sheetHandle.addEventListener('pointerdown',event=>{
+      if(event.button!==0)return;startY=event.clientY;currentY=startY;dragging=true;
+      sheetHandle.setPointerCapture?.(event.pointerId);
+    },{signal});
+    sheetHandle.addEventListener('pointermove',event=>{
+      if(!dragging||!playerNode)return;currentY=event.clientY;const diff=Math.max(0,currentY-startY);
+      if(diff>0){playerNode.style.transform=`translateY(${diff}px)`;playerNode.style.transition='none';}
+    },{signal});
+    const stopDrag=()=>{
+      if(!dragging||!playerNode)return;dragging=false;const diff=currentY-startY;
+      playerNode.style.transform='';playerNode.style.transition='';
+      if(diff>=36)collapse();
+    };
+    sheetHandle.addEventListener('pointerup',stopDrag,{signal});
+    sheetHandle.addEventListener('pointercancel',stopDrag,{signal});
+    sheetHandle.addEventListener('click',()=>collapse(),{signal});
+  }
+  doc.addEventListener('keydown',event=>{if(event.key==='Escape'&&expanded){event.preventDefault();collapse();toggle?.focus({preventScroll:true});}},{signal});
   select.addEventListener('change',()=>run((async()=>{
     const number=Number(select.value),pending=loadSession(number),action=intent;await pending;
     if(unified&&action===intent&&session?.session===number){
@@ -178,7 +225,7 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
   $('[data-lecture-back]')?.addEventListener('click',()=>run(seekTo(audio.currentTime-10)),{signal});
   $('[data-lecture-forward]')?.addEventListener('click',()=>run(seekTo(audio.currentTime+10)),{signal});
   rate?.addEventListener('change',()=>setRate(Number(rate.value)),{signal});
-  seek.addEventListener('input',()=>{clock.textContent=formatClock(Number(seek.value));},{signal});
+  seek.addEventListener('input',()=>{clock.textContent=formatClock(Number(seek.value));seek.setAttribute('aria-valuetext',formatClock(Number(seek.value)));},{signal});
   seek.addEventListener('change',()=>run(seekTo(Number(seek.value))),{signal});
   for(const type of ['timeupdate','seeked'])audio.addEventListener(type,()=>{run(sync());},{signal});
   for(const type of ['play','pause','ended'])audio.addEventListener(type,setPlayState,{signal});
@@ -193,7 +240,7 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
   const ready=unified?listReady.then(()=>ensureForPage()):listReady;
   setPlayState();
   return {open,collapse,loadSession,sync,play:start,pause,seek:seekTo,skipParagraph,setRate,
-    async pageChanged(){pause();clearFocus();initialPosition=true;await ensureForPage();},
+    async pageChanged(){const chosen=sessionForPage(sessions,getPage());if(!chosen||session?.session!==chosen.session){pause();clearFocus();initialPosition=true;await ensureForPage();}else setAvailable(Boolean(session.audio_url));},
     get track(){return track;},get audio(){return audio;},get sessions(){return sessions;},get expanded(){return expanded;},get ready(){return ready;},
     dispose(){++intent;++loadToken;++epoch;stopTicker();audio.pause();clearFocus();life.abort();sessionRequest?.abort();audio.removeAttribute('src');}};
 }

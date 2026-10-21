@@ -1,26 +1,212 @@
-/* Motion expresses navigation and feedback; the Book itself stays still. */
-#app{--motion-fast:120ms;--motion-normal:200ms;--motion-ease:cubic-bezier(.22,1,.36,1)}
-.motion-enabled .product-shell .drawer,.motion-enabled .product-shell .app-sheet{animation:none}
-.motion-overlay-exit{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
-.motion-overlay-exit *{pointer-events:none!important}
-.motion-overlay-exit .sheet{max-height:80%;overflow:auto;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
-.motion-enabled .note-tabs{position:relative}
-.motion-enabled .note-tabs button[aria-selected="true"]{border-bottom-color:transparent}
-.motion-tab-indicator{position:absolute;bottom:0;height:2px;background:var(--accent);transform-origin:left center;border-radius:2px;pointer-events:none}
-.motion-enabled button{transition:background-color var(--motion-fast) var(--motion-ease),color var(--motion-fast) var(--motion-ease),border-color var(--motion-fast) var(--motion-ease),opacity var(--motion-fast) var(--motion-ease)}
-.motion-enabled :is(.icon-button,.primary-action,.starter,.pages-button,.restore-response,.minimise){transition:transform var(--motion-fast) var(--motion-ease),background-color var(--motion-fast) var(--motion-ease),color var(--motion-fast) var(--motion-ease),border-color var(--motion-fast) var(--motion-ease),opacity var(--motion-fast) var(--motion-ease)}
-.motion-enabled :is(.icon-button,.primary-action,.starter,.pages-button,.restore-response,.minimise):active:not(:disabled){transform:scale(.97)}
-.motion-enabled :is(input,textarea,select){transition:border-color 150ms var(--motion-ease),background-color 150ms var(--motion-ease),box-shadow 150ms var(--motion-ease)}
-.motion-enabled .floating-bar textarea{border-radius:10px}
-.motion-enabled :is(.note-search,.floating-bar,.chat-composer){transition:border-color 150ms var(--motion-ease)}
-.motion-enabled :is(.note-search,.floating-bar,.chat-composer):focus-within{border-color:var(--accent)}
-@media(hover:hover) and (pointer:fine){
- .motion-enabled :is(.nav-item,.starter,.book-choice,.history-name,.text-action):hover{background-color:var(--accent-soft)}
- .motion-enabled .icon-button:hover:not(:disabled){background-color:var(--accent-soft)}
- .motion-enabled .primary-action:hover:not(:disabled){transform:translateY(-1px)}
+/* Apple Design (WWDC 2018/2026): Fluid Springs & Tactile Feedback */
+#app {
+  --motion-fast: 85ms;
+  --motion-normal: 240ms;
+  --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --apple-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --apple-spring-rebound: cubic-bezier(0.16, 1, 0.3, 1); /* Smooth fluid Apple deceleration */
+  --apple-card-rebound: cubic-bezier(0.2, 1, 0.35, 1);
+  --apple-snappy: cubic-bezier(0.16, 1, 0.3, 1);
 }
-@media(prefers-reduced-motion:reduce){
- .motion-enabled *{animation:none!important;transition:none!important;scroll-behavior:auto!important}
- .motion-enabled :is(.icon-button,.primary-action,.starter,.pages-button,.restore-response,.minimise):active{transform:none}
- .motion-enabled .primary-action:hover{transform:none}
+
+.motion-enabled .product-shell .drawer,
+.motion-enabled .product-shell .app-sheet {
+  animation: none;
+}
+
+.motion-overlay-exit {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+.motion-overlay-exit * {
+  pointer-events: none !important;
+}
+.motion-overlay-exit .sheet {
+  max-height: 80%;
+  overflow: auto;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+.motion-enabled .note-tabs {
+  position: relative;
+}
+.motion-enabled .note-tabs button[aria-selected="true"] {
+  border-bottom-color: transparent;
+}
+.motion-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 2.5px;
+  background: var(--accent);
+  transform-origin: left center;
+  border-radius: 999px;
+  pointer-events: none;
+  transition: transform 240ms var(--apple-spring);
+}
+
+/* Base button and touch transitions - soft and natural */
+.motion-enabled button,
+.motion-enabled a {
+  transition: transform 300ms var(--apple-spring-rebound),
+              background-color 160ms ease,
+              color 160ms ease,
+              border-color 160ms ease,
+              box-shadow 220ms ease,
+              opacity 160ms ease,
+              filter 160ms ease;
+  will-change: transform;
+}
+
+/* Touchable components - small/medium buttons, triggers, pills, and interactive items */
+.motion-enabled :is(
+  .icon-button,
+  .primary-action,
+  .starter,
+  .pages-button,
+  .pages-options-button,
+  .restore-response,
+  .minimise,
+  .audio-play,
+  .audio-widget button,
+  .nav-item,
+  .history-item,
+  .study-card button,
+  .text-action,
+  .cite-sent,
+  .theme-options button,
+  .note-tabs button,
+  .choice-option span,
+  .session-popover button,
+  .reader-navigation button,
+  .account-button,
+  .clear-pages,
+  .source-action,
+  .send-button,
+  .stop-button,
+  .mic-button,
+  .reader-page-badge span
+) {
+  transition: transform 320ms var(--apple-spring-rebound),
+              background-color 160ms ease,
+              color 160ms ease,
+              border-color 160ms ease,
+              box-shadow 220ms ease,
+              filter 160ms ease,
+              opacity 160ms ease;
+  will-change: transform;
+}
+
+/* Touch Down (:active) - cushioned soft compression with subtle dimming */
+.motion-enabled :is(
+  .icon-button,
+  .primary-action,
+  .starter,
+  .pages-button,
+  .pages-options-button,
+  .restore-response,
+  .minimise,
+  .audio-play,
+  .audio-widget button,
+  .nav-item,
+  .history-item,
+  .study-card button,
+  .text-action,
+  .cite-sent,
+  .theme-options button,
+  .note-tabs button,
+  .choice-option span,
+  .session-popover button,
+  .reader-navigation button,
+  .account-button,
+  .clear-pages,
+  .source-action,
+  .send-button,
+  .stop-button,
+  .mic-button,
+  .reader-page-badge span
+):active:not(:disabled) {
+  transform: scale(0.93) translateY(0.5px) !important;
+  filter: brightness(0.95);
+  transition: transform 80ms cubic-bezier(0.2, 0.9, 0.4, 1), filter 80ms ease !important;
+}
+
+/* Larger surface cards - soft weighted compression */
+.motion-enabled :is(
+  .study-card,
+  .book-choice,
+  .note-row > button,
+  .question-card
+) {
+  transition: transform 340ms var(--apple-card-rebound),
+              box-shadow 240ms ease,
+              border-color 180ms ease,
+              background-color 180ms ease;
+  will-change: transform;
+}
+
+.motion-enabled :is(
+  .study-card,
+  .book-choice,
+  .note-row > button,
+  .question-card
+):active {
+  transform: scale(0.975) translateY(0.5px) !important;
+  transition: transform 90ms cubic-bezier(0.2, 0.9, 0.4, 1) !important;
+}
+
+/* Inputs & Textareas - subtle gentle focus */
+.motion-enabled :is(input, textarea, select) {
+  transition: border-color 180ms var(--apple-snappy),
+              background-color 180ms var(--apple-snappy),
+              box-shadow 180ms var(--apple-snappy);
+}
+.motion-enabled .floating-bar textarea {
+  border-radius: 12px;
+}
+.motion-enabled :is(.note-search, .floating-bar, .chat-composer) {
+  transition: border-color 200ms var(--apple-snappy), box-shadow 200ms var(--apple-snappy);
+}
+.motion-enabled :is(.note-search, .floating-bar, .chat-composer):focus-within {
+  border-color: var(--accent);
+}
+
+/* Hover effects with natural subtle soft tone - NO neon glow */
+@media (hover: hover) and (pointer: fine) {
+  .motion-enabled :is(.nav-item, .starter, .book-choice, .history-name, .text-action):hover {
+    background-color: var(--accent-soft);
+  }
+  .motion-enabled .icon-button:hover:not(:disabled) {
+    background-color: var(--accent-soft);
+  }
+  .motion-enabled .primary-action:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(27, 40, 35, 0.14);
+  }
+  .motion-enabled .study-card:hover {
+    box-shadow: 0 4px 16px rgba(27, 40, 35, 0.08);
+  }
+}
+
+/* Apple Design Section 14: Reduced Motion & Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .motion-enabled * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .motion-enabled :is(
+    .icon-button, .primary-action, .starter, .pages-button, .restore-response,
+    .minimise, .audio-play, .audio-widget button, .nav-item, .history-item,
+    .study-card button, .text-action, .cite-sent, .choice-option span,
+    .theme-options button, .note-tabs button, .study-card, .book-choice,
+    .note-row > button
+  ):active {
+    transform: none !important;
+  }
+  .motion-enabled .primary-action:hover {
+    transform: none !important;
+  }
 }

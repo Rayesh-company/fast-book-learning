@@ -38,6 +38,9 @@ ui/audit.sqlite3
 # The worktree's runtime stores — the deployed copies live on /data.
 ui/research.sqlite3
 ui/sessions.sqlite3
+ui/notes.sqlite3
+ui/mind-map/
+.impeccable/
 
 # The pilot bench Accounts (credentials) — local only, never committed.
 benchmark/pilot/accounts.json
