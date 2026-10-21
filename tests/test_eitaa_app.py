@@ -386,6 +386,29 @@ def test_the_settled_answer_fires_the_opted_in_push(tmp_path, monkeypatch):
         stop_gate(server, original)
 
 
+def test_the_mobile_face_serves_the_page_and_eitaa_redirects(tmp_path, monkeypatch):
+    # The operator folded the Eita door into the platform's standard
+    # mobile path: /mobile IS the برنامک page, and the old registered
+    # /eitaa retires into a permanent redirect.
+    monkeypatch.setenv("EITAA_BOT_TOKEN", TEST_TOKEN)
+    eitaa_store.EITAA_DB = tmp_path / "eitaa.sqlite3"
+    base, server, original = with_gate(tmp_path, EmptyUpstream())
+    try:
+        with urlopen(Request(base + "/mobile/"), timeout=10) as response:
+            body = response.read().decode("utf-8")
+            assert response.status == 200
+            assert "developer.eitaa.com/eitaa-web-app.js" in body
+            assert 'dir="rtl"' in body
+        with urlopen(Request(base + "/eitaa"), timeout=10) as response:
+            assert response.geturl().endswith("/mobile/")
+            assert response.status == 200
+        # The preview keeps its own door.
+        with urlopen(Request(base + "/mobile/preview.html"), timeout=10) as response:
+            assert response.status == 200
+    finally:
+        stop_gate(server, original)
+
+
 def test_the_page_and_its_routes_are_the_sheets_own():
     # The برنامک speaks the shared API (ADR-0020's law, extended):
     # every path the page fetches is a route serve.py serves, and the

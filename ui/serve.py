@@ -926,13 +926,30 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        # The designed mobile UI now hosts the independent Book reader.
+        # The designed mobile UI now hosts the independent Book reader;
+        # its preview door keeps its own path.
         if path.startswith("/docs/design/mobile-preview/"):
-            self.path = self.path.replace("/docs/design/mobile-preview/", "/mobile/", 1)
+            self.path = self.path.replace(
+                "/docs/design/mobile-preview/", "/mobile/preview.html", 1
+            )
             path = self.path.split("?", 1)[0]
-            if path in ("/mobile/", "/mobile/index.html"):
-                self.path = self.path.replace(path, "/mobile/preview.html", 1)
-                path = "/mobile/preview.html"
+        if path in ("/mobile/", "/mobile/index.html"):
+            # The platform's mobile face — the برنامک page itself (the
+            # operator folded the Eita door into the standard /mobile
+            # path instead of a special one; the Eitaayar registration
+            # names /mobile now). Read from disk per request, the
+            # index.html rule.
+            self._eitaa_page()
+            return
+        if path in ("/eitaa", "/eitaa/"):
+            # The old registered URL: a permanent redirect — the
+            # panel's rename retires it gently and nothing bookmarked
+            # breaks.
+            self.send_response(301)
+            self.send_header("Location", "/mobile/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if path == "/reader/narration/status":
             if resolve_identity(self) is None:
                 return
@@ -987,13 +1004,6 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path.startswith("/ota/current/"):
             self._ota_asset(path)
-            return
-        if path in ("/eitaa", "/eitaa/"):
-            # The برنامک page (ADR-0021): Eita's WebView opens it with
-            # the signed initData riding inside the client — the URL
-            # itself stays open to reach, the initData is the
-            # credential, never the address.
-            self._eitaa_page()
             return
         if path == "/events":
             self._events()
