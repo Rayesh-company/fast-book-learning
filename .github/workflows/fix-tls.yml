@@ -58,7 +58,7 @@ jobs:
               -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
               "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
           set -eu
-          CONF=/srv/chat-with-books/current/ops/nginx/booksai.conf
+          CONF=/home/chat-with-books/current/ops/nginx/booksai.conf
           VHOST=/etc/nginx/sites-available/booksai.conf
           test -s "$CONF"
           test -f "$VHOST"
@@ -71,7 +71,7 @@ jobs:
           set -eu
           echo "== host root check =="
           [ "$(id -u)" = "0" ]
-          CONF=/srv/chat-with-books/current/ops/nginx/booksai.conf
+          CONF=/home/chat-with-books/current/ops/nginx/booksai.conf
           VHOST=/etc/nginx/sites-available/booksai.conf
           test -s "$CONF"
           test -f "$VHOST"

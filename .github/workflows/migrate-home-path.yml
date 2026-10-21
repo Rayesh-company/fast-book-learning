@@ -1,14 +1,16 @@
 name: Migrate deploy tree
 
-# One-shot (workflow_dispatch): move the deploy tree to /home/path per
-# the operator's call. /home is root-owned and the deploy user holds
-# docker but not sudo, so the ONE root action — mkdir + chown — rides
-# the sanctioned nsenter channel, and everything after runs as the
-# deploy user: `cp -a` carries the standing tree INCLUDING the two
-# things rsync deliberately never carries (the box's own .env and the
-# customer PDFs), so the first deploy into the new path finds them and
-# its own `test -s` gates pass. The old /srv tree stays untouched as
-# the rollback until the new path has served a deploy.
+# One-shot (workflow_dispatch): move the deploy tree to
+# /home/chat-with-books per the operator's call — the platform's own
+# name under /home. /home is root-owned and the deploy user holds
+# docker but not sudo, so the root act — rename-or-create + chown —
+# rides the sanctioned nsenter channel; everything after runs as the
+# deploy user. The first run copied the tree to a misnamed /home/path;
+# this run relocates it to the right name and carries the two things
+# rsync deliberately never carries (the box's own .env and the
+# customer PDFs) if they were not already carried. The old /srv tree
+# stands untouched as the rollback until the new path has served a
+# deploy.
 
 on:
   workflow_dispatch:
@@ -31,7 +33,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
-      - name: Create /home/path (root, one mkdir + chown)
+      - name: Relocate the tree to /home/chat-with-books (root, rename or create)
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -50,9 +52,9 @@ jobs:
             -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "docker run -i --rm --privileged --pid=host --userns=host chat-with-books-session:latest nsenter -t 1 -m -u -i -n -- bash -c 'mkdir -p /home/path/current && chown ${uid}:${gid} /home/path /home/path/current && ls -ld /home/path'"
+            "docker run -i --rm --privileged --pid=host --userns=host chat-with-books-session:latest nsenter -t 1 -m -u -i -n -- bash -c 'if [ -d /home/path ]; then mv /home/path /home/chat-with-books; else mkdir -p /home/chat-with-books/current; fi; chown ${uid}:${gid} /home/chat-with-books; ls -ld /home /home/chat-with-books'"
 
-      - name: Copy the standing tree (env and books included) and verify
+      - name: Verify the tree (env and books included)
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -63,12 +65,14 @@ jobs:
             -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
             "${DEPLOY_USER}@${DEPLOY_HOST}" '
               set -eu
-              cp -a /srv/chat-with-books/current/. /home/path/current/
-              test -s /home/path/current/.env
-              test -s /home/path/current/books/tarhe-kolli.pdf
-              test -s /home/path/current/books/70143-336.pdf
-              test -d /home/path/current/ops/nginx
-              test -d /home/path/current/ui
-              echo "tree copied: env + books + ops + ui all present"
-              du -sh /home/path/current
+              if [ ! -s /home/chat-with-books/current/.env ]; then
+                cp -a /srv/chat-with-books/current/. /home/chat-with-books/current/
+              fi
+              test -s /home/chat-with-books/current/.env
+              test -s /home/chat-with-books/current/books/tarhe-kolli.pdf
+              test -s /home/chat-with-books/current/books/70143-336.pdf
+              test -d /home/chat-with-books/current/ops/nginx
+              test -d /home/chat-with-books/current/ui
+              echo "tree verified at /home/chat-with-books/current"
+              du -sh /home/chat-with-books/current
             '
