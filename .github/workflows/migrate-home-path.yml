@@ -1,0 +1,74 @@
+name: Migrate deploy tree
+
+# One-shot (workflow_dispatch): move the deploy tree to /home/path per
+# the operator's call. /home is root-owned and the deploy user holds
+# docker but not sudo, so the ONE root action — mkdir + chown — rides
+# the sanctioned nsenter channel, and everything after runs as the
+# deploy user: `cp -a` carries the standing tree INCLUDING the two
+# things rsync deliberately never carries (the box's own .env and the
+# customer PDFs), so the first deploy into the new path finds them and
+# its own `test -s` gates pass. The old /srv tree stays untouched as
+# the rollback until the new path has served a deploy.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+
+      - name: Create /home/path (root, one mkdir + chown)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          uid=$(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" 'id -u')
+          gid=$(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" 'id -g')
+          echo "deploy user: $uid:$gid"
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "docker run -i --rm --privileged --pid=host --userns=host chat-with-books-session:latest nsenter -t 1 -m -u -i -n -- bash -c 'mkdir -p /home/path/current && chown ${uid}:${gid} /home/path /home/path/current && ls -ld /home/path'"
+
+      - name: Copy the standing tree (env and books included) and verify
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" '
+              set -eu
+              cp -a /srv/chat-with-books/current/. /home/path/current/
+              test -s /home/path/current/.env
+              test -s /home/path/current/books/tarhe-kolli.pdf
+              test -s /home/path/current/books/70143-336.pdf
+              test -d /home/path/current/ops/nginx
+              test -d /home/path/current/ui
+              echo "tree copied: env + books + ops + ui all present"
+              du -sh /home/path/current
+            '
