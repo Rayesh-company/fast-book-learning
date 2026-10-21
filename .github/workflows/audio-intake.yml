@@ -56,8 +56,12 @@ jobs:
           df -h /home | tail -1
           echo "===== copy ====="
           mkdir -p "$DST"
-          cp -a "$SRC/." "$DST/"
-          chown -R "$DST_UID:$DST_GID" "$DST"
+          if [ -d "$SRC" ]; then
+            cp -a "$SRC/." "$DST/"
+            chown -R "$DST_UID:$DST_GID" "$DST"
+          else
+            echo "source already moved (cut semantics) - the copy at $DST stands"
+          fi
           echo "===== copied ====="
           echo "===== restructure to the guide's method-2 layout ====="
           cd "$DST"
@@ -66,11 +70,17 @@ jobs:
             rm -rf books
           fi
           echo "mp3 count: $(ls tarhe-kolli | grep -c '\.mp3$')"
-          stat -c "%s bytes  %n" "$SRC/books/tarhe-kolli.lectures.json"
+          stat -c "%s bytes  %n" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
           du -sh "$DST"
           echo "===== index into the deploy tree (rsync-excluded) ====="
-          cp "$SRC/books/tarhe-kolli.lectures.json" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
-          chown "$DST_UID:$DST_GID" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
+          if [ -s /home/chat-with-books/current/books/tarhe-kolli.lectures.json ]; then
+            echo "index already in place"
+          elif [ -s "$SRC/books/tarhe-kolli.lectures.json" ]; then
+            cp "$SRC/books/tarhe-kolli.lectures.json" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
+            chown "$DST_UID:$DST_GID" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
+          fi
           stat -c "%s bytes  %n" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
+          echo "===== sessions schema ====="
+          python3 -c 'import json;d=json.load(open("/home/chat-with-books/current/books/tarhe-kolli.lectures.json"));print("top keys:",list(d.keys()));s=d.get("sessions") or d.get("lectures") or [];print("sessions:",type(s).__name__,len(s));f=s[0];print("session[0] keys:",list(f.keys()));print("session[0] slim:",json.dumps({k:(v if not isinstance(v,(list,dict)) else "<%s len=%d>"%(type(v).__name__,len(v))) for k,v in f.items()},ensure_ascii=False)[:900])'
           df -h /home | tail -1
           REMOTE
