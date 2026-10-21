@@ -48,25 +48,25 @@ jobs:
             -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
             "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "docker run -i --rm --privileged --pid=host --userns=host chat-with-books-session:latest nsenter -t 1 -m -u -i -n -- bash -s" <<'REMOTE'
+            "docker run -i --rm --privileged --pid=host --userns=host -e DST_UID=$uid -e DST_GID=$gid chat-with-books-session:latest nsenter -t 1 -m -u -i -n -- bash -s" <<'REMOTE'
           set -eu
           SRC=/home/ubuntu/fast-book-lecture-audio
           DST=/home/chat-with-books/lecture-audio
           echo "===== disk before ====="
           df -h /home | tail -1
-          echo "===== README.fa.md ====="
-          cat "$SRC/README.fa.md"
-          echo "===== lectures.json (head) ====="
-          head -c 2500 "$SRC/books/tarhe-kolli.lectures.json"
-          echo
-          echo "===== payload size ====="
-          du -sh "$SRC"
           echo "===== copy ====="
           mkdir -p "$DST"
           cp -a "$SRC/." "$DST/"
-          chown -R ${uid}:${gid} "$DST"
+          chown -R "$DST_UID:$DST_GID" "$DST"
           echo "===== copied ====="
+          echo "===== restructure to the guide's method-2 layout ====="
+          cd "$DST"
+          if [ -d books/tarhe-kolli/lectures ] && [ ! -d tarhe-kolli ]; then
+            mv books/tarhe-kolli/lectures tarhe-kolli
+            rm -rf books
+          fi
+          echo "mp3 count: $(ls tarhe-kolli | grep -c '\.mp3$')"
+          stat -c "%s bytes  %n" "$SRC/books/tarhe-kolli.lectures.json"
           du -sh "$DST"
-          ls "$DST/books/tarhe-kolli/lectures" | wc -l
           df -h /home | tail -1
           REMOTE
