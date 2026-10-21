@@ -926,25 +926,19 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        # The designed mobile UI now hosts the independent Book reader;
-        # its preview door keeps its own path.
+        # The designed mobile UI now hosts the independent Book reader.
+        # This is the face the Eita برنامک shows too (the operator's
+        # call: the bot opens /mobile and the visitor sees THIS panel —
+        # not a separate Eita-only page).
         if path.startswith("/docs/design/mobile-preview/"):
-            self.path = self.path.replace(
-                "/docs/design/mobile-preview/", "/mobile/preview.html", 1
-            )
+            self.path = self.path.replace("/docs/design/mobile-preview/", "/mobile/", 1)
             path = self.path.split("?", 1)[0]
-        if path in ("/mobile/", "/mobile/index.html"):
-            # The platform's mobile face — the برنامک page itself (the
-            # operator folded the Eita door into the standard /mobile
-            # path instead of a special one; the Eitaayar registration
-            # names /mobile now). Read from disk per request, the
-            # index.html rule.
-            self._eitaa_page()
-            return
+            if path in ("/mobile/", "/mobile/index.html"):
+                self.path = self.path.replace(path, "/mobile/preview.html", 1)
+                path = "/mobile/preview.html"
         if path in ("/eitaa", "/eitaa/"):
-            # The old registered URL: a permanent redirect — the
-            # panel's rename retires it gently and nothing bookmarked
-            # breaks.
+            # The retired برنامک page's address: a permanent redirect
+            # to the mobile face the operator chose instead.
             self.send_response(301)
             self.send_header("Location", "/mobile/")
             self.send_header("Content-Length", "0")
