@@ -1,0 +1,62 @@
+name: Relocate cognee dump
+
+# One-shot (workflow_dispatch): the operator left the cognee database
+# dump at /home/ubuntu/cognee_db.dump and asked it moved into the
+# platform's own home and out of ubuntu's. ubuntu's home is closed to
+# the deploy user, so the move rides the sanctioned root channel —
+# a MOVE, not a copy: the dump's old place ends empty. It lands in
+# /home/chat-with-books/backups/ (beside current/ and lecture-audio),
+# chowned to the deploy user so a future restore needs no root.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  relocate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+
+      - name: Move the dump (root channel)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          uid=$(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" 'id -u')
+          gid=$(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" 'id -g')
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "docker run -i --rm --privileged --pid=host --userns=host -e DST_UID=$uid -e DST_GID=$gid chat-with-books-session:latest nsenter -t 1 -m -u -i -n -- bash -s" <<'REMOTE'
+          set -eu
+          SRC=/home/ubuntu/cognee_db.dump
+          DST=/home/chat-with-books/backups/cognee_db.dump
+          test -s "$SRC"
+          mkdir -p /home/chat-with-books/backups
+          mv "$SRC" "$DST"
+          chown "$DST_UID:$DST_GID" "$DST"
+          echo "===== moved ====="
+          stat -c "%s bytes  %n  owner=%U" "$DST"
+          echo "===== old place ====="
+          ls -la /home/ubuntu/ | tail -5
+          REMOTE
