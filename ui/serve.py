@@ -340,6 +340,58 @@ BOOKS_DIR = Path(
 # the routes answer 404 and the player explains itself.
 LECTURE_AUDIO_DIR_ENV = "LECTURE_AUDIO_DIR"
 
+# The session index is ~45MB of word-level alignment — too heavy for a
+# phone to fetch just to show a session picker. The summary below is
+# what the player reads: one slim row per session (number, audio file,
+# duration, the «بدون مقدمه» boundaries, pages), parsed once per
+# process and cached until the file's mtime moves.
+_LECTURES_SUMMARY_CACHE: dict = {}
+
+
+def lectures_summary(dataset: str) -> dict | None:
+    """The slim session index for the player's picker, or None when the
+    dataset holds no lecture package. Parsed once per process — the
+    cache key carries the source file's mtime so a new delivery is
+    picked up without a restart."""
+    import json as _json
+
+    source = BOOKS_DIR / f"{dataset}.lectures.json"
+    if not source.is_file():
+        return None
+    try:
+        mtime = source.stat().st_mtime
+    except OSError:
+        return None
+    cached = _LECTURES_SUMMARY_CACHE.get(dataset)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        index = _json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    sessions = []
+    for row in index.get("sessions") or []:
+        if not isinstance(row, dict) or "audio" not in row:
+            continue
+        sessions.append(
+            {
+                "session": row.get("session"),
+                "audio": row.get("audio"),
+                "duration": row.get("duration"),
+                "lecture_start": row.get("lecture_start"),
+                "lecture_end": row.get("lecture_end"),
+                "cover_page": row.get("cover_page"),
+                "book_pages": row.get("book_pages"),
+            }
+        )
+    summary = {
+        "book": index.get("book", dataset),
+        "title": index.get("title", ""),
+        "sessions": sessions,
+    }
+    _LECTURES_SUMMARY_CACHE[dataset] = (mtime, summary)
+    return summary
+
 
 def lecture_audio_dir():
     value = str(os.environ.get(LECTURE_AUDIO_DIR_ENV, "") or "").strip()
@@ -1028,10 +1080,38 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if path.startswith("/books/") and "/lectures/" in path:
             self._lecture_audio(path)
             return
+        if path.endswith(".lectures.summary.json"):
+            self._lectures_summary(path)
+            return
         if path.startswith("/books/"):
             self._book_file(path)
             return
         super().do_GET()
+
+    def _lectures_summary(self, path: str) -> None:
+        """The player's slim index (GET
+        /books/<dataset>.lectures.summary.json): one row per session —
+        number, audio file, duration, the «بدون مقدمه» boundaries,
+        pages — a few KB instead of the 45MB alignment file, which only
+        the word-level sync will ever need to download. The dataset
+        must be in the Book set; an absent package answers 404."""
+        match = re.fullmatch(r"/books/([A-Za-z0-9_-]+)\.lectures\.summary\.json", path)
+        if not match or match.group(1) not in BOOK_DATASETS:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        summary = lectures_summary(match.group(1))
+        if summary is None:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        body = json.dumps(summary, ensure_ascii=False).encode("utf-8")
+        self._cache_policy = "public, max-age=300"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _book_file(self, path: str) -> None:
         """One Book asset — ``/books/<dataset>/book`` (the PDF, for the

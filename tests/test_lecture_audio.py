@@ -7,6 +7,7 @@ Range byte-for-byte — seeking IS the player. The allowlist is the
 traversal guard: a dataset outside the Book set, a foreign filename,
 or an unset audio dir answers the same 404."""
 
+import json
 import sys
 import threading
 from http.server import ThreadingHTTPServer
@@ -149,3 +150,56 @@ def test_the_preview_server_speaks_the_same_contract(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_the_summary_route_serves_the_players_slim_index(tmp_path, monkeypatch):
+    # The 45MB alignment file is box-side only; the player's picker
+    # reads THIS: one slim row per session — number, audio, duration,
+    # the «بدون مقدمه» boundaries, pages — no sentences, no cues.
+    books = tmp_path / "books"
+    books.mkdir()
+    index = {
+        "format": 1,
+        "book": "tarhe-kolli",
+        "title": "طرح کلی",
+        "page_sizes": {"41": [411.02, 595.28]},
+        "sessions": [
+            {
+                "session": 1,
+                "audio": "session_01.mp3",
+                "duration": 2484.2,
+                "lecture_start": 20.0,
+                "lecture_end": 2472.22,
+                "cover_page": 41,
+                "book_pages": [41, 84],
+                "sentences": [{"t": 0}],
+                "cues": [{"t": 0}],
+                "word_alignment": {"m": 1},
+                "sentence_focus": [{"t": 0}],
+            }
+        ],
+    }
+    (books / "tarhe-kolli.lectures.json").write_text(
+        json.dumps(index, ensure_ascii=False), encoding="utf-8"
+    )
+    monkeypatch.setattr(serve, "BOOKS_DIR", books)
+    base, server, original = with_gate(tmp_path, EmptyUpstream())
+    try:
+        request = Request(base + "/books/tarhe-kolli.lectures.summary.json")
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read())
+        assert response.status == 200
+        assert payload["title"] == "طرح کلی"
+        assert len(payload["sessions"]) == 1
+        row = payload["sessions"][0]
+        assert row["audio"] == "session_01.mp3"
+        assert row["lecture_start"] == 20.0
+        assert "sentences" not in row and "cues" not in row
+        # A dataset outside the Book set answers the same 404.
+        try:
+            urlopen(Request(base + "/books/nope.lectures.summary.json"), timeout=10)
+            assert False, "foreign dataset must 404"
+        except HTTPError as exc:
+            assert exc.code == 404
+    finally:
+        stop_gate(server, original)

@@ -53,7 +53,9 @@ export async function installLecturePlayer({
 
   let index;
   try {
-    const response = await fetchImpl(`/books/${book}.lectures.json`);
+    // The SLIM summary (a few KB) — the 45MB alignment file is only
+    // for word-level sync and a phone never downloads it to play.
+    const response = await fetchImpl(`/books/${book}.lectures.summary.json`);
     if (!response.ok) throw new Error(String(response.status));
     index = await response.json();
   } catch {
