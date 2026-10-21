@@ -68,5 +68,9 @@ jobs:
           echo "mp3 count: $(ls tarhe-kolli | grep -c '\.mp3$')"
           stat -c "%s bytes  %n" "$SRC/books/tarhe-kolli.lectures.json"
           du -sh "$DST"
+          echo "===== index into the deploy tree (rsync-excluded) ====="
+          cp "$SRC/books/tarhe-kolli.lectures.json" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
+          chown "$DST_UID:$DST_GID" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
+          stat -c "%s bytes  %n" /home/chat-with-books/current/books/tarhe-kolli.lectures.json
           df -h /home | tail -1
           REMOTE

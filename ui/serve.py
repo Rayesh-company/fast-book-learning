@@ -332,6 +332,18 @@ UI_DIR = Path(__file__).resolve().parent
 BOOKS_DIR = Path(
     os.environ.get("SESSION_BOOKS_DIR", str(UI_DIR.parent / "books"))
 )
+# The lecture sessions' recorded MP3s (the کتاب‌خوان's lecture player).
+# The heavy audio lives OUTSIDE the repo and OUTSIDE the rsynced tree —
+# the deploy mounts it read-only at /lecture-audio — and
+# LECTURE_AUDIO_DIR points there (<dir>/<dataset>/session_XX.mp3). Read
+# per call, the auth_secret() rule; unset (dev without the package),
+# the routes answer 404 and the player explains itself.
+LECTURE_AUDIO_DIR_ENV = "LECTURE_AUDIO_DIR"
+
+
+def lecture_audio_dir():
+    value = str(os.environ.get(LECTURE_AUDIO_DIR_ENV, "") or "").strip()
+    return value or None
 # Rendered page rasters (the visual pipeline). The books/ mount is
 # read-only, so the cache lives outside it. Default: a `render-cache/`
 # beside the books dir — persistent across restarts and deploys, unlike
@@ -1009,6 +1021,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             if rest.isdigit():
                 self._session_get(int(rest))
                 return
+        if path.startswith("/books/") and "/lectures/" in path:
+            self._lecture_audio(path)
+            return
         if path.startswith("/books/"):
             self._book_file(path)
             return
@@ -1029,14 +1044,22 @@ class SessionHandler(SimpleHTTPRequestHandler):
         download managers (IDM among them) intercept requests whose URL
         ends in ``.pdf`` and answer the page with an empty takeover —
         the recorded 204 that left the reader dark (2026-09-13)."""
-        book = re.fullmatch(r"/books/([A-Za-z0-9_-]+?)(?:/book|\.pdf)", path)
+        book = re.fullmatch(
+            r"/books/([A-Za-z0-9_-]+?)(/book|\.pdf|\.lectures\.json)", path
+        )
         index = re.fullmatch(r"/books/([A-Za-z0-9_-]+)\.pages\.json", path)
         if book:
-            dataset, suffix, content_type = (
-                book.group(1),
-                "pdf",
-                "application/pdf",
-            )
+            dataset = book.group(1)
+            if book.group(2) == ".lectures.json":
+                # The lecture index (sessions, word timings, page boxes)
+                # rides beside the PDF it aligns to — ~45MB of measured
+                # data, box-side only, rsync-excluded like the PDFs.
+                suffix, content_type = (
+                    "lectures.json",
+                    "application/json; charset=utf-8",
+                )
+            else:
+                suffix, content_type = ("pdf", "application/pdf")
         elif index:
             dataset, suffix, content_type = (
                 index.group(1),
@@ -1162,6 +1185,87 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
 
     _PAGE_WIDTH_RE = re.compile(r"/books/([A-Za-z0-9_-]+)/page/(\d{1,4})\.png$")
+
+    def _lecture_audio(self, path: str) -> None:
+        """One lecture session's MP3 (the کتاب‌خوان's lecture player).
+        The heavy audio lives OUTSIDE the repo and the rsynced tree —
+        LECTURE_AUDIO_DIR/<dataset>/<file>, a read-only mount the
+        deploy plants; unset, every request answers 404 and the player
+        explains itself. The dataset must be in the Book set and the
+        file a plain name — the allowlist is the traversal guard, the
+        PDF route's law. Range is honored byte-for-byte: seeking IS
+        the player, and a hung phone must not pin the thread (the
+        copy loop swallows the broken pipe like the page rasters
+        do)."""
+        audio_dir = lecture_audio_dir()
+        match = re.fullmatch(
+            r"/books/([A-Za-z0-9_-]+)/lectures/([A-Za-z0-9_.-]+\.mp3)", path
+        )
+        if audio_dir is None or not match or match.group(1) not in BOOK_DATASETS:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        target = (Path(audio_dir) / match.group(1) / match.group(2)).resolve()
+        if not str(target).startswith(str(Path(audio_dir).resolve())):
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        try:
+            total_size = target.stat().st_size
+        except OSError:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        range_header = self.headers.get("Range")
+        if range_header and range_header.startswith("bytes="):
+            try:
+                range_val = range_header[6:].strip()
+                if "-" in range_val:
+                    part_start, part_end = range_val.split("-", 1)
+                    if not part_start:
+                        length = int(part_end)
+                        start = max(0, total_size - length)
+                        end = total_size - 1
+                    else:
+                        start = int(part_start)
+                        end = int(part_end) if part_end else total_size - 1
+                else:
+                    start = int(range_val)
+                    end = total_size - 1
+                if start >= total_size or start > end:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{total_size}")
+                    self.end_headers()
+                    return
+                end = min(end, total_size - 1)
+            except ValueError:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{total_size}")
+                self.end_headers()
+                return
+            status = 206
+        else:
+            start, end, status = 0, total_size - 1, 200
+        self.send_response(status)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "no-cache")
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{total_size}")
+        self.end_headers()
+        try:
+            with target.open("rb") as source:
+                source.seek(start)
+                remaining = end - start + 1
+                while remaining:
+                    chunk = source.read(min(remaining, 64 * 1024))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _book_page_image(self, path: str) -> None:
         """One Book page as a PDFium raster — ``/books/<d>/page/<n>.png?w=``.

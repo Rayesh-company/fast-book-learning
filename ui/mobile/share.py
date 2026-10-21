@@ -2,12 +2,19 @@
 
 This host has no account, payment, AI, or database routes. Browser-local demo
 state stays on each device. The authenticated product server remains separate.
+
+The lecture sessions' MP3s (the کتاب‌خوان's lecture player) ride the same
+contract as the product server's: LECTURE_AUDIO_DIR (or
+--lecture-audio-dir) points at <dir>/<dataset>/session_XX.mp3 — the heavy
+audio lives outside the repo, the delivery guide's method two — and
+/books/<dataset>.lectures.json is served from the books dir beside the PDF.
 """
 from __future__ import annotations
 
 import argparse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import os
 import re
 from urllib.parse import unquote, urlsplit
 
@@ -16,8 +23,9 @@ BOOK_IDS = {"tarhe-kolli", "70143-336"}
 STATIC_TYPES = {".html", ".css", ".mjs", ".js", ".woff2", ".woff", ".ttf", ".svg", ".png", ".jpg"}
 
 
-def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR):
+def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR, lecture_dir: Path | None = None):
     books_dir, ui_dir = books_dir.resolve(), ui_dir.resolve()
+    lecture_dir = lecture_dir.resolve() if lecture_dir else None
 
     class PreviewHandler(SimpleHTTPRequestHandler):
         def do_GET(self):
@@ -36,11 +44,27 @@ def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR):
                 return
             if path == "/mobile/":
                 path = "/mobile/index.html"
-            book = re.fullmatch(r"/books/([A-Za-z0-9_-]+)(/book|\.pdf|\.pages\.json)", path)
+            book = re.fullmatch(
+                r"/books/([A-Za-z0-9_-]+)(/book|\.pdf|\.pages\.json|\.lectures\.json)", path
+            )
+            lecture = re.fullmatch(
+                r"/books/([A-Za-z0-9_-]+)/lectures/([A-Za-z0-9_.-]+\.mp3)", path
+            )
             if book and book[1] in BOOK_IDS:
-                suffix = ".pages.json" if book[2] == ".pages.json" else ".pdf"
+                suffix = {
+                    ".pages.json": ".pages.json",
+                    ".lectures.json": ".lectures.json",
+                }.get(book[2], ".pdf")
                 target = books_dir / (book[1] + suffix)
-                content_type = "application/json; charset=utf-8" if suffix != ".pdf" else "application/pdf"
+                content_type = (
+                    "application/json; charset=utf-8" if suffix != ".pdf" else "application/pdf"
+                )
+            elif lecture and lecture[1] in BOOK_IDS and lecture_dir:
+                target = (lecture_dir / lecture[1] / lecture[2]).resolve()
+                if not target.is_relative_to(lecture_dir):
+                    self.send_error(404)
+                    return
+                content_type = "audio/mpeg"
             elif path.startswith(("/mobile/", "/book-reader/", "/vendor/")):
                 target = (ui_dir / path.lstrip("/")).resolve()
                 if (not target.is_relative_to(ui_dir)
@@ -118,8 +142,18 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--books-dir", type=Path, required=True)
+    parser.add_argument(
+        "--lecture-audio-dir",
+        type=Path,
+        default=os.environ.get("LECTURE_AUDIO_DIR") or None,
+        help="the recorded lecture sessions' root (<dir>/<dataset>/*.mp3); "
+        "defaults to LECTURE_AUDIO_DIR",
+    )
     args = parser.parse_args()
-    server = ThreadingHTTPServer((args.host, args.port), preview_handler(args.books_dir))
+    server = ThreadingHTTPServer(
+        (args.host, args.port),
+        preview_handler(args.books_dir, lecture_dir=args.lecture_audio_dir),
+    )
     print(f"Book preview http://{args.host}:{args.port}/mobile/?demo=1", flush=True)
     try:
         server.serve_forever()

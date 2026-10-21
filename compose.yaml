@@ -250,6 +250,10 @@ services:
       # The server→user push (ADR-0021): opt-in, off by default —
       # Eita's daily message quota is not ours to spend.
       EITAA_PUSH_ENABLED: ${EITAA_PUSH_ENABLED:-}
+      # The lecture sessions' recorded MP3s (the کتاب‌خوان's lecture
+      # player): the read-only mount one level up, per the delivery
+      # guide's method two.
+      LECTURE_AUDIO_DIR: /lecture-audio
     volumes:
       - session_quota:/data
       # The Book set's PDFs + page indexes (ADR-0007), served by
@@ -258,6 +262,12 @@ services:
       - ./books:/books:ro
       # Optional Persian wav2vec2 artifact for exact audio focus.
       - ./models:/models:ro
+      # The lecture sessions' recorded MP3s (the کتاب‌خوان's lecture
+      # player): the heavy audio lives OUTSIDE the rsynced tree, one
+      # level up — the deploy plants it there and LECTURE_AUDIO_DIR
+      # points the routes at it. Unset dir, the routes answer 404 and
+      # the player explains itself.
+      - ../lecture-audio:/lecture-audio:ro
       # The page rasters' disk cache (ADR-0017): the render-cache bind
       # sits beside the books mount exactly where serve.py's default
       # BOOKS_DIR/../render-cache resolves, so a rebuild never re-renders
