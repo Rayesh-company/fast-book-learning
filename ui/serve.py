@@ -978,16 +978,17 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        # The designed mobile UI now hosts the independent Book reader.
-        # This is the face the Eita برنامک shows too (the operator's
-        # call: the bot opens /mobile and the visitor sees THIS panel —
-        # not a separate Eita-only page).
+        # The designed mobile UI is the REAL app (app.mjs: login,
+        # sessions, chat, notes, the reader) — the face the Eita
+        # برنامک opens too. The old design preview keeps its own door.
         if path.startswith("/docs/design/mobile-preview/"):
-            self.path = self.path.replace("/docs/design/mobile-preview/", "/mobile/", 1)
+            self.path = self.path.replace(
+                "/docs/design/mobile-preview/", "/mobile/preview.html", 1
+            )
             path = self.path.split("?", 1)[0]
-            if path in ("/mobile/", "/mobile/index.html"):
-                self.path = self.path.replace(path, "/mobile/preview.html", 1)
-                path = "/mobile/preview.html"
+        if path in ("/mobile/", "/mobile/index.html"):
+            self._mobile_page("index.html")
+            return
         if path in ("/eitaa", "/eitaa/"):
             # The retired برنامک page's address: a permanent redirect
             # to the mobile face the operator chose instead.
@@ -1654,11 +1655,11 @@ class SessionHandler(SimpleHTTPRequestHandler):
     # check verbatim), the binding it records is the next open's silent
     # ride, and «خروج» removes only the caller's own row.
 
-    def _eitaa_page(self) -> None:
-        """The برنامک's page, read from disk per request (the
+    def _mobile_page(self, filename: str = "eitaa_app.html") -> None:
+        """The mobile face's page, read from disk per request (the
         index.html rule): a redeployed page lands without a restart."""
         try:
-            body = (UI_DIR / "eitaa_app.html").read_bytes()
+            body = (UI_DIR / filename).read_bytes()
         except OSError:
             self._drain_request_body()
             self.send_error(404, "Not found")

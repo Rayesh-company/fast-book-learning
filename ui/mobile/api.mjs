@@ -1,16 +1,25 @@
 /** The current repository's authenticated API; absent launch services fail visibly. */
 export function createApi({fetchImpl=fetch}={}) {
+ // The login token persists in localStorage and rides Authorization:
+ // Bearer (ADR-0020) — a WebView's cookie jar dies with the app, the
+ // token does not. A 401 clears it, so a dead token can never masquerade
+ // as a session.
+ const TOKEN_KEY='cwb_auth_token';
+ const loadToken=()=>{try{return localStorage.getItem(TOKEN_KEY);}catch{return null;}};
+ const storeToken=value=>{try{value?localStorage.setItem(TOKEN_KEY,value):localStorage.removeItem(TOKEN_KEY);}catch{}};
  async function request(path,{method='GET',body,signal}={}){
-  const r=await fetchImpl(path,{method,signal,credentials:'same-origin',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+  const token=loadToken();
+  const r=await fetchImpl(path,{method,signal,credentials:'same-origin',cache:'no-store',headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{Authorization:`Bearer ${token}`}:{})},body:body?JSON.stringify(body):undefined});
   let data;try{data=await r.json();}catch{}
+  if(r.status===401)storeToken(null);
   if(!r.ok){const e=new Error(data?.detail||'ارتباط برقرار نشد. دوباره تلاش کنید.');e.status=r.status;throw e;}
   return data;
  }
  const unavailable=async message=>{throw new Error(message);};
  return {demo:false,pageFiltering:false,
   me:async()=>{try{return await request('/auth/me');}catch(e){if(e.status===401)return null;throw e;}},
-  login:({email,password})=>request('/auth/login',{method:'POST',body:{email,password}}),
-  logout:()=>request('/auth/logout',{method:'POST'}),
+  login:async({email,password})=>{const payload=await request('/auth/login',{method:'POST',body:{email,password}});storeToken(payload.token||null);return payload;},
+  logout:async()=>{storeToken(null);await request('/auth/logout',{method:'POST'});},
   requestOtp:()=>unavailable('ورود پیامکی هنوز فعال نشده است. اگر حساب قبلی دارید از ورود با ایمیل استفاده کنید.'),
   verifyOtp:()=>unavailable('تأیید پیامکی هنوز فعال نشده است.'),
   joinWaitlist:()=>unavailable('ثبت فهرست انتظار هنوز در دسترس نیست. بعداً دوباره تلاش کنید.'),

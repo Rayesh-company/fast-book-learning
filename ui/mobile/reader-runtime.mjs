@@ -52,10 +52,11 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
             const result = await fetchImpl('/auth/login', { method: 'POST', signal: listeners.signal, headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({email: form.elements.email.value, password: form.elements.password.value}) });
             if (disposed) return;
-            if (!result.ok) {
-              const body = await result.json();
-              throw new Error(body.detail || 'ورود تأیید نشد.');
-            }
+            const body = await result.json();
+            if (!result.ok) throw new Error(body.detail || 'ورود تأیید نشد.');
+            // The token joins localStorage so the login survives the
+            // WebView's short cookie memory (ADR-0020's Bearer law).
+            if (body.token) { try { localStorage.setItem('cwb_auth_token', body.token); } catch {} }
             authOverlay.remove(); resolve();
           } catch (error) { form.querySelector('[role="alert"]').textContent = error.message; }
           finally { button.disabled = false; }
