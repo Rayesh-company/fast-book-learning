@@ -987,7 +987,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
             )
             path = self.path.split("?", 1)[0]
         if path in ("/mobile/", "/mobile/index.html"):
-            self._mobile_page("index.html")
+            self._mobile_page("mobile/index.html")
             return
         if path in ("/eitaa", "/eitaa/"):
             # The retired برنامک page's address: a permanent redirect
