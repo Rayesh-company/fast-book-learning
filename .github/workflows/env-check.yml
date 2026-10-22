@@ -1,0 +1,18 @@
+name: Env check
+on: {workflow_dispatch: {}}
+permissions: {contents: read}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env: {SSH_PRIVATE_KEY: "${{ secrets.DEPLOY_SSH_KEY }}", SSH_KNOWN_HOSTS: "${{ secrets.DEPLOY_KNOWN_HOSTS }}"}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+      - name: Key names only
+        env: {DEPLOY_HOST: "${{ secrets.DEPLOY_HOST }}", DEPLOY_USER: "${{ secrets.DEPLOY_USER }}", DEPLOY_PORT: "${{ secrets.DEPLOY_PORT }}"}
+        run: |
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" "${DEPLOY_USER}@${DEPLOY_HOST}" 'echo "== .env keys:"; cut -d= -f1 /home/chat-with-books/current/.env | grep -v "^#" | grep -v "^$"; echo "== container has AUTH_SECRET:"; docker exec chat-with-books-session sh -c "printenv | cut -d= -f1 | grep -c AUTH_SECRET || echo 0"; echo "== recent 401s:"; docker logs --since 3600 chat-with-books-session 2>&1 | grep -E "\"(POST|GET) /(ask|api/v1/recall|auth)[^\"]*\" (401|402|429)" | tail -8'
