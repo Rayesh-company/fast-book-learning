@@ -1,0 +1,54 @@
+name: Cognee restore inspect
+
+# Manual: diagnose before restoring — the dump's FORMAT (custom PGDMP vs
+# plain SQL), its size, the postgres container's own DB names, and the
+# CURRENT corpus state (table count + row estimate) so the restore plan
+# is built on facts. Values printed: none beyond names and counts.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+
+      - name: Inspect the dump and the live corpus
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" '
+              set -eu
+              P=chat-with-books-postgres
+              echo "== dump header =="
+              head -c 5 /home/chat-with-books/backups/cognee_db.dump | od -c | head -2
+              stat -c "%s bytes" /home/chat-with-books/backups/cognee_db.dump
+              echo "== pg_dump --list (if custom) =="
+              docker exec $P sh -c "pg_restore --list /dev/null" >/dev/null 2>&1 && echo "pg_restore available" || true
+              docker cp /home/chat-with-books/backups/cognee_db.dump $P:/tmp/cognee_db.dump
+              docker exec $P sh -c "pg_restore --list /tmp/cognee_db.dump 2>/dev/null | head -8 || echo NOT-CUSTOM-FORMAT"
+              echo "== live DB names =="
+              docker exec $P sh -c "printenv | grep -E \"^POSTGRES_(DB|USER)=\" "
+              echo "== current tables and row estimates =="
+              docker exec $P sh -c "psql -U \${POSTGRES_USER:-cognee} -d \${POSTGRES_DB:-cognee_db} -tAc \"SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN (\\x27pg_catalog\\x27,\\x27information_schema\\x27)\"" || true
+              docker exec $P sh -c "psql -U \${POSTGRES_USER:-cognee} -d \${POSTGRES_DB:-cognee_db} -tAc \"SELECT relname, n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC LIMIT 8\"" || true
+              docker exec $P sh -c "rm -f /tmp/cognee_db.dump"
+            '
