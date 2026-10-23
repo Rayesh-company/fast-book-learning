@@ -1,10 +1,11 @@
 name: Cognee restore inspect
 
-# Manual: diagnose the corpus — where the vectors actually live. The
-# graph survived the migration (18k edges) but no vector-bearing table
-# sits in public; this probe lists every database, every vector-columned
-# table in any schema, and the schema census, so the restore plan rests
-# on the cluster's own facts.
+# Manual: diagnose the corpus and the live search. The vector data IS
+# present (DocumentChunk_text 341 rows beside the graph) yet /ask's pool
+# is empty — so the probe now hits cognee DIRECTLY on the box with the
+# exact payload ui/ask.py sends (searchType HYBRID_COMPLETION,
+# only_context) and prints the HTTP status, the reply's head, and
+# cognee's recent error lines: the failing lane named by cognee itself.
 
 on:
   workflow_dispatch:
@@ -27,7 +28,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
-      - name: Where do the vectors live
+      - name: Probe cognee directly with the ask's own payload
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -38,13 +39,14 @@ jobs:
             -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
             "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
           set -eu
-          P=chat-with-books-postgres
-          U=$(docker exec $P printenv POSTGRES_USER)
-          D=$(docker exec $P printenv POSTGRES_DB)
-          echo "== databases =="
-          docker exec $P psql -U "$U" -d "$D" -tAc "SELECT datname FROM pg_database WHERE NOT datistemplate"
-          echo "== vector-bearing tables, any schema =="
-          docker exec $P psql -U "$U" -d "$D" -tAc "SELECT table_schema || '.' || table_name || ' : ' || (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I', table_schema, table_name), false, true, '')))[1]::text FROM information_schema.columns WHERE udt_name='vector' ORDER BY 1"
-          echo "== schema census =="
-          docker exec $P psql -U "$U" -d "$D" -tAc "SELECT n.nspname || ' : ' || count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema') GROUP BY 1 ORDER BY 1"
+          echo "== direct cognee probe =="
+          code=$(curl -s -m 60 -o /tmp/probe.json -w '%{http_code}' \
+            -X POST http://cognee:8000/api/v1/recall \
+            -H 'Content-Type: application/json' \
+            -d '{"searchType":"HYBRID_COMPLETION","query":"قرآن","datasets":["tarhe-kolli"],"includeReferences":true,"only_context":true}')
+          echo "http $code"
+          head -c 500 /tmp/probe.json; echo
+          rm -f /tmp/probe.json
+          echo "== cognee recent errors =="
+          docker logs --since 3600 chat-with-books-cognee 2>&1 | grep -iE "error|exception|traceback|dimension" | tail -12 || echo "(none)"
           REMOTE
