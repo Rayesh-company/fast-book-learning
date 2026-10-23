@@ -108,7 +108,7 @@ export function installQuestionGestures({root,minimise,expand}) {
   root.addEventListener('pointerdown',event=>{
     const handle=event.target.closest('[data-question-handle]');
     if(handle){event.preventDefault();suppressClick=false;drag={id:event.pointerId,y:event.clientY,handle,panel:handle.closest('.reader-floating')};handle.setPointerCapture?.(event.pointerId);}
-    else if(root.querySelector('.reader-floating:not([hidden]) [name="reader-question"],.reader-floating .loading-label')&&!event.target.closest('.reader-floating,.reader-selection-actions,.reader-tools,.drawer-holder,.overlay-holder'))minimise();
+    else if(root.querySelector('.reader-floating:not([hidden]) [name="reader-question"],.reader-floating .loading-label')&&!event.target.closest('.reader-floating,.reader-selection-actions,.reader-tools,.drawer-holder,.overlay-holder,.reader-chrome'))minimise();
   },{signal:life.signal});
   root.addEventListener('pointermove',event=>{if(drag?.id===event.pointerId)drag.panel.style.transform=`translateY(${clamp(event.clientY-drag.y,-100,100)}px)`;},{signal:life.signal});
   function finish(event){if(drag?.id!==event.pointerId)return;const dy=event.clientY-drag.y;drag.panel.style.transform='';suppressClick=Math.abs(dy)>8;drag=null;if(event.type!=='pointercancel'){if(dy<=-48)expand();else if(dy>=36)minimise();}}

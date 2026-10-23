@@ -176,3 +176,61 @@ test('minimising and expanding an in-flight reader answer never cancel or duplic
  f.doc.querySelector('.reader-page').dispatchEvent(new f.dom.window.Event('pointerdown',{bubbles:true}));assert.equal(f.app.state.busy,true);click(f,'restore');click(f,'expand-question');resolve({text:'پاسخ آزمایشی'});await f.app.settled();
  assert.equal(requests,1);assert.equal(f.app.state.messages.length,2);assert.match(f.doc.querySelector('.conversation').textContent,/پاسخ آزمایشی/);f.close();
 });
+
+test('reader chat badge is present from the start next to player without text, activates reader question pop-up on click, and restores/minimises it',async()=>{
+ const f=await fixture();
+ assert.equal(f.doc.querySelector('.phone').dataset.type,'reader');
+ const chatBadge=f.doc.querySelector('.reader-chat-badge');
+ assert.ok(chatBadge, 'chat badge should exist in reader from start');
+ assert.equal(chatBadge.textContent.trim(), '', 'chat badge should have no text');
+ assert.ok(chatBadge.querySelector('svg'), 'chat badge should have SVG icon');
+ const pageBadge=f.doc.querySelector('.reader-page-badge');
+ const player=f.doc.querySelector('.lecture-player');
+ assert.equal(chatBadge.parentElement, player.parentElement, 'chat badge and player should share parent (.reader-chrome)');
+ assert.equal(pageBadge.parentElement, player.parentElement, 'page badge and player should share parent');
+ 
+ // Clicking question button opens question pop-up over reader instead of navigating to chat
+ chatBadge.click();
+ assert.equal(f.doc.querySelector('.phone').dataset.type, 'reader', 'should stay in reader');
+ assert.equal(f.doc.querySelector('.reader-floating').hidden, false, 'should activate question pop-up over reader');
+ assert.equal(f.doc.querySelector('.reader-floating').dataset.state, 'ready');
+ assert.equal(f.doc.querySelector('.reader-chrome').dataset.questionOpen, 'true', 'player should hide when question is open');
+ 
+ // Clicking again while open minimises it
+ chatBadge.click();
+ assert.equal(f.doc.querySelector('.reader-floating').dataset.state, 'minimised');
+ assert.equal(f.doc.querySelector('.reader-chrome').dataset.questionOpen, 'false');
+ 
+ // Clicking again restores it
+ chatBadge.click();
+ assert.equal(f.doc.querySelector('.reader-floating').dataset.state, 'ready');
+ assert.equal(f.doc.querySelector('[name="reader-question"]').value, '');
+ f.close();
+});
+
+test('gemini invocation renders clean morphing pill at bottom, hiding player and minimising into chat badge',async()=>{
+ const f=await fixture();
+ const selected={text:'نمونه متن برای احضار جمینای',pages:[{page:100,start:0,end:25,text:'نمونه متن برای احضار جمینای'}]};
+ f.doc.querySelector('.phone').dispatchEvent(new f.dom.window.CustomEvent('reader-question',{bubbles:true,detail:selected}));
+ 
+ // Clean design: no rainbow aurora or colorful halo
+ assert.equal(f.doc.querySelector('.gemini-screen-aurora'), null, 'no rainbow screen aurora');
+ assert.equal(f.doc.querySelector('.gemini-halo-aura'), null, 'no rainbow halo aura');
+
+ // Floating input dialog sits at the bottom over the player
+ const floating=f.doc.querySelector('.reader-floating');
+ assert.equal(floating.hidden, false);
+ assert.equal(floating.dataset.state, 'ready');
+ assert.equal(f.doc.querySelector('.reader-chrome').dataset.questionOpen, 'true');
+
+ // Minimise cleans up and shrinks towards chat badge
+ f.doc.querySelector('[name="reader-question"]').dispatchEvent(new f.dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+ assert.equal(f.doc.querySelector('.reader-floating').dataset.state, 'minimised');
+ assert.equal(f.doc.querySelector('.reader-chrome').dataset.questionOpen, 'false');
+
+ // Restoring from chat badge re-opens floating dialog
+ f.doc.querySelector('.reader-chat-badge').click();
+ assert.equal(f.doc.querySelector('.reader-floating').dataset.state, 'ready');
+ assert.equal(f.doc.querySelector('.reader-chrome').dataset.questionOpen, 'true');
+ f.close();
+});
