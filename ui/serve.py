@@ -211,6 +211,7 @@ try:
         with_references,
     )
     from ui import lectures
+    from ui import telemetry
     abort_phone_research = abort_account_research
 except ImportError:  # the container runs this file as a script beside the modules
     from agent_client import (
@@ -376,6 +377,7 @@ except ImportError:  # the container runs this file as a script beside the modul
         with_references,
     )
     import lectures
+    import telemetry
     abort_phone_research = abort_account_research
 
 UI_DIR = Path(__file__).resolve().parent
@@ -812,6 +814,20 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # The «میز مدیریت» (T25): the Admin's server-rendered
             # mirror of the system — a read, never a mutation.
             self._admin_console()
+            return
+        if path == "/admin/requests":
+            self._admin_requests_list()
+            return
+        if path.startswith("/admin/requests/"):
+            rest = path[len("/admin/requests/"):]
+            if not rest:
+                self._json_error(404, "شناسه درخواست یافت نشد")
+                return
+            if rest.endswith("/trace.json"):
+                req_id = rest[:-len("/trace.json")]
+                self._admin_request_json(req_id)
+            else:
+                self._admin_request_detail(rest)
             return
         if path == "/profile/data":
             self._profile_data()
@@ -1504,10 +1520,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
             abort_account_research(account)
             # The ask's own ledger entry (T22): input-side size
             # estimate, like the recall POST always recorded.
+            request_id = secrets.token_hex(16)
             record_size_estimate(
-                account, "ask", int(self.headers.get("Content-Length", "0") or "0")
+                account,
+                "ask",
+                int(self.headers.get("Content-Length", "0") or "0"),
+                request_id=request_id,
             )
-            self._ask(account)
+            self._ask(account, request_id=request_id)
         if path == "/admin/accounts":
             # The console's issuance form (T26, GitLab #28): the same
             # act as /auth/accounts, wearing the page's shape.
@@ -1570,10 +1590,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # input-side size estimate — the model calls happen in the
             # agent service, so the Toman ledger sees the volume, not
             # tokens it never metered.
+            request_id = secrets.token_hex(16)
             record_size_estimate(
-                account, "agent", int(self.headers.get("Content-Length", "0") or "0")
+                account,
+                "agent",
+                int(self.headers.get("Content-Length", "0") or "0"),
+                request_id=request_id,
             )
-            self._agent_chat(phone, account=account)
+            self._agent_chat(phone, account=account, request_id=request_id)
             return
         if path == "/agent/recall":
             self._agent_recall()
@@ -1825,7 +1849,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _ask(self, account: str) -> None:
+    def _ask(self, account: str, request_id: str | None = None) -> None:
         """The retrieval-only ask (ADR-0014): the first answer's Evidence
         pool with NO LLM completion in the loop — one only_context search
         per selected Book over the main Cognee service, so the pool is
@@ -1849,15 +1873,25 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # The body is already read above, so _send_json is safe.
             self._send_json(400, {"detail": "پرسش را بنویسید."})
             return
-        sources = ask_pool(query.strip(), datasets)
+        if not request_id:
+            request_id = secrets.token_hex(16)
+        sources = ask_pool(query.strip(), datasets, session_id=request_id)
         chat_id = secrets.token_hex(8)
-        chat_store.create_chat(chat_id, account, query.strip(), datasets, sources)
+        chat_store.create_chat(
+            chat_id, account, query.strip(), datasets, sources, request_id=request_id
+        )
+        telemetry.write_qa_entry(request_id, query.strip(), "", (datasets or [""])[0])
         self._send_json(
             200,
-            {"chat_id": chat_id, "sources": sources, "pool_size": len(sources)},
+            {
+                "chat_id": chat_id,
+                "sources": sources,
+                "pool_size": len(sources),
+                "request_id": request_id,
+            },
         )
 
-    def _agent_chat(self, phone: str, account: str | None = None) -> None:
+    def _agent_chat(self, phone: str, account: str | None = None, request_id: str | None = None) -> None:
         """The Learner-facing seam (ADR-0018), STREAMED (issue #26): the
         sheet's chat surface — the Learner's message goes to the Mastra
         agent's stream route (its tools are the Book pool through
@@ -1884,8 +1918,12 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # The body is already read above, so _send_json is safe.
             self._send_json(400, {"detail": "پرسش را بنویسید."})
             return
+        if not request_id:
+            request_id = secrets.token_hex(16)
         try:
-            turn = LearnerTurnContext.from_request(phone, account, payload)
+            turn = LearnerTurnContext.from_request(
+                phone, account, payload, request_id=request_id
+            )
         except ValueError as err:
             self._send_json(400, {"detail": "پرسش را بنویسید."})
             return
@@ -1930,6 +1968,13 @@ class SessionHandler(SimpleHTTPRequestHandler):
             reply["text"],
             reply["web_sourced"],
             reply["sources"],
+            request_id=request_id,
+        )
+        telemetry.write_qa_entry(
+            request_id,
+            turn.query,
+            reply["text"],
+            turn.datasets[0] if turn.datasets else "",
         )
         # The finalize frame (issue #26): the full answer with the
         # marking guarantee and the window AFTER this Question landed
@@ -2009,7 +2054,10 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # The body is already read above, so _send_json is safe.
             self._send_json(400, {"detail": "query is required"})
             return
-        raw_pool = ask_pool(query.strip(), datasets)
+        session_id = payload.get("session_id") if isinstance(payload, dict) else None
+        if not isinstance(session_id, str):
+            session_id = None
+        raw_pool = ask_pool(query.strip(), datasets, session_id=session_id)
         distilled = distill_pool(query.strip(), raw_pool)
         self._send_json(200, {"passages": distilled})
 
@@ -2382,6 +2430,54 @@ class SessionHandler(SimpleHTTPRequestHandler):
         ).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _admin_requests_list(self) -> None:
+        account = self._admin_gate()
+        if account is None:
+            return
+        query_string = urlparse(self.path).query
+        qs = parse_qs(query_string)
+        filters = {k: v[0] for k, v in qs.items() if v}
+        reqs = telemetry.recent_requests(
+            limit=50,
+            day=filters.get("day"),
+            phone=filters.get("phone"),
+            dataset=filters.get("dataset"),
+            status=filters.get("status"),
+        )
+        body = telemetry.telemetry_list_html(reqs, filters).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _admin_request_detail(self, request_id: str) -> None:
+        account = self._admin_gate()
+        if account is None:
+            return
+        view = telemetry.request_view(request_id)
+        body = telemetry.telemetry_detail_html(view).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _admin_request_json(self, request_id: str) -> None:
+        account = self._admin_gate()
+        if account is None:
+            return
+        data = telemetry.request_json(request_id)
+        body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()

@@ -67,7 +67,7 @@ def _recall_url() -> str:
     )
 
 
-def only_context_request(dataset: str, query: str) -> Request:
+def only_context_request(dataset: str, query: str, session_id: str | None = None) -> Request:
     """One Book's retrieval-only recall POST — the search shape pinned
     HERE, never in the browser: the hybrid retriever's lanes with
     ``only_context``, which returns the retrieval context and nothing
@@ -75,16 +75,19 @@ def only_context_request(dataset: str, query: str) -> Request:
     modules/retrieval/context_preview.py). One dataset per call so every
     passage's Book identity is the call's own — the context doc carries
     no per-chunk attribution."""
+    payload = {
+        "searchType": "HYBRID_COMPLETION",
+        "query": query,
+        "datasets": [dataset],
+        "includeReferences": True,
+        "only_context": True,
+    }
+    if session_id:
+        payload["session_id"] = session_id
     return Request(
         _recall_url(),
         data=json.dumps(
-            {
-                "searchType": "HYBRID_COMPLETION",
-                "query": query,
-                "datasets": [dataset],
-                "includeReferences": True,
-                "only_context": True,
-            },
+            payload,
             ensure_ascii=False,
         ).encode("utf-8"),
         headers={"Content-Type": "application/json; charset=utf-8"},
@@ -133,13 +136,16 @@ def _passage_reference(dataset: str, passage: str) -> str:
     return f"document {dataset} (pages {pages[0]}-{pages[-1]})"
 
 
-def _dataset_passages(dataset: str, query: str) -> list:
+def _dataset_passages(dataset: str, query: str, session_id: str | None = None) -> list:
     """One Book's pool: the only_context call, the context doc out of
     the reply, the parsed passages as (reference, passage) pairs. On
     any failure the Book contributes nothing; the ask continues on its
     sibling Book's pool."""
     try:
-        with urlopen(only_context_request(dataset, query), timeout=ASK_TIMEOUT) as response:
+        with urlopen(
+            only_context_request(dataset, query, session_id=session_id),
+            timeout=ASK_TIMEOUT,
+        ) as response:
             payload = json.load(response)
     except (OSError, ValueError):
         return []
@@ -164,7 +170,7 @@ def _dataset_passages(dataset: str, query: str) -> list:
     ]
 
 
-def ask_pool(query: str, datasets=None, distill: bool = False) -> list:
+def ask_pool(query: str, datasets=None, distill: bool = False, session_id: str | None = None) -> list:
     """The ask's Evidence pool: one only_context search per selected
     Book, both lanes in parallel, the passages merged in the Book set's
     stable order with cross-Book duplicates dropped. The pool is
@@ -176,7 +182,10 @@ def ask_pool(query: str, datasets=None, distill: bool = False) -> list:
     picked = [d for d in (datasets or []) if d in BOOK_DATASETS] or list(BOOK_DATASETS)
     with ThreadPoolExecutor(max_workers=len(picked)) as pool:
         per_book = list(
-            pool.map(lambda dataset: _dataset_passages(dataset, query), picked)
+            pool.map(
+                lambda dataset: _dataset_passages(dataset, query, session_id=session_id),
+                picked,
+            )
         )
     seen = set()
     sources = []

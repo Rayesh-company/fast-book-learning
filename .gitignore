@@ -40,6 +40,7 @@ ui/audit.sqlite3
 # The worktree's runtime stores — the deployed copies live on /data.
 ui/research.sqlite3
 ui/sessions.sqlite3
+ui/chats.sqlite3
 
 # The pilot bench Accounts (credentials) — local only, never committed.
 benchmark/pilot/accounts.json
@@ -58,3 +59,6 @@ agent/src/mastra/public/data/
 # Local e2e scratch
 e2e-tmp/
 agent-dev.log
+agent/data/
+data/
+node_modules/

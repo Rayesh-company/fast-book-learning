@@ -198,6 +198,11 @@ class LearnerTurnContext:
     user_profile: dict = field(default_factory=dict)
     page_context: dict | None = None
     selection_text: dict | str | None = None
+    # The join key (spec 0025 §1): minted at the request boundary in
+    # serve.py, before any downstream call, and handed to the factory.
+    # Empty means the caller never minted — the body stays exactly the
+    # shape the existing pins read.
+    request_id: str = ""
 
     def __post_init__(self) -> None:
         if self.datasets is None:
@@ -213,7 +218,13 @@ class LearnerTurnContext:
         """The ONE body both routes carry (the generate call's own shape —
         #24's pin): the message, the per-Learner thread, and the Book
         selection, user profile, and active page context riding the requestContext,
-        never the prompt text."""
+        never the prompt text. A minted request_id (spec 0025 §1) rides the
+        body twice: as the requestContext key the search-books tool reads,
+        and as ``tracingOptions.traceId`` — 32 hex, the shape Mastra nests
+        its root span under — with the thread and resource as the trace
+        metadata Studio renders as trace-list columns. No minted id, no
+        tracingOptions: the body is exactly the shape the existing pins
+        read."""
         body = {
             "messages": [{"role": "user", "content": self.query}],
             "memory": {
@@ -228,13 +239,31 @@ class LearnerTurnContext:
             body["requestContext"]["pageContext"] = self.page_context
         if self.selection_text:
             body["requestContext"]["selectionText"] = self.selection_text
+        if self.request_id:
+            body["requestContext"]["requestId"] = self.request_id
+            body["tracingOptions"] = {
+                "traceId": self.request_id,
+                "metadata": {"thread": self.thread_id, "resource": self.resource_id},
+                "requestContextKeys": [
+                    "datasets",
+                    "userProfile",
+                    "pageContext",
+                    "selectionText",
+                ],
+            }
         return body
 
     @classmethod
     def from_request(
-        cls, phone: str, account: str | None, payload: dict
+        cls,
+        phone: str,
+        account: str | None,
+        payload: dict,
+        request_id: str | None = None,
     ) -> LearnerTurnContext:
-        """Factory creating turn context from a client request payload."""
+        """Factory creating turn context from a client request payload.
+        ``request_id`` is the join key the gate minted before this call
+        (spec 0025 §1); a caller that never minted leaves it empty."""
         if not isinstance(payload, dict):
             raise ValueError("payload must be a dictionary")
         query = payload.get("query")
@@ -279,6 +308,7 @@ class LearnerTurnContext:
             user_profile=user_profile,
             page_context=page_context,
             selection_text=selection_payload,
+            request_id=request_id or "",
         )
 
 

@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { Mastra } from "@mastra/core";
 import { LibSQLStore } from "@mastra/libsql";
 import { chatAgent } from "./agents/chat-agent";
+import { observability } from "./observability";
 
 const STORAGE_URL = process.env.MASTRA_STORAGE_URL ?? "file:./data/mastra.sqlite";
 
@@ -19,4 +20,5 @@ export const mastra = new Mastra({
     id: "chat-agent-storage",
     url: STORAGE_URL,
   }),
+  observability,
 });

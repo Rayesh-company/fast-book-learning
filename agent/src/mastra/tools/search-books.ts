@@ -26,7 +26,8 @@ export const searchBooksTool = createTool({
       }),
     ),
   }),
-  execute: async ({ query, datasets }, { abortSignal, requestContext }) => {
+  execute: async ({ query, datasets }, context) => {
+    const { abortSignal, requestContext } = (context ?? {}) as any;
     const coreUrl = (process.env.PYTHON_CORE_URL ?? "http://127.0.0.1:8765").replace(/\/+$/, "");
     const agentToken = process.env.AGENT_SERVICE_TOKEN ?? "";
     // The Learner-facing seam (ADR-0018) sends the sheet's Book toggles
@@ -44,6 +45,19 @@ export const searchBooksTool = createTool({
         : Array.isArray(datasets) && datasets.length > 0
           ? datasets
           : undefined;
+    const requestId =
+      typeof requestContext?.get === "function"
+        ? requestContext.get("requestId")
+        : (requestContext as any)?.requestId;
+
+    const span = (context as any)?.tracing?.currentSpan?.createChildSpan?.({
+      type: "generic",
+      name: "cognee-recall",
+      metadata: { request_id: requestId, requestId, datasets: selection },
+      input: { query },
+    });
+    const start = Date.now();
+
     try {
       const response = await fetch(`${coreUrl}/agent/recall`, {
         method: "POST",
@@ -51,10 +65,20 @@ export const searchBooksTool = createTool({
           "Content-Type": "application/json",
           "X-Agent-Token": agentToken,
         },
-        body: JSON.stringify({ query, datasets: selection }),
+        body: JSON.stringify({ query, datasets: selection, session_id: requestId }),
         signal: abortSignal ?? undefined,
       });
       if (!response.ok) {
+        span?.error?.({
+          error: new Error(`Recall failed: ${response.status}`),
+          attributes: {
+            searchType: "recall",
+            datasets: selection,
+            status: "error",
+            status_code: response.status,
+            latency_ms: Date.now() - start,
+          },
+        });
         return { passages: [] };
       }
       const data = (await response.json()) as {
@@ -66,6 +90,23 @@ export const searchBooksTool = createTool({
               typeof p?.reference === "string" && typeof p?.passage === "string",
           )
         : [];
+
+      const passageReferences = rawPassages.map((p) => p.reference);
+      const passageLengths = rawPassages.map((p) => p.passage.length);
+
+      span?.end?.({
+        output: { passages: rawPassages.length },
+        attributes: {
+          searchType: "recall",
+          datasets: selection,
+          passage_count: rawPassages.length,
+          passage_references: passageReferences,
+          passage_lengths: passageLengths,
+          status: "success",
+          latency_ms: Date.now() - start,
+        },
+      });
+
       return {
         passages: rawPassages.slice(0, 4).map((p) => ({
           reference: p.reference,
@@ -75,7 +116,16 @@ export const searchBooksTool = createTool({
               : p.passage,
         })),
       };
-    } catch {
+    } catch (err) {
+      span?.error?.({
+        error: err instanceof Error ? err : new Error(String(err)),
+        attributes: {
+          searchType: "recall",
+          datasets: selection,
+          status: "error",
+          latency_ms: Date.now() - start,
+        },
+      });
       // A missed seam contributes nothing; the agent must say the
       // Books are unreachable rather than invent Book text.
       return { passages: [] };

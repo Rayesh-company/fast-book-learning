@@ -22,7 +22,8 @@ RUN npm run build
 ENV NODE_ENV=production \
     PORT=4111 \
     MASTRA_HOST=0.0.0.0 \
-    MASTRA_STORAGE_URL=file:/data/mastra.sqlite
+    MASTRA_STORAGE_URL=file:/data/mastra.sqlite \
+    MASTRA_STUDIO_PATH=/app/.mastra/output/studio
 
 EXPOSE 4111
 
