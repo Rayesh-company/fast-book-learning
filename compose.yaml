@@ -164,6 +164,7 @@ services:
       PORT: "4111"
       MASTRA_HOST: 0.0.0.0
       MASTRA_STORAGE_URL: file:/data/mastra.sqlite
+      MASTRA_DUCKDB_PATH: /data/mastra-observability.duckdb
       # deepseek-v4.1-flash via Avalai (ADR-0018); the key rides the
       # same root-.env LLM_API_KEY the cognee services read.
       CHAT_AGENT_MODEL: ${CHAT_AGENT_MODEL:-avalai/deepseek-v4.1-flash}

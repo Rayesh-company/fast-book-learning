@@ -1,3 +1,5 @@
+import ast
+
 from tests.conftest import REPO_ROOT
 
 README = REPO_ROOT / "README.md"
@@ -440,31 +442,184 @@ def test_session_ui_server_relays_the_streamed_agent_answer_unbuffered():
     # aborts the upstream and returns BEFORE any metering — the browser
     # gate exercises the disconnect itself; this pin holds the ordering.
     text = SERVE.read_text(encoding="utf-8")
-    handler = text[
-        text.index("def _agent_chat(self, phone: str") : text.index(
-            "def _agent_chat_history(self)"
-        )
-    ]
-    assert 'self.send_header("Content-Type", "text/event-stream' in handler
-    assert "AgentStream(" in handler
-    # The unbuffered relay: one line at a time onto the socket, the
-    # _relay close-delimited pattern.
-    assert "self.wfile.write(line)" in handler
-    # Completion-anchored metering: both writes sit AFTER the relay loop
-    # and behind the completed-reply guard, never on the error path; the
-    # finalize frame rides the seam's own line builder and terminal
-    # frame name (the error frame's name and text are pinned on the
-    # seam tests' wire assertions).
-    assert "record_question(phone)" in handler
-    assert "record_agent_exchange(" in handler
-    assert "sse_frame(" in handler
-    assert "CHAT_ANSWER_FINALIZED" in handler
-    assert handler.index("self.wfile.write(line)") < handler.index(
-        "record_question(phone)"
+    tree = ast.parse(text)
+    func_node = next(
+        (
+            n
+            for n in ast.walk(tree)
+            if isinstance(n, ast.FunctionDef) and n.name == "_agent_chat"
+        ),
+        None,
     )
-    # The abandoned branch: abort and return, meter nothing.
-    abort_branch = handler[
-        handler.index("stream.abort()") : handler.index("record_question(phone)")
-    ]
-    assert "return" in abort_branch
+    assert func_node is not None, "_agent_chat function definition not found in ui/serve.py"
 
+    # SSE header setup: Content-Type must be text/event-stream
+    send_header_call = next(
+        (
+            c
+            for c in ast.walk(func_node)
+            if isinstance(c, ast.Call)
+            and isinstance(c.func, ast.Attribute)
+            and c.func.attr == "send_header"
+            and len(c.args) >= 2
+            and isinstance(c.args[0], ast.Constant)
+            and c.args[0].value == "Content-Type"
+            and isinstance(c.args[1], ast.Constant)
+            and "text/event-stream" in c.args[1].value
+        ),
+        None,
+    )
+    assert send_header_call is not None, "send_header('Content-Type', 'text/event-stream...') not called"
+
+    # AgentStream instantiation
+    agent_stream_call = next(
+        (
+            c
+            for c in ast.walk(func_node)
+            if isinstance(c, ast.Call)
+            and isinstance(c.func, ast.Name)
+            and c.func.id == "AgentStream"
+        ),
+        None,
+    )
+    assert agent_stream_call is not None, "AgentStream(...) not instantiated"
+
+    # The unbuffered relay loop: for line in stream
+    relay_for_idx, relay_for_node = next(
+        (
+            (i, s)
+            for i, s in enumerate(func_node.body)
+            if isinstance(s, ast.For)
+            and isinstance(s.target, ast.Name)
+            and s.target.id == "line"
+            and isinstance(s.iter, ast.Name)
+            and s.iter.id == "stream"
+        ),
+        (None, None),
+    )
+    assert relay_for_node is not None, "Relay loop (for line in stream) not found"
+
+    # Within the relay loop: self.wfile.write(line)
+    relay_write_call = next(
+        (
+            c
+            for c in ast.walk(relay_for_node)
+            if isinstance(c, ast.Call)
+            and isinstance(c.func, ast.Attribute)
+            and c.func.attr == "write"
+            and isinstance(c.func.value, ast.Attribute)
+            and c.func.value.attr == "wfile"
+            and len(c.args) == 1
+            and isinstance(c.args[0], ast.Name)
+            and c.args[0].id == "line"
+        ),
+        None,
+    )
+    assert relay_write_call is not None, "self.wfile.write(line) not found in relay loop"
+
+    # The abandoned branch inside the relay loop: except OSError aborts upstream and returns
+    relay_try_stmt = next(
+        (s for s in relay_for_node.body if isinstance(s, ast.Try)), None
+    )
+    assert relay_try_stmt is not None, "try/except not found in relay loop"
+    os_error_handler = next(
+        (
+            h
+            for h in relay_try_stmt.handlers
+            if isinstance(h.type, ast.Name) and h.type.id == "OSError"
+        ),
+        None,
+    )
+    assert os_error_handler is not None, "except OSError handler not found in relay loop"
+
+    abort_call = next(
+        (
+            c
+            for c in ast.walk(os_error_handler)
+            if isinstance(c, ast.Call)
+            and isinstance(c.func, ast.Attribute)
+            and c.func.attr == "abort"
+            and isinstance(c.func.value, ast.Name)
+            and c.func.value.id == "stream"
+        ),
+        None,
+    )
+    assert abort_call is not None, "stream.abort() call not found in OSError handler"
+
+    has_return = any(isinstance(n, ast.Return) for n in ast.walk(os_error_handler))
+    assert has_return, "Return statement not found in abandoned branch"
+
+    # Metering and persistence calls must never be reachable on the abandoned branch
+    abandoned_calls = [
+        c.func.id if isinstance(c.func, ast.Name) else c.func.attr
+        for c in ast.walk(os_error_handler)
+        if isinstance(c, ast.Call) and (isinstance(c.func, ast.Name) or isinstance(c.func, ast.Attribute))
+    ]
+    assert "record_question" not in abandoned_calls
+    assert "record_agent_exchange" not in abandoned_calls
+
+    # Completion-anchored metering: both writes sit AFTER the relay loop in func_node.body
+    record_question_idx = next(
+        (
+            i
+            for i, s in enumerate(func_node.body)
+            if isinstance(s, ast.Expr)
+            and isinstance(s.value, ast.Call)
+            and isinstance(s.value.func, ast.Name)
+            and s.value.func.id == "record_question"
+        ),
+        None,
+    )
+    assert record_question_idx is not None, "record_question call not found in function body"
+
+    record_exchange_idx = next(
+        (
+            i
+            for i, s in enumerate(func_node.body)
+            if isinstance(s, ast.Expr)
+            and isinstance(s.value, ast.Call)
+            and isinstance(s.value.func, ast.Attribute)
+            and s.value.func.attr == "record_agent_exchange"
+        ),
+        None,
+    )
+    assert record_exchange_idx is not None, "record_agent_exchange call not found in function body"
+
+    assert relay_for_idx < record_question_idx, "record_question must sit after the relay loop"
+    assert relay_for_idx < record_exchange_idx, "record_agent_exchange must sit after the relay loop"
+
+    # Guard behind completed-reply: must sit between relay loop and record_question
+    guard_node = next(
+        (
+            s
+            for s in func_node.body[relay_for_idx:record_question_idx]
+            if isinstance(s, ast.If)
+            and isinstance(s.test, ast.Compare)
+            and any(isinstance(op, ast.Is) for op in s.test.ops)
+            and any(isinstance(n, ast.Return) for n in s.body)
+        ),
+        None,
+    )
+    assert guard_node is not None, "Completed-reply guard (if reply is None: return) must precede metering"
+
+    # Finalize frame with CHAT_ANSWER_FINALIZED
+    sse_finalize_call = next(
+        (
+            c
+            for c in ast.walk(func_node)
+            if isinstance(c, ast.Call)
+            and isinstance(c.func, ast.Name)
+            and c.func.id == "sse_frame"
+            and c.args
+            and isinstance(c.args[0], ast.Dict)
+            and any(
+                isinstance(k, ast.Constant)
+                and k.value == "type"
+                and isinstance(v, ast.Name)
+                and v.id == "CHAT_ANSWER_FINALIZED"
+                for k, v in zip(c.args[0].keys, c.args[0].values)
+            )
+        ),
+        None,
+    )
+    assert sse_finalize_call is not None, "Finalize frame with CHAT_ANSWER_FINALIZED not found"

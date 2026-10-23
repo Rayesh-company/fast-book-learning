@@ -22,6 +22,11 @@ import secrets
 import sqlite3
 from pathlib import Path
 
+try:
+    from ui.store_kernel import open_store
+except ImportError:
+    from store_kernel import open_store
+
 CHAT_DB = Path(
     os.environ.get(
         "SESSION_CHAT_DB", str(Path(__file__).resolve().parent / "chats.sqlite3")
@@ -29,9 +34,8 @@ CHAT_DB = Path(
 )
 
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(CHAT_DB), timeout=5)
-    conn.execute(
+_CHAT_SCHEMA = [
+    (
         "CREATE TABLE IF NOT EXISTS chats ("
         "id TEXT PRIMARY KEY, phone TEXT NOT NULL, "
         "question TEXT NOT NULL, datasets_json TEXT NOT NULL, "
@@ -39,8 +43,8 @@ def _connect() -> sqlite3.Connection:
         "blocks_json TEXT NOT NULL, truncated INTEGER NOT NULL DEFAULT 0, "
         "created_at TEXT NOT NULL, updated_at TEXT NOT NULL, "
         "request_id TEXT)"
-    )
-    conn.execute(
+    ),
+    (
         "CREATE TABLE IF NOT EXISTS agent_chats ("
         "id TEXT PRIMARY KEY, phone TEXT NOT NULL, thread_id TEXT NOT NULL, "
         "question TEXT NOT NULL, answer TEXT NOT NULL, "
@@ -48,32 +52,18 @@ def _connect() -> sqlite3.Connection:
         "sources TEXT NOT NULL DEFAULT '[]', "
         "created_at TEXT NOT NULL, "
         "request_id TEXT)"
-    )
-    # The deployed DB's pre-#24 table predates the marking columns — the
-    # store migrates itself on connect (guarded ALTER per missing
-    # column), so a deployed DB reads old rows with the honest defaults
-    # and takes the guarantee on new writes without a manual step.
-    chats_columns = {
-        row[1] for row in conn.execute("PRAGMA table_info(chats)")
-    }
-    if "request_id" not in chats_columns:
-        conn.execute("ALTER TABLE chats ADD COLUMN request_id TEXT")
-    agent_chats_columns = {
-        row[1] for row in conn.execute("PRAGMA table_info(agent_chats)")
-    }
-    if "web_sourced" not in agent_chats_columns:
-        conn.execute(
-            "ALTER TABLE agent_chats ADD COLUMN web_sourced"
-            " INTEGER NOT NULL DEFAULT 0"
-        )
-    if "sources" not in agent_chats_columns:
-        conn.execute(
-            "ALTER TABLE agent_chats ADD COLUMN sources TEXT NOT NULL DEFAULT '[]'"
-        )
-    if "request_id" not in agent_chats_columns:
-        conn.execute("ALTER TABLE agent_chats ADD COLUMN request_id TEXT")
-    conn.commit()
-    return conn
+    ),
+]
+_CHAT_MIGRATIONS = [
+    ("chats", "request_id", "TEXT"),
+    ("agent_chats", "web_sourced", "INTEGER NOT NULL DEFAULT 0"),
+    ("agent_chats", "sources", "TEXT NOT NULL DEFAULT '[]'"),
+    ("agent_chats", "request_id", "TEXT"),
+]
+
+
+def _connect() -> sqlite3.Connection:
+    return open_store(CHAT_DB, _CHAT_SCHEMA, _CHAT_MIGRATIONS)
 
 
 def _now() -> str:

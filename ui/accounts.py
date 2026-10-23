@@ -28,6 +28,11 @@ import secrets
 import sqlite3
 from pathlib import Path
 
+try:
+    from ui.store_kernel import open_store
+except ImportError:
+    from store_kernel import open_store
+
 # The Account store's own file (the quotas.py pattern): ui/ in dev,
 # beside the other stores; ACCOUNTS_DB moves it for tests and deploys.
 ACCOUNTS_DB = Path(
@@ -51,32 +56,24 @@ def _now() -> str:
     return datetime.datetime.now().isoformat(timespec="seconds")
 
 
+_ACCOUNTS_SCHEMA = (
+    "CREATE TABLE IF NOT EXISTS accounts ("
+    "email TEXT PRIMARY KEY, "
+    "password_hash TEXT NOT NULL, "
+    "phone TEXT, "
+    "role TEXT NOT NULL, "
+    "created_at TEXT NOT NULL, "
+    "balance_toman INTEGER NOT NULL DEFAULT 0, "
+    "profile_json TEXT)"
+)
+_ACCOUNTS_MIGRATIONS = [
+    ("accounts", "balance_toman", "INTEGER NOT NULL DEFAULT 0"),
+    ("accounts", "profile_json", "TEXT"),
+]
+
+
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(ACCOUNTS_DB), timeout=5)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS accounts ("
-        "email TEXT PRIMARY KEY, "
-        "password_hash TEXT NOT NULL, "
-        "phone TEXT, "
-        "role TEXT NOT NULL, "
-        "created_at TEXT NOT NULL, "
-        "balance_toman INTEGER NOT NULL DEFAULT 0)"
-    )
-    # The Balance (T23, GitLab #25) landed after the first Accounts did —
-    # an existing store migrates in place, idempotently, on first touch.
-    try:
-        conn.execute(
-            "ALTER TABLE accounts ADD COLUMN balance_toman INTEGER NOT NULL DEFAULT 0"
-        )
-    except sqlite3.OperationalError:
-        pass  # the column is already there
-    try:
-        conn.execute(
-            "ALTER TABLE accounts ADD COLUMN profile_json TEXT"
-        )
-    except sqlite3.OperationalError:
-        pass
-    return conn
+    return open_store(ACCOUNTS_DB, _ACCOUNTS_SCHEMA, _ACCOUNTS_MIGRATIONS)
 
 
 def _normalize_email(email) -> str:

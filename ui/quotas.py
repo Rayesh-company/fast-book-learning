@@ -17,6 +17,11 @@ import os
 import sqlite3
 from pathlib import Path
 
+try:
+    from ui.store_kernel import open_store
+except ImportError:
+    from store_kernel import open_store
+
 # A chat is one ask: phase 1 records it, and phase 2 (/quoted-answer)
 # belongs to that chat — it needs an Account with a chat today, and never
 # counts or checks the limit itself (the 5th chat's own Quoted answer must
@@ -43,18 +48,16 @@ def _today() -> str:
     return datetime.date.today().isoformat()
 
 
+_QUOTA_SCHEMA = (
+    "CREATE TABLE IF NOT EXISTS chats (account TEXT NOT NULL, day TEXT NOT NULL)"
+)
+_QUOTA_MIGRATIONS = [
+    ("chats", "account", "RENAME FROM phone"),
+]
+
+
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(QUOTA_DB), timeout=5)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS chats (account TEXT NOT NULL, day TEXT NOT NULL)"
-    )
-    # A pre-T21 store keys its rows `phone` — the column renames in
-    # place (the values follow when ui/migrate.py runs the attach map).
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(chats)")}
-    if "phone" in columns and "account" not in columns:
-        conn.execute("ALTER TABLE chats RENAME COLUMN phone TO account")
-        conn.commit()
-    return conn
+    return open_store(QUOTA_DB, _QUOTA_SCHEMA, _QUOTA_MIGRATIONS)
 
 
 def chats_today(account: str) -> int:

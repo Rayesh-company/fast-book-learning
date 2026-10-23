@@ -26,6 +26,11 @@ import threading
 import time
 from pathlib import Path
 
+try:
+    from ui.store_kernel import open_store
+except ImportError:
+    from store_kernel import open_store
+
 # The tariff (T22): Toman per million tokens, config-held. The defaults
 # are the PM's starting dials for glm-5.3-flash on AvalAI — they are
 # deliberately NOT measured market prices; the shape (config over code)
@@ -55,36 +60,26 @@ LEDGER_DB = os.environ.get(
 _LOCK = threading.Lock()
 
 
+_LEDGER_SCHEMA = """CREATE TABLE IF NOT EXISTS usage_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account TEXT NOT NULL,
+    ts TEXT NOT NULL,
+    day TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    metered INTEGER NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    cost_toman INTEGER NOT NULL,
+    request_id TEXT
+)"""
+_LEDGER_MIGRATIONS = [
+    ("usage_entries", "account", "RENAME FROM phone"),
+    ("usage_entries", "request_id", "TEXT"),
+]
+
+
 def _connect() -> sqlite3.Connection:
-    con = sqlite3.connect(LEDGER_DB)
-    con.execute(
-        """CREATE TABLE IF NOT EXISTS usage_entries (
-               id INTEGER PRIMARY KEY AUTOINCREMENT,
-               account TEXT NOT NULL,
-               ts TEXT NOT NULL,
-               day TEXT NOT NULL,
-               kind TEXT NOT NULL,
-               metered INTEGER NOT NULL,
-               input_tokens INTEGER NOT NULL,
-               output_tokens INTEGER NOT NULL,
-               cost_toman INTEGER NOT NULL,
-               request_id TEXT
-           )"""
-    )
-    # A pre-T21 store keys its rows `phone` — the column renames in
-    # place (the values follow when ui/migrate.py runs the attach map).
-    columns = {row[1] for row in con.execute("PRAGMA table_info(usage_entries)")}
-    if "phone" in columns and "account" not in columns:
-        con.execute("ALTER TABLE usage_entries RENAME COLUMN phone TO account")
-        con.commit()
-    # A deployed store predates the join key (spec 0025 §1): the guarded
-    # ALTER per missing column, the chat store's own migration shape, so
-    # a rebuild keeps existing rows and old entries read with the honest
-    # absence.
-    if "request_id" not in columns:
-        con.execute("ALTER TABLE usage_entries ADD COLUMN request_id TEXT")
-        con.commit()
-    return con
+    return open_store(LEDGER_DB, _LEDGER_SCHEMA, _LEDGER_MIGRATIONS)
 
 
 def _today() -> str:

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
-import type { LibSQLStore } from "@mastra/libsql";
+import type { ObservabilityStorage } from "@mastra/core/storage";
 import { chatAgent } from "./agents/chat-agent";
 import { observability } from "./observability";
 import { mastra } from "./index";
@@ -100,10 +100,44 @@ afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
+async function getObservabilityStore(): Promise<ObservabilityStorage> {
+  const storage = mastra.getStorage();
+  expect(storage).toBeDefined();
+  expect(typeof storage?.getStore).toBe("function");
+
+  const obsStore = await storage!.getStore("observability");
+  expect(obsStore).toBeDefined();
+  return obsStore!;
+}
+
 describe("Mastra observability integration", () => {
   it("wires observability into the main mastra instance in index.ts", () => {
     expect(mastra.observability).toBeDefined();
     expect(mastra.observability).toBe(observability);
+  });
+
+  it("configures storage with an observability domain supporting metrics and traces", async () => {
+    const obsStore = await getObservabilityStore();
+
+    expect(typeof obsStore.batchCreateMetrics).toBe("function");
+    expect(typeof obsStore.getTrace).toBe("function");
+    expect(typeof obsStore.listMetrics).toBe("function");
+    expect(typeof obsStore.createSpan).toBe("function");
+
+    // Assert batchCreateMetrics is supported by the observability store and does not throw
+    await expect(
+      obsStore.batchCreateMetrics({
+        metrics: [
+          {
+            metricId: "test-metric-1",
+            name: "test_counter",
+            value: 1,
+            timestamp: new Date(),
+            labels: {},
+          },
+        ],
+      }),
+    ).resolves.not.toThrow();
   });
 
   it("records a trace matching the provided traceId and contains a search-books tool span", async () => {
@@ -122,11 +156,8 @@ describe("Mastra observability integration", () => {
     await observability.flush();
 
     // Query trace from the storage observability domain
-    const storage = mastra.getStorage() as LibSQLStore;
-    const obsStore = await storage.getStore("observability");
-    expect(obsStore).toBeDefined();
-
-    const trace = await obsStore!.getTrace({ traceId });
+    const obsStore = await getObservabilityStore();
+    const trace = await obsStore.getTrace({ traceId });
 
     expect(trace).toBeDefined();
     expect(trace?.traceId).toBe(traceId);
@@ -140,5 +171,11 @@ describe("Mastra observability integration", () => {
         (/search.*book/i.test(s.name) || /search.*book/i.test(s.entityId)),
     );
     expect(toolSpan).toBeDefined();
+
+    // Verify metrics batch creation was recorded into the observability store
+    const metrics = await obsStore.listMetrics({});
+    expect(metrics).toBeDefined();
+    expect(Array.isArray(metrics.metrics)).toBe(true);
+    expect(metrics.metrics.length).toBeGreaterThan(0);
   });
 });
