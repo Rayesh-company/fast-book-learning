@@ -234,3 +234,93 @@ test('gemini invocation renders clean morphing pill at bottom, hiding player and
  assert.equal(f.doc.querySelector('.reader-chrome').dataset.questionOpen, 'true');
  f.close();
 });
+test('selecting a line in reader to ask agent uses a new session instead of previous chat session',async()=>{
+ const f=await fixture();
+ click(f,'open-chat');
+ let q=f.doc.querySelector('[name="question"]');
+ q.value='پرسش نخست در نشست اول';
+ q.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}));
+ click(f,'send-chat');
+ await f.app.settled();
+ const firstSessionId=f.app.state.sessionId;
+ assert.ok(firstSessionId,'first session id should be established');
+ assert.equal(f.app.state.messages.length,2);
+ assert.equal(f.app.state.messages[0].payload.text,'پرسش نخست در نشست اول');
+
+ click(f,'open-reader');
+ assert.equal(f.doc.querySelector('.phone').dataset.type,'reader');
+
+ const selection={
+  text:'این یک فراز مهم از متن کتاب است',
+  pages:[{page:100,start:5,end:35,text:'این یک فراز مهم از متن کتاب است'}],
+ };
+ f.doc.querySelector('.phone').dispatchEvent(
+  new f.dom.window.CustomEvent('reader-question',{bubbles:true,detail:selection})
+ );
+
+ assert.equal(f.app.state.sessionId,null);
+ assert.equal(f.app.state.messages.length,0);
+
+ click(f,'expand-question');
+ assert.equal(f.doc.querySelector('.phone').dataset.type,'chat');
+ assert.equal(f.app.state.messages.length,0);
+ assert.equal(f.doc.querySelectorAll('.conversation .user-turn').length,0);
+
+ q=f.doc.querySelector('[name="question"]');
+ q.value='این فراز را تشریح کن';
+ q.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}));
+ click(f,'send-chat');
+ await f.app.settled();
+
+ const secondSessionId=f.app.state.sessionId;
+ assert.ok(secondSessionId,'new session id should be created');
+ assert.notEqual(secondSessionId,firstSessionId,'must use a new session, not the previous session');
+ assert.equal(f.app.state.messages.length,2);
+ assert.equal(f.app.state.messages[0].payload.text,'این فراز را تشریح کن');
+ assert.deepEqual(JSON.parse(JSON.stringify(f.app.state.messages[0].payload.selection)),selection);
+
+ const prevSession=await f.api.session(firstSessionId);
+ assert.equal(prevSession.messages[0].payload.text,'پرسش نخست در نشست اول');
+ assert.equal(prevSession.messages.length,2);
+ f.close();
+});
+
+test('submitting a question directly from reader floating bar uses a new session',async()=>{
+ const f=await fixture();
+ click(f,'open-chat');
+ const q=f.doc.querySelector('[name="question"]');
+ q.value='گفتگوی قبلی';
+ q.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}));
+ click(f,'send-chat');
+ await f.app.settled();
+ const prevId=f.app.state.sessionId;
+ assert.ok(prevId);
+
+ click(f,'open-reader');
+
+ const selection={
+  text:'متن جدید برای نشست جدید',
+  pages:[{page:100,start:0,end:20,text:'متن جدید برای نشست جدید'}],
+ };
+ f.doc.querySelector('.phone').dispatchEvent(
+  new f.dom.window.CustomEvent('reader-question',{bubbles:true,detail:selection})
+ );
+ assert.equal(f.app.state.sessionId,null);
+ assert.equal(f.app.state.messages.length,0);
+
+ const rqInput=f.doc.querySelector('[name="reader-question"]');
+ rqInput.value='توضیح این متن';
+ rqInput.dispatchEvent(new f.dom.window.Event('input',{bubbles:true}));
+ click(f,'send-reader');
+ await f.app.settled();
+
+ const newId=f.app.state.sessionId;
+ assert.ok(newId);
+ assert.notEqual(newId,prevId,'should create a new session ID for the selection question');
+ assert.ok(f.app.state.readerQuestion.answer);
+
+ const oldSession=await f.api.session(prevId);
+ assert.equal(oldSession.messages[0].payload.text,'گفتگوی قبلی');
+ f.close();
+});
+

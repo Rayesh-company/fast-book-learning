@@ -22,6 +22,11 @@ import secrets
 import sqlite3
 from pathlib import Path
 
+try:
+    from ui.store_kernel import open_store
+except ImportError:
+    from store_kernel import open_store
+
 CHAT_DB = Path(
     os.environ.get(
         "SESSION_CHAT_DB", str(Path(__file__).resolve().parent / "chats.sqlite3")
@@ -29,48 +34,245 @@ CHAT_DB = Path(
 )
 
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(CHAT_DB), timeout=5)
-    conn.execute(
+_CHAT_SCHEMA = [
+    (
         "CREATE TABLE IF NOT EXISTS chats ("
         "id TEXT PRIMARY KEY, phone TEXT NOT NULL, "
         "question TEXT NOT NULL, datasets_json TEXT NOT NULL, "
         "sources_json TEXT NOT NULL, selections_json TEXT NOT NULL, "
         "blocks_json TEXT NOT NULL, truncated INTEGER NOT NULL DEFAULT 0, "
-        "created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
-    )
-    conn.execute(
+        "created_at TEXT NOT NULL, updated_at TEXT NOT NULL, "
+        "request_id TEXT)"
+    ),
+    (
         "CREATE TABLE IF NOT EXISTS agent_chats ("
         "id TEXT PRIMARY KEY, phone TEXT NOT NULL, thread_id TEXT NOT NULL, "
         "question TEXT NOT NULL, answer TEXT NOT NULL, "
         "web_sourced INTEGER NOT NULL DEFAULT 0, "
         "sources TEXT NOT NULL DEFAULT '[]', "
-        "created_at TEXT NOT NULL)"
-    )
-    # The deployed DB's pre-#24 table predates the marking columns — the
-    # store migrates itself on connect (guarded ALTER per missing
-    # column), so a deployed DB reads old rows with the honest defaults
-    # and takes the guarantee on new writes without a manual step.
-    columns = {
-        row[1] for row in conn.execute("PRAGMA table_info(agent_chats)")
-    }
-    if "web_sourced" not in columns:
-        conn.execute(
-            "ALTER TABLE agent_chats ADD COLUMN web_sourced"
-            " INTEGER NOT NULL DEFAULT 0"
-        )
-    if "sources" not in columns:
-        conn.execute(
-            "ALTER TABLE agent_chats ADD COLUMN sources TEXT NOT NULL DEFAULT '[]'"
-        )
-    return conn
+        "created_at TEXT NOT NULL, "
+        "request_id TEXT)"
+    ),
+]
+_CHAT_MIGRATIONS = [
+    ("chats", "request_id", "TEXT"),
+    ("agent_chats", "web_sourced", "INTEGER NOT NULL DEFAULT 0"),
+    ("agent_chats", "sources", "TEXT NOT NULL DEFAULT '[]'"),
+    ("agent_chats", "request_id", "TEXT"),
+]
+
+
+def _connect() -> sqlite3.Connection:
+    return open_store(CHAT_DB, _CHAT_SCHEMA, _CHAT_MIGRATIONS)
 
 
 def _now() -> str:
     return datetime.datetime.now().isoformat(timespec="seconds")
 
 
-def create_chat(chat_id: str, phone: str, question: str, datasets, sources) -> None:
+def _compute_duration(created_at: str | None, updated_at: str | None) -> float | None:
+    if not created_at or not updated_at:
+        return None
+    try:
+        t0 = datetime.datetime.fromisoformat(created_at)
+        t1 = datetime.datetime.fromisoformat(updated_at)
+        diff = (t1 - t0).total_seconds()
+        if diff >= 0:
+            return round(diff, 1)
+    except Exception:
+        pass
+    return None
+
+
+def get_chat_by_request_id(request_id: str) -> dict | None:
+    """Search agent_chats first for request_id == request_id, then fallback to chats.
+    Deserializes JSON fields (sources, datasets), computes duration (float or None) from
+    created_at and updated_at, and returns a normalized dictionary:
+    {"id": row_id, "request_id": req_id, "phone": phone, "account": account,
+     "question": question, "answer": answer, "sources": sources, "datasets": datasets,
+     "created_at": created_at, "updated_at": updated_at, "duration": duration,
+     "is_agent": True/False}
+    Returns None if not found.
+    """
+    if not request_id:
+        return None
+    conn = _connect()
+    try:
+        conn.row_factory = sqlite3.Row
+        # 1. Search agent_chats first
+        row = conn.execute(
+            "SELECT id, phone, thread_id, question, answer, web_sourced, sources, created_at, request_id "
+            "FROM agent_chats WHERE request_id = ? ORDER BY rowid DESC LIMIT 1",
+            (request_id,),
+        ).fetchone()
+        if row is not None:
+            sources = []
+            try:
+                sources = json.loads(row["sources"])
+            except Exception:
+                sources = []
+            return {
+                "id": row["id"],
+                "request_id": row["request_id"],
+                "phone": row["phone"],
+                "account": row["phone"],
+                "question": row["question"],
+                "answer": row["answer"],
+                "sources": sources,
+                "datasets": ["tarhe-kolli"],
+                "created_at": row["created_at"],
+                "updated_at": None,
+                "duration": None,
+                "is_agent": True,
+            }
+
+        # 2. Fallback to chats
+        row = conn.execute(
+            "SELECT id, phone, question, datasets_json, sources_json, created_at, updated_at, request_id "
+            "FROM chats WHERE request_id = ? ORDER BY rowid DESC LIMIT 1",
+            (request_id,),
+        ).fetchone()
+        if row is not None:
+            datasets = []
+            try:
+                datasets = json.loads(row["datasets_json"])
+            except Exception:
+                datasets = []
+            if not datasets:
+                datasets = ["tarhe-kolli"]
+
+            sources = []
+            try:
+                sources = json.loads(row["sources_json"])
+            except Exception:
+                sources = []
+
+            created_at = row["created_at"]
+            updated_at = row["updated_at"]
+            duration = _compute_duration(created_at, updated_at)
+
+            return {
+                "id": row["id"],
+                "request_id": row["request_id"],
+                "phone": row["phone"],
+                "account": row["phone"],
+                "question": row["question"],
+                "answer": "",
+                "sources": sources,
+                "datasets": datasets,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "duration": duration,
+                "is_agent": False,
+            }
+        return None
+    finally:
+        conn.close()
+
+
+def list_recent_chats_by_request(limit: int = 100) -> list[dict]:
+    """Queries recent rows from agent_chats and chats with non-null request_id,
+    normalizes each row into the dict format, sorts by created_at DESC, and
+    returns up to limit records.
+    """
+    conn = _connect()
+    try:
+        conn.row_factory = sqlite3.Row
+        agent_rows = conn.execute(
+            "SELECT id, phone, thread_id, question, answer, web_sourced, sources, created_at, request_id "
+            "FROM agent_chats WHERE request_id IS NOT NULL AND request_id != '' "
+            "ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        chat_rows = conn.execute(
+            "SELECT id, phone, question, datasets_json, sources_json, created_at, updated_at, request_id "
+            "FROM chats WHERE request_id IS NOT NULL AND request_id != '' "
+            "ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    chats_by_req: dict[str, dict] = {}
+    for r in agent_rows:
+        req_id = r["request_id"]
+        if not req_id:
+            continue
+        sources = []
+        try:
+            sources = json.loads(r["sources"])
+        except Exception:
+            sources = []
+        chats_by_req[req_id] = {
+            "id": r["id"],
+            "request_id": req_id,
+            "phone": r["phone"],
+            "account": r["phone"],
+            "question": r["question"],
+            "answer": r["answer"],
+            "sources": sources,
+            "datasets": ["tarhe-kolli"],
+            "created_at": r["created_at"],
+            "updated_at": None,
+            "duration": None,
+            "is_agent": True,
+        }
+
+    for r in chat_rows:
+        req_id = r["request_id"]
+        if not req_id:
+            continue
+        datasets = []
+        try:
+            datasets = json.loads(r["datasets_json"])
+        except Exception:
+            datasets = []
+        if not datasets:
+            datasets = ["tarhe-kolli"]
+
+        sources = []
+        try:
+            sources = json.loads(r["sources_json"])
+        except Exception:
+            sources = []
+
+        created_at = r["created_at"]
+        updated_at = r["updated_at"]
+        duration = _compute_duration(created_at, updated_at)
+
+        if req_id not in chats_by_req:
+            chats_by_req[req_id] = {
+                "id": r["id"],
+                "request_id": req_id,
+                "phone": r["phone"],
+                "account": r["phone"],
+                "question": r["question"],
+                "answer": "",
+                "sources": sources,
+                "datasets": datasets,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "duration": duration,
+                "is_agent": False,
+            }
+        else:
+            chats_by_req[req_id]["datasets"] = datasets
+            if duration is not None and chats_by_req[req_id].get("duration") is None:
+                chats_by_req[req_id]["duration"] = duration
+
+    items = list(chats_by_req.values())
+    items.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    return items[:limit]
+
+
+def create_chat(
+    chat_id: str,
+    phone: str,
+    question: str,
+    datasets,
+    sources,
+    request_id: str | None = None,
+) -> None:
     """Insert one ask's row with its founding pool; the caller owns the
     id (the handler minted it before the first write, so the ask is
     always addressable by the id it already answered with)."""
@@ -79,8 +281,8 @@ def create_chat(chat_id: str, phone: str, question: str, datasets, sources) -> N
         stamp = _now()
         conn.execute(
             "INSERT INTO chats (id, phone, question, datasets_json, sources_json,"
-            " selections_json, blocks_json, truncated, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+            " selections_json, blocks_json, truncated, created_at, updated_at, request_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
             (
                 chat_id,
                 phone,
@@ -91,6 +293,7 @@ def create_chat(chat_id: str, phone: str, question: str, datasets, sources) -> N
                 "[]",
                 stamp,
                 stamp,
+                request_id,
             ),
         )
         conn.commit()
@@ -171,6 +374,7 @@ def record_agent_exchange(
     answer: str,
     web_sourced: bool = False,
     sources=None,
+    request_id: str | None = None,
 ) -> str:
     """One Question's row in the agent conversation (ADR-0018): the
     Learner's message, the agent's answer, and the guaranteed «بیرون از
@@ -191,7 +395,7 @@ def record_agent_exchange(
     try:
         conn.execute(
             "INSERT INTO agent_chats (id, phone, thread_id, question, answer,"
-            " web_sourced, sources, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            " web_sourced, sources, created_at, request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 exchange_id,
                 phone,
@@ -201,6 +405,7 @@ def record_agent_exchange(
                 1 if web_sourced else 0,
                 json.dumps(clean_sources, ensure_ascii=False),
                 _now(),
+                request_id,
             ),
         )
         conn.commit()

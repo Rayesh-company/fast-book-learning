@@ -28,7 +28,7 @@ export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequi
   saveProfile:async profile=>{
    if(!data.account)data.account={phone:'۰۹۱۲۳۴۵۶۷۸۹',email:'',role:'user'};
    data.account.profile=clone(profile);
-   data.account.profile_completed=Boolean(profile?.usage_purpose);
+   data.account.profile_completed=Boolean(profile?.assistant_tone||profile?.tone||profile?.usage_purpose||profile?.knowledge_level);
    save();
    return {profile:clone(data.account.profile),profile_completed:data.account.profile_completed};
   },

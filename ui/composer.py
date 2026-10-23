@@ -271,7 +271,12 @@ def _composer_reply(
         model = "unsloth/Qwen3.8-27B-GGUF"
     endpoint_url = os.environ.get("LLM_ENDPOINT")
     target_url = (endpoint_url.rstrip("/") + "/chat/completions") if endpoint_url else COMPOSER_URL
-    if os.path.exists("/.dockerenv") or os.environ.get("SESSION_UI_HOST") == "0.0.0.0":
+    in_docker = (
+        os.path.exists("/.dockerenv")
+        or os.environ.get("IN_DOCKER") == "1"
+        or (os.name != "nt" and os.environ.get("SESSION_UI_HOST") == "0.0.0.0")
+    )
+    if in_docker:
         target_url = target_url.replace("127.0.0.1", "host.docker.internal").replace("localhost", "host.docker.internal")
     payload = {
         "model": model,

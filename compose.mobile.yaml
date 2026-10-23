@@ -10,6 +10,7 @@ services:
     env_file:
       - .env
     environment:
+      IN_DOCKER: "1"
       SESSION_UI_HOST: 0.0.0.0
       SESSION_UI_PORT: "8765"
       SESSION_UI_QUOTA_DB: /data/usage.sqlite3
@@ -39,7 +40,7 @@ services:
       FROZEN_EMBEDDING_DIMENSIONS: ${FROZEN_EMBEDDING_DIMENSIONS:-${EMBEDDING_DIMENSIONS:-"3072"}}
     volumes:
       - session_mobile_data:/data
-      - ../../books:/books:ro
+      - ./books:/books:ro
       - ./models:/models:ro
       - ../../render-cache:/render-cache
     ports:

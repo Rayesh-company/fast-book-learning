@@ -164,6 +164,7 @@ services:
       PORT: "4111"
       MASTRA_HOST: 0.0.0.0
       MASTRA_STORAGE_URL: file:/data/mastra.sqlite
+      MASTRA_DUCKDB_PATH: /data/mastra-observability.duckdb
       # deepseek-v4.1-flash via Avalai (ADR-0018); the key rides the
       # same root-.env LLM_API_KEY the cognee services read.
       CHAT_AGENT_MODEL: ${CHAT_AGENT_MODEL:-avalai/deepseek-v4.1-flash}
@@ -174,6 +175,9 @@ services:
       # (ADR-0016/0018), container-to-container.
       PYTHON_CORE_URL: http://session:8765
       AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
+      MASTRA_STUDIO_PATH: /app/.mastra/output/studio
+    ports:
+      - "127.0.0.1:4111:4111"
     volumes:
       # The agent's conversation memory (durable threads, ADR-0014's
       # persistence leg) — a rebuild must not throw it away.
@@ -230,6 +234,7 @@ services:
       # A Next-tier search can pass ten minutes; the relay waits on its
       # own leash (serve.py default 1200s).
       NEXT_TIER_TIMEOUT: ${NEXT_TIER_TIMEOUT:-1200}
+      IN_DOCKER: "1"
       SESSION_UI_HOST: 0.0.0.0
       SESSION_UI_PORT: "8765"
       SESSION_UI_QUOTA_DB: /data/usage.sqlite3

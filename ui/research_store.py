@@ -25,6 +25,11 @@ import sqlite3
 import threading
 from pathlib import Path
 
+try:
+    from ui.store_kernel import open_store
+except ImportError:
+    from store_kernel import open_store
+
 # Research Mode (ADR-0008): a research conversation spans far longer
 # than one request — a restart must not throw the investigation away
 # (the dive's in-process registry did, by design). Sessions and their
@@ -78,55 +83,35 @@ def session_save_lock(session_id: str) -> threading.RLock:
         return lock
 
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(RESEARCH_DB), timeout=5)
-    conn.execute(
+_RESEARCH_SCHEMA = [
+    (
         "CREATE TABLE IF NOT EXISTS research_sessions ("
         "id TEXT PRIMARY KEY, account TEXT NOT NULL, "
         "state_json TEXT NOT NULL, created_at TEXT NOT NULL, "
         "updated_at TEXT NOT NULL, "
-        "version INTEGER NOT NULL DEFAULT 0)"
-    )
-    # A pre-T21 store keys its rows `phone` — the column renames in
-    # place (the values follow when ui/migrate.py runs the attach map).
-    columns = {
-        row[1] for row in conn.execute("PRAGMA table_info(research_sessions)")
-    }
-    if "phone" in columns and "account" not in columns:
-        conn.execute(
-            "ALTER TABLE research_sessions RENAME COLUMN phone TO account"
-        )
-        conn.commit()
-    # A store written before T11 has no version column — top it up in
-    # place; every existing row starts at 0.
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(research_sessions)")}
-    if "version" not in columns:
-        conn.execute(
-            "ALTER TABLE research_sessions "
-            "ADD COLUMN version INTEGER NOT NULL DEFAULT 0"
-        )
-        conn.commit()
-    # The Session-store linkage (ADR-0016): which chat Session (the
-    # sheet's sidebar row) a research session belongs to. Nullable —
-    # rows written before the linkage carry NULL and stay reachable the
-    # old same-tab way; the column tops up in place like `version`.
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(research_sessions)")}
-    if "chat_session_id" not in columns:
-        conn.execute(
-            "ALTER TABLE research_sessions ADD COLUMN chat_session_id TEXT"
-        )
-        conn.commit()
-    conn.execute(
+        "version INTEGER NOT NULL DEFAULT 0, "
+        "chat_session_id TEXT)"
+    ),
+    (
         "CREATE INDEX IF NOT EXISTS idx_research_chat_session"
         " ON research_sessions(account, chat_session_id)"
-    )
-    conn.execute(
+    ),
+    (
         "CREATE TABLE IF NOT EXISTS research_messages ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, "
         "role TEXT NOT NULL, payload_json TEXT NOT NULL, "
         "created_at TEXT NOT NULL)"
-    )
-    return conn
+    ),
+]
+_RESEARCH_MIGRATIONS = [
+    ("research_sessions", "account", "RENAME FROM phone"),
+    ("research_sessions", "version", "INTEGER NOT NULL DEFAULT 0"),
+    ("research_sessions", "chat_session_id", "TEXT"),
+]
+
+
+def _connect() -> sqlite3.Connection:
+    return open_store(RESEARCH_DB, _RESEARCH_SCHEMA, _RESEARCH_MIGRATIONS)
 
 
 def _now() -> str:

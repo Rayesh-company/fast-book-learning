@@ -28,6 +28,9 @@ ui/narration/node_modules/
 ui/narration/alignment/node_modules/
 models/
 .scratch/
+scratch/
+chat-with-books-handoff/
+fast-book-audio-delivery/
 *.dump
 *.tar
 *.tar.gz
@@ -41,6 +44,7 @@ ui/sessions.sqlite3
 ui/notes.sqlite3
 ui/mind-map/
 .impeccable/
+ui/chats.sqlite3
 
 # The pilot bench Accounts (credentials) — local only, never committed.
 benchmark/pilot/accounts.json
@@ -65,3 +69,6 @@ agent/src/mastra/public/data/
 # Local e2e scratch
 e2e-tmp/
 agent-dev.log
+agent/data/
+data/
+node_modules/

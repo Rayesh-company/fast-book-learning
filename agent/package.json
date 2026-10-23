@@ -5,10 +5,10 @@
   "private": true,
   "scripts": {
     "dev": "mastra dev",
-    "build": "mastra build",
+    "build": "mastra build --studio",
     "start": "mastra start",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --fileParallelism=false"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
@@ -17,9 +17,11 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
-    "@mastra/core": "^1.74.0",
+    "@mastra/core": "^1.79.0",
+    "@mastra/duckdb": "^1.15.0",
     "@mastra/libsql": "^1.25.0",
     "@mastra/memory": "^1.35.0",
+    "@mastra/observability": "^1.21.0",
     "zod": "^4.6.5"
   }
 }

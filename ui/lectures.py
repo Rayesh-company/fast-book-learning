@@ -20,6 +20,7 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 _CACHE: dict[Path, tuple[int, dict]] = {}
 AUDIO_TYPES = {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".ogg": "audio/ogg",
@@ -233,3 +234,128 @@ def handle(handler, path: str, books_dir: Path, allowed: set[str] | list[str],
     if not head:
         handler.wfile.write(body)
     return True
+
+
+# --- Compatibility helpers for fast-book-audio-delivery / legacy test suite ---
+
+def resolve_session_audio_file(
+    books_dir: Path,
+    book_id: str,
+    audio_filename: str,
+    lecture_audio_dir: Path | str | None = None,
+) -> Path | None:
+    """Find the audio file on disk according to precedence rules."""
+    if not audio_filename:
+        return None
+
+    ext_dir = lecture_audio_dir or os.environ.get("LECTURE_AUDIO_DIR")
+    if ext_dir:
+        ext_path = Path(ext_dir)
+        cand1 = ext_path / book_id / audio_filename
+        if cand1.is_file():
+            return cand1
+        cand2 = ext_path / audio_filename
+        if cand2.is_file():
+            return cand2
+        return None
+
+    cand1 = Path(books_dir) / book_id / "lectures" / audio_filename
+    if cand1.is_file():
+        return cand1
+    cand2 = Path(books_dir) / book_id / audio_filename
+    if cand2.is_file():
+        return cand2
+    return None
+
+
+def resolve_audio_url(
+    book_id: str,
+    session_num: int,
+    audio_filename: str,
+    base_url: str | None = None,
+) -> str:
+    """Return the audio URL for a session."""
+    effective_base = base_url or os.environ.get("LECTURE_AUDIO_BASE_URL", "").strip()
+    if effective_base:
+        return f"{effective_base.rstrip('/')}/{book_id}/{audio_filename}"
+    return f"/books/{book_id}/lectures/{session_num}/audio"
+
+
+def load_lectures_summary(
+    books_dir: Path,
+    book_id: str,
+    lecture_audio_dir: Path | str | None = None,
+    base_url: str | None = None,
+) -> list[dict[str, Any]] | None:
+    """Lightweight summary list of sessions."""
+    data = load_index(books_dir, book_id)
+    if data is None:
+        return None
+
+    effective_base = base_url or os.environ.get("LECTURE_AUDIO_BASE_URL", "").strip()
+    summary: list[dict[str, Any]] = []
+    for s in data.get("sessions", []):
+        audio_name = s.get("audio", "")
+        session_num = s.get("session", 0)
+        file = resolve_session_audio_file(books_dir, book_id, audio_name, lecture_audio_dir)
+        avail = bool(effective_base) or (file is not None and file.is_file())
+        url = resolve_audio_url(book_id, session_num, audio_name, effective_base)
+
+        item = {k: v for k, v in s.items() if k not in ("cues", "sentences", "sentence_focus", "word_alignment")}
+        item["audio_available"] = avail
+        item["audio_url"] = url
+        summary.append(item)
+    return summary
+
+
+def get_session_data(
+    books_dir: Path,
+    book_id: str,
+    session_num: int,
+    lecture_audio_dir: Path | str | None = None,
+    base_url: str | None = None,
+) -> dict[str, Any] | None:
+    """Session full data."""
+    data = load_index(books_dir, book_id)
+    if data is None:
+        return None
+
+    target = find_session(data, session_num)
+    if target is None:
+        return None
+
+    effective_base = base_url or os.environ.get("LECTURE_AUDIO_BASE_URL", "").strip()
+    audio_name = target.get("audio", "")
+    file = resolve_session_audio_file(books_dir, book_id, audio_name, lecture_audio_dir)
+    avail = bool(effective_base) or (file is not None and file.is_file())
+    url = resolve_audio_url(book_id, session_num, audio_name, effective_base)
+
+    session_copy = dict(target)
+    session_copy["audio_available"] = avail
+    session_copy["audio_url"] = url
+    return session_copy
+
+
+def get_session_audio_file(
+    books_dir: Path,
+    book_id: str,
+    session_num: int,
+    lecture_audio_dir: Path | str | None = None,
+) -> Path | None:
+    """Audio file path for a session number."""
+    data = load_index(books_dir, book_id)
+    if data is None:
+        return None
+    session_rec = find_session(data, session_num)
+    if session_rec:
+        audio_name = session_rec.get("audio", "")
+        return resolve_session_audio_file(books_dir, book_id, audio_name, lecture_audio_dir)
+    return None
+
+
+def stream_audio_range(handler: Any, target_file: Path, head: bool = False) -> None:
+    """Stream an MP3 file with HTTP Range support."""
+    if not target_file.is_file():
+        handler.send_error(404)
+        return
+    send_file(handler, target_file, "audio/mpeg", head=head)

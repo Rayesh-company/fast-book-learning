@@ -90,7 +90,7 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
     const savedOverlay = doc.createElement('div');
     savedOverlay.className = 'book-reader-saved-highlights'; savedOverlay.setAttribute('aria-hidden','true');
     const record = { page: page.pageNumber, surface, layer, overlay, savedOverlay, index: null, disposed: false,
-      pointWidth: viewport.width / viewport.scale };
+      pointWidth: viewport.width / viewport.scale, viewport };
     const active = () => !record.disposed && isCurrent();
     pages.set(record.page, record);
     let renderTask;

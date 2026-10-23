@@ -14,6 +14,11 @@ import sqlite3
 import time
 from pathlib import Path
 
+try:
+    from ui.store_kernel import open_store
+except ImportError:
+    from store_kernel import open_store
+
 # ADR-0017's launch values: 30 Questions (one ask + its answer) per 5
 # hours per Account. Reading, notes, and TTS are never windowed.
 QUESTION_WINDOW_LIMIT = 30
@@ -26,13 +31,14 @@ WINDOW_DB = Path(
 )
 
 
+_WINDOW_SCHEMA = (
+    "CREATE TABLE IF NOT EXISTS questions ("
+    "phone TEXT NOT NULL, at REAL NOT NULL)"
+)
+
+
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(WINDOW_DB), timeout=5)
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS questions ("
-        "phone TEXT NOT NULL, at REAL NOT NULL)"
-    )
-    return conn
+    return open_store(WINDOW_DB, _WINDOW_SCHEMA)
 
 
 def questions_in_window(phone: str, now: float = None) -> int:
