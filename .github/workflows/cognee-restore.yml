@@ -41,7 +41,7 @@ jobs:
           set -eu
           echo "== direct cognee probe =="
           code=$(curl -s -m 60 -o /tmp/probe.json -w '%{http_code}' \
-            -X POST http://cognee:8000/api/v1/recall \
+            -X POST http://127.0.0.1:18000/api/v1/recall \
             -H 'Content-Type: application/json' \
             -d '{"searchType":"HYBRID_COMPLETION","query":"قرآن","datasets":["tarhe-kolli"],"includeReferences":true,"only_context":true}')
           echo "http $code"
