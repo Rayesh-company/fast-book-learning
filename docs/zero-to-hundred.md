@@ -2,7 +2,7 @@
 
 > سند جامع محصول: معماری، جریان‌ها، UML و فلوچارت‌ها، دیتا، و راه‌اندازی از صفر.
 > نمودارها Mermaid هستند و توی GitLab/GitHub مستقیم رندر می‌شن.
-> مرجع‌های رکورد‌شده: `README.md`، `docs/CONTEXT.md`، `docs/adr/0001…0020`.
+> مرجع‌های رکورد‌شده: `README.md`، `docs/CONTEXT.md`، `docs/adr/0001…0020` — و برای کاراییِ چهرهٔ موبایل: `docs/performance-zero-to-hundred.md`.
 
 ---
 
