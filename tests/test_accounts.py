@@ -397,6 +397,30 @@ def test_anonymous_and_broken_tokens_are_401_on_the_gated_paths(tmp_path):
         stop_gate(server, original)
 
 
+def test_the_dev_login_bypass_is_opt_in_and_unset_stays_gated(
+    tmp_path, monkeypatch
+):
+    """The DISABLE_LOGIN bypass (the agent line's dev/preview mode) is
+    opt-in ONLY: an unset value — the production shape — must never
+    quietly map every anonymous stranger onto the dev Account (which
+    carries the admin role and a near-infinite Balance). Pinned the
+    hard way after the 2026-10-24 afternoon deploys ran production
+    with the default open."""
+    monkeypatch.delenv("DISABLE_LOGIN", raising=False)
+    base, server, original = with_gate(tmp_path, NoUpstream())
+    try:
+        status, payload = get(base, "/sessions")
+        assert status == 401
+        assert payload["detail"] == serve.AUTH_LOGIN_401_DETAIL
+        # The dev machine that WANTS the bypass says so out loud.
+        monkeypatch.setenv("DISABLE_LOGIN", "1")
+        status, payload = get(base, "/sessions")
+        assert status == 200
+        assert payload == {"sessions": []}
+    finally:
+        stop_gate(server, original)
+
+
 def test_an_account_without_a_phone_is_a_working_account(tmp_path):
     """The no-attached-phone 403 retired with the phone-keyed stores
     (T21, GitLab #23): the stores key by the Account's email, so an

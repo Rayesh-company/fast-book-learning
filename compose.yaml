@@ -307,6 +307,10 @@ services:
       FARAZSMS_PATTERN_CODE: ${FARAZSMS_PATTERN_CODE:-}
       FARAZSMS_FROM_NUMBER: ${FARAZSMS_FROM_NUMBER:-}
       FARAZSMS_PATTERN_PARAM: ${FARAZSMS_PATTERN_PARAM:-codeotp}
+      # The dev/preview login bypass is OPT-IN, and the deployed shape
+      # says no out loud: an unset value must never quietly map an
+      # anonymous stranger onto the dev Account (ADR-0013; F-001).
+      DISABLE_LOGIN: ${DISABLE_LOGIN:-0}
       # The برنامک's bot token (ADR-0021): the Eitaayar panel's token —
       # the initData signature's key and sendMessage's credential.
       # Deploys carry it as a FILE on the volume (EITAA_BOT_TOKEN_FILE,

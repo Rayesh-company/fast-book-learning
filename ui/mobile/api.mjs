@@ -187,19 +187,17 @@ export function createApi({ fetchImpl = fetch } = {}) {
     demo: false,
     loginRequired: false,
     pageFiltering: false,
+    // The honest boot: an anonymous caller is null and the app shows
+    // the login door (ADR-0013). A fabricated dev session here would
+    // walk the user past login into endpoints that then 401 on every
+    // call.
     me: async () => {
       try {
-        const user = await request('/auth/me');
-        if (user) return user;
+        return (await request('/auth/me')) || null;
       } catch (e) {
-        if (e.status !== 401) throw e;
+        if (e.status === 401) return null;
+        throw e;
       }
-      return {
-        email: 'dev@local',
-        phone: '09123456789',
-        role: 'admin',
-        profile_completed: true,
-      };
     },
     login: async ({ email, password }) => {
       const payload = await request('/auth/login', { method: 'POST', body: { email, password } });

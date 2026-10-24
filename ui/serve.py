@@ -779,12 +779,13 @@ DEV_ACCOUNT_EMAIL = "dev@local"
 
 
 def is_login_disabled() -> bool:
-    """Check if authentication requirements are bypassed for local dev/preview."""
-    if os.environ.get("DISABLE_LOGIN") == "0":
-        return False
-    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
-        return os.environ.get("DISABLE_LOGIN") == "1"
-    return os.environ.get("DISABLE_LOGIN", "1") == "1"
+    """Whether authentication is bypassed for local dev/preview —
+    OPT-IN ONLY (DISABLE_LOGIN=1, said out loud in the dev machine's
+    own .env). Unset — the production shape — keeps every door gated
+    (ADR-0013; F-001 of the 2026-10-24 review): an open default here
+    silently maps every anonymous stranger onto the dev Account, which
+    carries the admin role and a near-infinite Balance."""
+    return os.environ.get("DISABLE_LOGIN") == "1"
 
 
 def _ensure_dev_account():
