@@ -147,13 +147,16 @@ def _login_cookie(base: str, phone: str) -> str:
     return cookie
 
 
-def raw_post(base: str, path: str, payload, cookie: str = None):
+def raw_post(base: str, path: str, payload, cookie: str = None, extra_headers=None):
     """One POST with an explicit cookie header value (not the phone
     translation) — the auth tests' own client, so tampered/expired
-    tokens can ride exactly the header a browser would send."""
+    tokens can ride exactly the header a browser would send.
+    extra_headers rides beside them (the TLS-stamp tests' header)."""
     headers = {"Content-Type": "application/json"}
     if cookie is not None:
         headers["Cookie"] = cookie
+    if extra_headers:
+        headers.update(extra_headers)
     request = urllib.request.Request(
         base + path,
         data=json.dumps(payload).encode("utf-8"),
@@ -167,9 +170,12 @@ def raw_post(base: str, path: str, payload, cookie: str = None):
         return exc.code, json.load(exc)
 
 
-def raw_get(base: str, path: str, cookie: str = None):
-    """One GET with an explicit cookie header value — see raw_post."""
+def raw_get(base: str, path: str, cookie: str = None, extra_headers=None):
+    """One GET with an explicit cookie header value — see raw_post.
+    extra_headers rides beside it (the TLS-stamp tests' header)."""
     headers = {"Cookie": cookie} if cookie is not None else {}
+    if extra_headers:
+        headers.update(extra_headers)
     request = urllib.request.Request(base + path, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=10) as response:

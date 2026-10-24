@@ -11,6 +11,8 @@ import base64
 import json
 import os
 import time
+import urllib.error
+import urllib.request
 
 from tests.conftest import REPO_ROOT
 from tests.helpers import (
@@ -213,6 +215,72 @@ def test_login_me_and_logout_over_the_real_server(tmp_path):
         status, payload = raw_post(base, "/auth/logout", {}, cookie=cookie)
         assert status == 200
         assert payload["detail"] == serve.AUTH_LOGOUT_DETAIL
+    finally:
+        stop_gate(server, original)
+
+
+def _post_cookie(base, path, payload, extra_headers=None, cookie=None):
+    """One POST read for its Set-Cookie header — the Secure-flag tests'
+    own client (raw_post returns the parsed body only)."""
+    headers = {"Content-Type": "application/json"}
+    if cookie is not None:
+        headers["Cookie"] = cookie
+    if extra_headers:
+        headers.update(extra_headers)
+    request = urllib.request.Request(
+        base + path,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.status, response.headers.get("Set-Cookie", "")
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers.get("Set-Cookie", "")
+
+
+def test_the_auth_cookie_carries_secure_only_over_tls(tmp_path):
+    """F-005 of the 2026-10-24 review: the login/logout Set-Cookie pair
+    carries Secure exactly when the request arrived over TLS (nginx's
+    X-Forwarded-Proto: https) — a plain-HTTP dev run keeps its
+    cookie-working shape, the deployed TLS face never ships the
+    credential without the Secure belt."""
+    base, server, original = with_gate(tmp_path, NoUpstream())
+    try:
+        status, set_cookie = _post_cookie(
+            base,
+            "/auth/login",
+            {"email": ADMIN_EMAIL, "password": TEST_PASSWORD},
+            extra_headers={"X-Forwarded-Proto": "https"},
+        )
+        assert status == 200
+        assert "Secure" in set_cookie
+        assert set_cookie.startswith("cwb_auth=")
+
+        status, set_cookie = _post_cookie(
+            base, "/auth/login", {"email": ADMIN_EMAIL, "password": TEST_PASSWORD}
+        )
+        assert status == 200
+        assert "Secure" not in set_cookie
+
+        cookie = cookie_for(base, ADMIN_EMAIL)
+        status, set_cookie = _post_cookie(
+            base,
+            "/auth/logout",
+            {},
+            cookie=cookie,
+            extra_headers={"X-Forwarded-Proto": "https"},
+        )
+        assert status == 200
+        assert "Secure" in set_cookie
+        assert "Max-Age=0" in set_cookie
+
+        status, set_cookie = _post_cookie(
+            base, "/auth/logout", {}, cookie=cookie
+        )
+        assert status == 200
+        assert "Secure" not in set_cookie
     finally:
         stop_gate(server, original)
 

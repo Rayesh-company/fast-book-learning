@@ -1735,21 +1735,38 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 return value
         return ""
 
+    def _behind_tls(self) -> bool:
+        """The deploy's TLS signal: nginx terminates Let's Encrypt and
+        stamps X-Forwarded-Proto: https on every proxied request
+        (ops/nginx/booksai.conf). Only then does the cookie carry
+        Secure — a dev or test run over plain HTTP keeps working
+        (the ADR-0013 review's TLS law: a Secure cookie on a non-TLS
+        app breaks the app, never the reverse)."""
+        return (self.headers.get("X-Forwarded-Proto") or "") == "https"
+
     def _auth_cookie_header(self, token: str) -> tuple:
         """The Set-Cookie pair that logs an Account in: HttpOnly (the
         sheet's JS never holds the token), SameSite=Lax (cross-site
         posts cannot ride it), Max-Age matching the token's own signed
-        expiry so the browser and the payload agree."""
+        expiry so the browser and the payload agree — and Secure when
+        the request arrived over TLS, so the credential never rides a
+        plain-HTTP hop (F-005 of the 2026-10-24 security review)."""
+        secure = "; Secure" if self._behind_tls() else ""
         return (
             "Set-Cookie",
             f"{AUTH_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; "
-            f"Max-Age={AUTH_TOKEN_TTL}",
+            f"Max-Age={AUTH_TOKEN_TTL}{secure}",
         )
 
-    _CLEAR_COOKIE = (
-        "Set-Cookie",
-        f"{AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
-    )
+    def _clear_cookie_header(self) -> tuple:
+        """The logout's deletion pair — Secure rides the same condition
+        as the issue, so the browser matches and clears the cookie it
+        actually holds."""
+        secure = "; Secure" if self._behind_tls() else ""
+        return (
+            "Set-Cookie",
+            f"{AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secure}",
+        )
 
     def _balance_gate(self, account: str) -> bool:
         """The prepaid stop (T23, GitLab #25): an Account whose Balance
@@ -2155,7 +2172,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
         """Clear the cookie client-side. The token is stateless, so the
         server has nothing to revoke — its signed expiry ends it."""
         self._send_json(
-            200, {"detail": AUTH_LOGOUT_DETAIL}, extra_headers=[self._CLEAR_COOKIE]
+            200, {"detail": AUTH_LOGOUT_DETAIL}, extra_headers=[self._clear_cookie_header()]
         )
 
     def _auth_me(self) -> None:
