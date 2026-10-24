@@ -199,6 +199,46 @@ jobs:
                 sh -c "test -s /data/eitaa-bot-token && echo token-file-present"
             '
 
+      # The SMS login's panel facts (2026-10-23, فراز اسمس): the box
+      # .env is rsync-excluded, so the deploy upserts the three values
+      # itself — idempotent replace-or-append, SINGLE-QUOTED (the house
+      # rule: compose interpolates .env values, quotes are the only
+      # shield). The script is built in the runner (values substituted
+      # into single-quoted positions once) and rides ssh STDIN — the
+      # pattern the برنامک token step uses; nothing hits an argv or a
+      # heredoc (the recorded workflow gotchas). compose recreates the
+      # session container with them; any unset secret leaves the route
+      # at its honest 503.
+      - name: Upsert the فراز اسمس facts into the box .env
+        env:
+          FARAZSMS_API_KEY: ${{ secrets.FARAZSMS_API_KEY }}
+          FARAZSMS_PATTERN_CODE: ${{ secrets.FARAZSMS_PATTERN_CODE }}
+          FARAZSMS_FROM_NUMBER: ${{ secrets.FARAZSMS_FROM_NUMBER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          remote_script="set -eu
+          cd /home/chat-with-books/current
+          touch .env
+          upsert_val() {
+            name=\"\$1\"; value=\"\$2\"
+            if grep -q \"^\${name}=\" .env 2>/dev/null; then
+              sed -i \"s|^\${name}=.*|\${name}='\${value}'|\" .env
+            else
+              printf '\n%s=%s\n' \"\$name\" \"'\${value}'\" >> .env
+            fi
+          }
+          upsert_val FARAZSMS_API_KEY '$FARAZSMS_API_KEY'
+          upsert_val FARAZSMS_PATTERN_CODE '$FARAZSMS_PATTERN_CODE'
+          upsert_val FARAZSMS_FROM_NUMBER '$FARAZSMS_FROM_NUMBER'
+          grep -c '^FARAZSMS_' .env"
+          printf '%s' "$remote_script" | ssh -p "$DEPLOY_PORT" \
+            -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s'
+
       - name: Sync source and deploy
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}

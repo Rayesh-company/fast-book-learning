@@ -34,7 +34,9 @@ test('the player lists the sessions and points the audio at the served route', a
   assert.match(options[0].textContent, /جلسۀ ۱/);
   const audio = bar.parentElement.querySelector('audio');
   assert.equal(audio.getAttribute('src'), '/books/tarhe-kolli/lectures/session_01.mp3');
-  assert.equal(audio.preload, 'metadata');
+  // 'none': the MP3 downloads only on play — 'metadata' pulled the
+  // first 64KB of session_01 into every page load (2026-10-23 run).
+  assert.equal(audio.preload, 'none');
   // The «بدون مقدمه» boundary stays off until the operator asks.
   assert.equal(audio.currentTime, 0);
   f.dom.window.close();

@@ -20,9 +20,13 @@ export function createApi({fetchImpl=fetch}={}) {
   me:async()=>{try{return await request('/auth/me');}catch(e){if(e.status===401)return null;throw e;}},
   login:async({email,password})=>{const payload=await request('/auth/login',{method:'POST',body:{email,password}});storeToken(payload.token||null);return payload;},
   logout:async()=>{storeToken(null);await request('/auth/logout',{method:'POST'});},
-  requestOtp:()=>unavailable('ورود پیامکی هنوز فعال نشده است. اگر حساب قبلی دارید از ورود با ایمیل استفاده کنید.'),
-  verifyOtp:()=>unavailable('تأیید پیامکی هنوز فعال نشده است.'),
-  joinWaitlist:()=>unavailable('ثبت فهرست انتظار هنوز در دسترس نیست. بعداً دوباره تلاش کنید.'),
+  // The SMS login (2026-10-23): the phone-first flow the views always
+  // had — request forks waitlist-or-code, verify answers the email
+  // login's own body (the token stores exactly like login's does, so
+  // initialize()'s me() rides it).
+  requestOtp:async phone=>request('/auth/otp/request',{method:'POST',body:{phone}}),
+  verifyOtp:async(phone,code)=>{const payload=await request('/auth/otp/verify',{method:'POST',body:{phone,code}});storeToken(payload.token||null);return payload;},
+  joinWaitlist:async phone=>request('/waitlist',{method:'POST',body:{phone}}),
   profile:async()=>{await request('/profile/data');return{subscription:null,subscription_available:false,questions_remaining:null};},
   sessions:async()=>(await request('/sessions')).sessions,
   session:id=>request(`/sessions/${Number(id)}`),

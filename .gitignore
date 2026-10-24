@@ -57,6 +57,9 @@ ui/ota/manifest.json
 # /data; the worktree's is runtime data, never git.
 ui/eitaa.sqlite3
 ui/notes.sqlite3
+# The SMS login's waitlist (2026-10-23) — the deployed copy lives on
+# /data; the worktree's is runtime data, never git.
+ui/waitlist.sqlite3
 # A built APK is a build artifact (rule 001: mobile ships OTA, never a
 # new binary) — locally built for an emulator flavor, never committed.
 mobile/*.apk

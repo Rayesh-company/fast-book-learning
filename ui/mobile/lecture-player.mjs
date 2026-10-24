@@ -71,7 +71,12 @@ export async function installLecturePlayer({
   }
 
   const audio = audioFactory();
-  audio.preload = 'metadata';
+  // 'none': the session MP3s download only when someone presses play —
+  // 'metadata' pulled the first 64KB of session_01 into every page
+  // load, on the boot's critical path (the Lighthouse 2026-10-23 run).
+  // Durations come from the summary index, so the bar needs no fetch
+  // to paint its clock.
+  audio.preload = 'none';
   bar.append(audio);
   const sessionPicker = doc.createElement('select');
   sessionPicker.setAttribute('aria-label', 'انتخاب جلسه');

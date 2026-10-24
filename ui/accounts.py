@@ -23,6 +23,7 @@ import datetime
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import sqlite3
 from pathlib import Path
@@ -177,6 +178,61 @@ def account_by_email(email):
     finally:
         conn.close()
     return _row_to_account(row) if row is not None else None
+
+
+def account_by_phone(phone):
+    """The Account with this phone attached, or None — the SMS login's
+    lookup (the OTP layer ADR-0013 parked, landed 2026-10-23). Attached
+    phones are legacy data in whatever shape the Admin attached them, so
+    the match is on the normalized LAST TEN DIGITS (the subscriber
+    number): 09123456789, +989123456789, and ۰۹۱۲… all agree, and no
+    attach-time format can lock a phone out of its own account."""
+    needle = _phone_key(phone)
+    if not needle:
+        return None
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT email, phone, role, created_at FROM accounts "
+            "WHERE phone IS NOT NULL"
+        ).fetchall()
+    finally:
+        conn.close()
+    for row in rows:
+        if _phone_key(row[1]) == needle:
+            return _row_to_account(row)
+    return None
+
+
+# The digit fold the phone key shares with the client's normalPhone:
+# Persian and Arabic-Indic digits to ASCII before any comparison.
+_DIGIT_MAP = {
+    ord("۰"): "0", ord("۱"): "1", ord("۲"): "2", ord("۳"): "3", ord("۴"): "4",
+    ord("۵"): "5", ord("۶"): "6", ord("۷"): "7", ord("۸"): "8", ord("۹"): "9",
+    ord("٠"): "0", ord("١"): "1", ord("٢"): "2", ord("٣"): "3", ord("٤"): "4",
+    ord("٥"): "5", ord("٦"): "6", ord("٧"): "7", ord("٨"): "8", ord("٩"): "9",
+}
+
+
+def _phone_key(raw) -> str:
+    """The comparable form of a phone: Persian/Arabic digits folded to
+    ASCII, non-digits dropped, the last 10 digits kept ('' when
+    shorter) — the subscriber number every Iranian formatting shares."""
+    digits = "".join(
+        ch for ch in str(raw or "").translate(_DIGIT_MAP) if ch.isdigit()
+    )
+    return digits[-10:] if len(digits) >= 10 else ""
+
+
+def normalize_local_phone(raw) -> str:
+    """The SMS login's canonical input: fold Persian digits, drop the
+    dressing, and keep the number ONLY in its Iranian local shape
+    (09 + 9 digits, exactly the client's own rule) — '' for anything
+    else, so the route's 400 is one check."""
+    digits = "".join(
+        ch for ch in str(raw or "").translate(_DIGIT_MAP) if ch.isdigit()
+    )
+    return digits if re.fullmatch(r"09\d{9}", digits) else ""
 
 
 def list_accounts():

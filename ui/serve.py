@@ -24,8 +24,9 @@ import secrets
 import sys
 import time
 import threading
+from stat import S_ISREG
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 try:
@@ -61,6 +62,7 @@ try:
     )
     from ui.accounts import (
         account_by_email,
+        account_by_phone,
         admins_exist,
         attach_phone,
         create_account,
@@ -69,8 +71,10 @@ try:
         ensure_admin,
         get_balance,
         list_accounts,
+        normalize_local_phone,
         verify_login,
     )
+    from ui import otp
     from ui import audit, migrate
     from ui.console import console_html
     from ui.composer import (
@@ -203,6 +207,7 @@ except ImportError:  # the container runs this file as a script beside the modul
     )
     from accounts import (
         account_by_email,
+        account_by_phone,
         admins_exist,
         attach_phone,
         create_account,
@@ -211,8 +216,10 @@ except ImportError:  # the container runs this file as a script beside the modul
         ensure_admin,
         get_balance,
         list_accounts,
+        normalize_local_phone,
         verify_login,
     )
+    import otp
     import audit, migrate
     from console import console_html
     from report import research_session_report
@@ -482,6 +489,21 @@ AUTH_BAD_CREDENTIALS_DETAIL = "ایمیل یا گذرواژه نادرست اس�
 AUTH_BAD_LOGIN_BODY_DETAIL = "ایمیل و گذرواژه را بفرستید."
 AUTH_LOGOUT_DETAIL = "خارج شدید."
 AUTH_EMAIL_TAKEN_DETAIL = "این ایمیل پیش‌تر حساب گرفته است."
+# The SMS login's own words (the OTP layer ADR-0013 parked, 2026-10-23):
+# one refusal shape for a wrong and an expired code alike (the guesser
+# never learns which), the cooldown's honest wait, and the two
+# configuration failures that must never wear a user error's clothing —
+# an unconfigured فراز اسمس answers 503 like the برنامک's unconfigured
+# bot, a panel refusal answers 502.
+OTP_BAD_BODY_DETAIL = "شمارهٔ موبایل را بفرستید."
+OTP_BAD_PHONE_DETAIL = "شمارهٔ موبایل ایرانی را با ۱۱ رقم وارد کنید."
+OTP_BAD_CODE_401_DETAIL = "کد درست نیست یا به پایان رسیده است. دوباره کد بگیرید."
+OTP_RATE_429_DETAIL = "برای درخواست کد جدید یک دقیقه صبر کنید."
+OTP_UNCONFIGURED_503_DETAIL = (
+    "ورود پیامکی روی این سرور تنظیم نشده است؛ از ورود با ایمیل استفاده کنید."
+)
+OTP_SEND_502_DETAIL = "پیامک فرستاده نشد؛ کمی بعد دوباره کد بگیرید."
+WAITLIST_JOINED_DETAIL = "در فهرست انتظار ثبت شدید."
 # The برنامک's own refusals (ADR-0021, DRAFT display vocabulary
 # pending PM approval — the CONTEXT.md draft row carries them): the
 # initData that fails the signature or the freshness bound refuses
@@ -920,6 +942,115 @@ def _gzipped_file(file_path: Path, mtime_ns: int) -> bytes:
     return body
 
 
+# The UI statics' gzip cache: the mobile face rides ~30 small modules and
+# styles down a slow path; compressed they ship ~4x smaller, and the
+# compressed bytes are cached by mtime so an unchanged file compresses
+# once. Capped (unlike the Book index's one-slot cache) because the set
+# is many small files that all deserve to stay warm.
+_STATIC_GZIP_CACHE: dict[tuple[str, int], bytes] = {}
+
+
+def _static_gzip(file_path: Path, mtime_ns: int) -> bytes:
+    key = (str(file_path), mtime_ns)
+    body = _STATIC_GZIP_CACHE.get(key)
+    if body is None:
+        body = gzip.compress(file_path.read_bytes(), compresslevel=6)
+        if len(_STATIC_GZIP_CACHE) >= 64:
+            _STATIC_GZIP_CACHE.clear()
+        _STATIC_GZIP_CACHE[key] = body
+    return body
+
+
+# modulepreload's list: the STATIC import closure of the page's module
+# entry scripts, so the browser learns every module URL at HTML parse
+# instead of discovering them wave by wave (the recorded waterfall: five
+# serialized rounds, each paying the path's ~1.2s latency — SI 18s).
+# Dynamic import() calls are deliberately NOT matched: the PDF engine
+# stays off the anonymous boot. The scan is conservative — statements
+# that START a line with `import` — matching the hand-written modules;
+# a missed import only loses its preload, never its execution.
+_MODULE_IMPORT_RE = re.compile(
+    r"(?m)^[ \t]*import[ \t]+(?:[^;'\"]*?[ \t]from[ \t]*)?['\"]([^'\"]+)['\"]"
+)
+_MODULE_SRC_RE = re.compile(
+    r"<script[^>]*\btype=\"module\"[^>]*\bsrc=\"([^\"]+)\"[^>]*>"
+)
+
+
+def _module_graph(entry_urls: list[str]) -> tuple[list[str], int]:
+    """(preload URLs, fingerprint) for the page's module entries — the
+    URLs in document order excluding the entries themselves (the script
+    tags already fetch those), plus an mtime fingerprint of every file
+    walked so the page's ETag changes when any module in the graph
+    changes, not just the HTML."""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    fingerprint = 0
+
+    def scan(url: str) -> None:
+        nonlocal fingerprint
+        if url in seen:
+            return
+        seen.add(url)
+        file_path = UI_DIR / url.lstrip("/")
+        try:
+            stat = file_path.stat()
+            text = file_path.read_text(encoding="utf-8")
+        except OSError:
+            return
+        fingerprint = (fingerprint + stat.st_mtime_ns) & 0xFFFFFFFFFFFF
+        for spec in _MODULE_IMPORT_RE.findall(text):
+            if not spec.startswith(("/", "./", "../")) or not spec.endswith(".mjs"):
+                continue  # bare specifiers never resolve in the browser
+            resolved = urljoin(url, spec)
+            if resolved not in seen:
+                scan(resolved)
+
+    for entry in entry_urls:
+        scan(entry)
+    entries = set(entry_urls)
+    return [url for url in seen if url not in entries], fingerprint
+
+
+# The page's own stylesheet links — the render-blocking set _mobile_page
+# inlines, so the HTML carries the CSS and first paint waits on ONE
+# request instead of six (the 2026-10-24 pass: the 6 CSS files were the
+# only FAIL left, ~300ms each under throttling). The files stay the
+# source of truth on disk; only the wire shape changes.
+_STYLESHEET_LINK_RE = re.compile(
+    r'<link rel="stylesheet" href="(/[^"]+\.css)">'
+)
+
+
+def _inline_stylesheets(page: str) -> str:
+    """The mobile page with its local stylesheet links replaced by the
+    stylesheets themselves. Same-origin absolute paths only — anything
+    else (a future CDN link, a query string) stays a link, untouched."""
+    pieces: list[str] = []
+    cursor = 0
+    for match in _STYLESHEET_LINK_RE.finditer(page):
+        file_path = UI_DIR / match.group(1).lstrip("/")
+        try:
+            css = file_path.read_text(encoding="utf-8")
+        except OSError:
+            continue  # a missing sheet keeps its link and the 404 says so
+        pieces.append(page[cursor : match.start()])
+        pieces.append(f"<style>{css}</style>")
+        cursor = match.end()
+    if not pieces:
+        return page
+    pieces.append(page[cursor:])
+    return "".join(pieces)
+
+
+# The static types worth gzipping (the UI's own text assets; PDFs, MP3s
+# and rasters ride their own routes, fonts and bcmaps are already
+# compressed payloads).
+_GZIP_SUFFIXES = frozenset(
+    {".html", ".css", ".js", ".mjs", ".json", ".webmanifest", ".svg", ".txt"}
+)
+
+
 class SessionHandler(SimpleHTTPRequestHandler):
     # The PWA's and the reader's static types, pinned (ADR-0019):
     # SimpleHTTPRequestHandler falls back to mimetypes, and on Windows
@@ -1087,7 +1218,54 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if path.startswith("/books/"):
             self._book_file(path)
             return
+        if self._serve_static(path):
+            return
         super().do_GET()
+
+    def _serve_static(self, path: str) -> bool:
+        """The UI's own static files (the mobile face's modules and
+        styles, the fonts, the icons): gzipped when the client accepts
+        it and always revalidatable — the same ETag + 304 pair the Book
+        route established (ADR-0017), so a redeploy is picked up on the
+        next load (the 2026-09-11 stale-page law) while an unchanged
+        file costs one stat and a bodyless 304. Returns False for
+        anything that is not a plain file (directories, misses, Range
+        requests) so SimpleHTTPRequestHandler keeps its old answer."""
+        if path.endswith("/"):
+            return False
+        file_path = Path(self.translate_path(path))
+        try:
+            stat = file_path.stat()
+        except OSError:
+            return False
+        if not S_ISREG(stat.st_mode) or self.headers.get("Range"):
+            return False
+        etag = f'"{stat.st_size:x}-{stat.st_mtime_ns:x}"'
+        self._cache_policy = "public, max-age=0, must-revalidate"
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.end_headers()
+            return True
+        body = None
+        if (
+            file_path.suffix.lower() in _GZIP_SUFFIXES
+            and stat.st_size >= 600
+            and "gzip" in (self.headers.get("Accept-Encoding") or "")
+        ):
+            body = _static_gzip(file_path, stat.st_mtime_ns)
+        self.send_response(200)
+        self.send_header("Content-Type", self.guess_type(file_path))
+        self.send_header("ETag", etag)
+        if body is not None:
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
+        else:
+            body = file_path.read_bytes()
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return True
 
     def _lectures_summary(self, path: str) -> None:
         """The player's slim index (GET
@@ -1657,18 +1835,68 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def _mobile_page(self, filename: str = "eitaa_app.html") -> None:
         """The mobile face's page, read from disk per request (the
-        index.html rule): a redeployed page lands without a restart."""
+        index.html rule): a redeployed page lands without a restart.
+        The page answers with the modulepreload set — the static import
+        closure of its own <script type=module> tags, injected fresh so
+        a new import is preloaded the moment it is written, never by
+        hand-maintained list — and with its own stylesheets INLINED
+        (first paint waits on one request, not six). The ETag covers
+        the HTML, every module in the graph, and every inlined sheet's
+        mtime, so a revalidated 304 means the whole boot bundle is
+        unchanged. Fonts and the description stay in the file itself;
+        only what the file CANNOT know (its imports' imports) is
+        injected."""
         try:
-            body = (UI_DIR / filename).read_bytes()
+            raw = (UI_DIR / filename).read_bytes()
+            body = raw.decode("utf-8")
         except OSError:
             self._drain_request_body()
             self.send_error(404, "Not found")
             return
+        entries = _MODULE_SRC_RE.findall(body)
+        links, fingerprint = _module_graph(entries)
+        for href in _STYLESHEET_LINK_RE.findall(body):
+            try:
+                fingerprint = (
+                    fingerprint
+                    + (UI_DIR / href.lstrip("/")).stat().st_mtime_ns
+                ) & 0xFFFFFFFFFFFF
+            except OSError:
+                pass
+        try:
+            page_mtime = (UI_DIR / filename).stat().st_mtime_ns
+        except OSError:
+            page_mtime = 0
+        etag = f'"{len(raw):x}-{page_mtime:x}-{fingerprint:x}"'
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.end_headers()
+            return
+        body = _inline_stylesheets(body)
+        if links:
+            injected = "".join(
+                f'<link rel="modulepreload" href="{link}">' for link in links
+            )
+            body = body.replace("</head>", injected + "</head>", 1)
+        payload = body.encode("utf-8")
+        encoding_header = None
+        # The inlined page is the biggest text asset on the wire now —
+        # it gzips like any static (the 2026-10-24 pass measured the
+        # inline WITHOUT this line shipping +27KB and losing 0.1s FCP:
+        # the win only exists compressed).
+        if "gzip" in (self.headers.get("Accept-Encoding") or ""):
+            payload = gzip.compress(payload, compresslevel=6)
+            encoding_header = ("Content-Encoding", "gzip")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("ETag", etag)
+        if encoding_header:
+            self.send_header(*encoding_header)
+            self.send_header("Vary", "Accept-Encoding")
+        self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(body)
+        self.wfile.write(payload)
 
     def _eitaa_init_data(self):
         """(fields, payload) — the request body read ONCE, the initData
@@ -1947,6 +2175,105 @@ class SessionHandler(SimpleHTTPRequestHandler):
             },
         )
 
+    def _otp_request(self) -> None:
+        """The SMS login's first knock (POST /auth/otp/request): the
+        phone in, the flow's fork out. A phone no Account carries is
+        the waitlist answer — nothing sent, nothing charged, the UI's
+        own 'به فهرست انتظار بپیوندید' view. A known phone sends the
+        six-digit code down فراز اسمس's pattern wire (ui/otp.py owns
+        the cooldown, the daily cap, and the code's five-minute life).
+        The two configuration failures never wear a user's clothing:
+        the unconfigured panel is the same honest 503 the برنامک's
+        unconfigured bot answers, and a refused send answers 502 having
+        charged nothing against the cooldown (ui/otp.py records only
+        after the send succeeds)."""
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            raw = payload["phone"]
+            if not isinstance(raw, str):
+                raise ValueError("phone must be a string")
+        except (ValueError, KeyError, TypeError):
+            self._send_json(400, {"detail": OTP_BAD_BODY_DETAIL})
+            return
+        phone = normalize_local_phone(raw)
+        if not phone:
+            self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
+            return
+        if account_by_phone(phone) is None:
+            self._send_json(200, {"waitlist": True})
+            return
+        if not otp.configured():
+            self._send_json(503, {"detail": OTP_UNCONFIGURED_503_DETAIL})
+            return
+        try:
+            otp.request_otp(phone)
+        except otp.OtpRateLimited:
+            self._send_json(429, {"detail": OTP_RATE_429_DETAIL})
+        except otp.OtpSendFailed:
+            self._send_json(502, {"detail": OTP_SEND_502_DETAIL})
+        else:
+            self._send_json(200, {"waitlist": False})
+
+    def _otp_verify(self) -> None:
+        """The SMS login's second knock (POST /auth/otp/verify): the
+        code against the record — the SAME 401 for a wrong code, an
+        expired one, and a phone whose Account vanished between the two
+        knocks (the ADR-0013 law: refusals an attacker cannot tell
+        apart). Success answers /auth/login's body exactly — email,
+        role, the native clients' token (ADR-0020), the HttpOnly cookie
+        — because as far as every later endpoint cares, this IS the
+        email login, arrived by phone."""
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            raw = payload["phone"]
+            code = payload["code"]
+            if not isinstance(raw, str) or not isinstance(code, (str, int)):
+                raise ValueError("phone and code are required")
+        except (ValueError, KeyError, TypeError):
+            self._send_json(400, {"detail": OTP_BAD_BODY_DETAIL})
+            return
+        phone = normalize_local_phone(raw)
+        if not phone:
+            self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
+            return
+        account = account_by_phone(phone)
+        if account is None or not otp.verify_otp(phone, str(code).strip()):
+            self._send_json(401, {"detail": OTP_BAD_CODE_401_DETAIL})
+            return
+        token = issue_token(account["email"], account["role"])
+        self._send_json(
+            200,
+            {
+                "email": account["email"],
+                "role": account["role"],
+                "token": token,
+            },
+            extra_headers=[self._auth_cookie_header(token)],
+        )
+
+    def _waitlist_join(self) -> None:
+        """The flow's honest dead end made useful (POST /waitlist): a
+        phone with no Account joins the waitlist — idempotent, one row
+        per phone. Accounts stay Admin-issued (ADR-0013); this list is
+        who to issue them to when capacity opens."""
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            raw = payload["phone"]
+            if not isinstance(raw, str):
+                raise ValueError("phone must be a string")
+        except (ValueError, KeyError, TypeError):
+            self._send_json(400, {"detail": OTP_BAD_BODY_DETAIL})
+            return
+        phone = normalize_local_phone(raw)
+        if not phone:
+            self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
+            return
+        otp.join_waitlist(phone)
+        self._send_json(200, {"detail": WAITLIST_JOINED_DETAIL})
+
     def _auth_create_account(self) -> None:
         """The Admin issues an operator Account (ADR-0013) — the only
         creation path that exists, no signup page beside it. Anonymous
@@ -2042,6 +2369,18 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path == "/auth/logout":
             self._auth_logout()
+            return
+        if path == "/auth/otp/request":
+            # The SMS login's first knock (2026-10-23): the phone in,
+            # waitlist-or-code out — open like /auth/login, there is no
+            # other door to protect.
+            self._otp_request()
+            return
+        if path == "/auth/otp/verify":
+            self._otp_verify()
+            return
+        if path == "/waitlist":
+            self._waitlist_join()
             return
         if path == "/auth/accounts":
             self._auth_create_account()

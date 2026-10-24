@@ -37,3 +37,17 @@ Spend was already real before this: one research turn may spend up to 24 upstrea
 - The sheet's wire shape barely moves: the token replaces the header, resolved server-side.
 - CONTEXT.md gains the vocabulary (Account, Login, Balance, Tariff, Admin, Admin console, Session report); the Persian display rows stay a draft until the PM approves them.
 - Next step in the development workflow: `/to-tickets` — accounts → metering → admin as tracer-bullet tickets with blocking edges.
+
+## Addendum — the parked SMS OTP lands (2026-10-23)
+
+The decision's own "explicitly out, layerable later without rework" clause did its
+job: the OTP layer (`ui/otp.py`, routes `/auth/otp/request`, `/auth/otp/verify`,
+`/waitlist`) landed without touching a single Account-store key. The phone is
+still never an identity — `account_by_phone` (ten-digit match, any dressing)
+only finds the Account the Admin already issued, and a phone no Account carries
+answers the flow's waitlist view, nothing sent. Codes are six digits, five
+minutes of life, five wrong tries, one send a minute and ten a day per phone,
+in memory only; delivery rides فراز اسمس (ippanel) pattern messages — the code
+never travels as free text, and the الگو lives in the operator's panel, not in
+the repo. A successful verify answers `/auth/login`'s own body: to every later
+endpoint this IS the email login, arrived by phone.
