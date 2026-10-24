@@ -82,6 +82,7 @@ try:
     from ui.quotas import (
         DAILY_CHAT_LIMIT,
         chats_today,
+        is_unlimited,
         normalize_phone,
         record_chat,
     )
@@ -248,6 +249,7 @@ except ImportError:  # the container runs this file as a script beside the modul
     from quotas import (
         DAILY_CHAT_LIMIT,
         chats_today,
+        is_unlimited,
         normalize_phone,
         record_chat,
     )
@@ -1361,7 +1363,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return None
         if not self._balance_gate(account):
             return None
-        if chats_today(account) >= DAILY_CHAT_LIMIT:
+        acc = account_by_email(account)
+        is_exempt = (acc and acc.get("role") == "admin") or is_unlimited(account)
+        if not is_exempt and chats_today(account) >= DAILY_CHAT_LIMIT:
             self._json_error(
                 429, "شمار گفتگوهای امروز این حساب پر شده است؛ فردا بیایید."
             )
@@ -2443,6 +2447,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
                     "yesterday_spend_toman": day_total(row["email"], yesterday),
                     "today_spend_toman": today_total(row["email"]),
                     "chats_today": chats_today(row["email"]),
+                    "quota_limit": "نامحدود" if (row.get("role") == "admin" or is_unlimited(row["email"])) else DAILY_CHAT_LIMIT,
                 }
             )
         now_mono = time.monotonic()

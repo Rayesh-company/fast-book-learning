@@ -83,6 +83,7 @@ parse_quoted_reply = guard.parse_quoted_reply
 # quotas — the daily-chat gate
 DAILY_CHAT_LIMIT = quotas.DAILY_CHAT_LIMIT
 chats_today = quotas.chats_today
+is_unlimited = quotas.is_unlimited
 normalize_phone = quotas.normalize_phone
 record_chat = quotas.record_chat
 
@@ -182,6 +183,7 @@ __all__ = [
     # quotas
     "DAILY_CHAT_LIMIT",
     "chats_today",
+    "is_unlimited",
     "normalize_phone",
     "record_chat",
     # accounts

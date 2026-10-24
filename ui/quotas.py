@@ -27,6 +27,25 @@ except ImportError:
 # counts or checks the limit itself (the 5th chat's own Quoted answer must
 # pass). DAILY_CHAT_LIMIT per Account per server-local day.
 DAILY_CHAT_LIMIT = 5
+DAILY_CHAT_LIMIT = int(os.environ.get("DAILY_CHAT_LIMIT", str(DAILY_CHAT_LIMIT)))
+
+UNLIMITED_ACCOUNTS = set(
+    filter(
+        None,
+        [
+            acc.strip().lower()
+            for acc in os.environ.get(
+                "UNLIMITED_ACCOUNTS", "aubed9@gmail.com"
+            ).split(",")
+        ],
+    )
+)
+
+
+def is_unlimited(account: str) -> bool:
+    if not account:
+        return False
+    return account.strip().lower() in UNLIMITED_ACCOUNTS
 QUOTA_DB = Path(
     os.environ.get(
         "SESSION_UI_QUOTA_DB", str(Path(__file__).resolve().parent / "usage.sqlite3")

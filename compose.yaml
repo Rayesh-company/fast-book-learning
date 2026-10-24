@@ -177,7 +177,7 @@ services:
       AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
       MASTRA_STUDIO_PATH: /app/.mastra/output/studio
     ports:
-      - "127.0.0.1:4111:4111"
+      - "${AGENT_STUDIO_PORT:-127.0.0.1:4112}:4111"
     volumes:
       # The agent's conversation memory (durable threads, ADR-0014's
       # persistence leg) — a rebuild must not throw it away.
@@ -238,6 +238,8 @@ services:
       SESSION_UI_HOST: 0.0.0.0
       SESSION_UI_PORT: "8765"
       SESSION_UI_QUOTA_DB: /data/usage.sqlite3
+      DAILY_CHAT_LIMIT: 
+      UNLIMITED_ACCOUNTS: 
       # The Account store (ADR-0013) persists beside the quota counts on
       # the same volume — a container rebuild must not throw the issued
       # Accounts away.

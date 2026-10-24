@@ -133,7 +133,11 @@ def _accounts_table(rows) -> str:
         phone = row.get("phone") or ""
         role = _ROLE_LABELS.get(str(row.get("role", "")), str(row.get("role", "")))
         chats = int(row.get("chats_today", 0))
-        limit = int(row.get("quota_limit", 5))
+        raw_limit = row.get("quota_limit", 5)
+        if str(raw_limit) in ("نامحدود", "∞", "inf"):
+            limit_str = "نامحدود"
+        else:
+            limit_str = _fa_digits(int(raw_limit))
         rows_html.append(
             "<tr>"
             f"<td class=\"email\">{_esc(row.get('email', ''))}</td>"
@@ -142,7 +146,7 @@ def _accounts_table(rows) -> str:
             f"<td class=\"num\">{_toman(row.get('balance_toman', 0))}</td>"
             f"<td class=\"num\">{_toman(row.get('yesterday_spend_toman', 0))}</td>"
             f"<td class=\"num\">{_toman(row.get('today_spend_toman', 0))}</td>"
-            f"<td class=\"num\">{_fa_digits(chats)} از {_fa_digits(limit)}</td>"
+            f"<td class=\"num\">{_fa_digits(chats)} از {limit_str}</td>"
             "</tr>"
         )
     return _table(
@@ -294,7 +298,7 @@ def console_html(
     whitelisted refused-write code (T26) or "". Renders in the fixed
     order: Accounts, the write forms, live turns, settled turns, the
     audit."""
-    limit = int(quota_limit)
+    limit = int(quota_limit) if str(quota_limit) not in ("نامحدود", "∞", "inf") else quota_limit
     rows = [
         {**row, "quota_limit": row.get("quota_limit", limit)} for row in accounts_rows
     ]
