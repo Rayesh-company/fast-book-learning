@@ -1285,6 +1285,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 from narration import narration_status
             self._send_json(200, narration_status())
             return
+        if path.startswith("/books/") and "/lectures/" in path and path.endswith(".mp3"):
+            self._lecture_audio(path)
+            return
         if path.startswith("/books/") and "/lectures" in path:
             # Lecture read-along (ui/lectures.py): session timings, page
             # boxes and the recorded audio — the Account's read, like the

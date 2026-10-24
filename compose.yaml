@@ -324,7 +324,7 @@ services:
       # The lecture sessions' recorded MP3s (the کتاب‌خوان's lecture
       # player): the read-only mount one level up, per the delivery
       # guide's method two.
-      LECTURE_AUDIO_DIR: ${LECTURE_AUDIO_DIR:-/lecture-audio}
+      LECTURE_AUDIO_DIR: ${LECTURE_AUDIO_DIR:-}
       LECTURE_AUDIO_BASE_URL: ${LECTURE_AUDIO_BASE_URL:-}
     volumes:
       - session_quota:/data

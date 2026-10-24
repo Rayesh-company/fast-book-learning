@@ -29,9 +29,12 @@ BOOK_IDS = {"tarhe-kolli", "70143-336"}
 STATIC_TYPES = {".html", ".css", ".mjs", ".js", ".woff2", ".woff", ".ttf", ".svg", ".png", ".jpg"}
 
 
-def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR, lecture_dir: Path | None = None):
+def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR, lecture_dir: Path | None = None, lecture_audio_dir: Path | str | None = None):
     books_dir, ui_dir = books_dir.resolve(), ui_dir.resolve()
+    lecture_dir = lecture_dir or (Path(lecture_audio_dir) if lecture_audio_dir else None)
     lecture_dir = lecture_dir.resolve() if lecture_dir else None
+    if lecture_audio_dir:
+        os.environ["LECTURE_AUDIO_DIR"] = str(Path(lecture_audio_dir).resolve())
 
     class PreviewHandler(SimpleHTTPRequestHandler):
         def do_GET(self):
@@ -50,6 +53,10 @@ def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR, lecture_dir: Path | 
                 return
             if path == "/mobile/":
                 path = "/mobile/index.html"
+            if path.startswith("/books/") and "/lectures" in path and not path.endswith(".mp3"):
+                if not lectures.handle(self, path, books_dir, BOOK_IDS, head):
+                    self.send_error(404)
+                return
             book = re.fullmatch(
                 r"/books/([A-Za-z0-9_-]+)(/book|\.pdf|\.pages\.json|\.lectures\.json)", path
             )

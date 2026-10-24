@@ -64,7 +64,6 @@ def patch_bullets(source: str) -> str:
             "expected 1 Evidence helper anchor, found "
             f"{sum(source.count(anchor) for anchor in HELPER_ANCHORS)}"
         )
-        )
     helper_anchor = helper_anchors[0]
     if "def _pages_suffix" not in source:
         source = source.replace(helper_anchor, PAGES_HELPER + helper_anchor, 1)

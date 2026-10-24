@@ -56,12 +56,17 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
   // Precomputed geometry (lecture read-along): PDF-point rectangles,
   // top-left origin, scaled to the page as currently laid out.
   function paintBoxes(record) {
-    const scale = record.surface.getBoundingClientRect().width / record.pointWidth;
+    const width = record.surface.getBoundingClientRect().width || record.pointWidth;
+    const scale = width / record.pointWidth;
     if (!Number.isFinite(scale) || scale <= 0) return;
-    for (const box of focus.boxes) {
+    const round = v => Number(v.toFixed(2));
+    for (const raw of focus.boxes) {
+      const isArr = Array.isArray(raw);
+      const box = isArr ? { x0: raw[1], y0: raw[2], x1: raw[3], y1: raw[4] } : raw;
       const span = record.surface.ownerDocument.createElement('span');
-      span.style.left = `${box.x0 * scale - 2}px`; span.style.top = `${box.y0 * scale - 1}px`;
-      span.style.width = `${(box.x1 - box.x0) * scale + 4}px`; span.style.height = `${(box.y1 - box.y0) * scale + 2}px`;
+      const dx = isArr ? 0 : 2, dy = isArr ? 0 : 1;
+      span.style.left = `${round(box.x0 * scale - dx)}px`; span.style.top = `${round(box.y0 * scale - dy)}px`;
+      span.style.width = `${round((box.x1 - box.x0) * scale + dx * 2)}px`; span.style.height = `${round((box.y1 - box.y0) * scale + dy * 2)}px`;
       record.overlay.append(span);
     }
   }

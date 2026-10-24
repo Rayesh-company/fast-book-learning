@@ -57,20 +57,18 @@ test('first-time user without completed profile is routed to onboarding view', a
   assert.ok(f.doc.querySelector('[data-onboarding-form]'));
   assert.match(f.doc.querySelector('h1').textContent, /سبک یادگیری/);
 
-  // Check Q1 (Agent Tone) is required with 4 options
-  const toneRadios = f.doc.querySelectorAll('input[name="assistant_tone"]');
-  assert.equal(toneRadios.length, 4);
-  assert.equal(toneRadios[0].required, true);
+  // Check Q1 is required
+  const purposeRadios = f.doc.querySelectorAll('input[name="usage_purpose"]');
+  assert.ok(purposeRadios.length >= 6);
+  assert.equal(purposeRadios[0].required, true);
 
-  // Check optional fields exist (Age, Knowledge Level)
+  // Check optional fields exist
+  assert.ok(f.doc.querySelector('input[name="martyr_works_familiarity"]'));
   assert.ok(f.doc.querySelector('input[name="age"]'));
-  assert.ok(f.doc.querySelector('input[name="knowledge_level"]'));
-
-  // Obsolete questions should not be present in the streamlined form
-  assert.equal(f.doc.querySelector('input[name="usage_purpose"]'), null);
-  assert.equal(f.doc.querySelector('input[name="political_familiarity"]'), null);
-  assert.equal(f.doc.querySelector('input[name="religious_familiarity"]'), null);
-  assert.equal(f.doc.querySelector('input[name="occupation"]'), null);
+  assert.ok(f.doc.querySelector('input[name="political_familiarity"]'));
+  assert.ok(f.doc.querySelector('input[name="religious_familiarity"]'));
+  assert.ok(f.doc.querySelector('input[name="occupation"]'));
+  assert.ok(f.doc.querySelector('input[name="assistant_tone"]'));
 
   f.close();
 });
@@ -79,16 +77,16 @@ test('submitting onboarding form saves profile and transitions to reader', async
   const f = await fixture({ profileCompleted: false });
   assert.equal(f.app.state.view, 'onboarding');
 
-  // Select Q1 (Tone: simple)
-  const toneRadio = f.doc.querySelector('input[name="assistant_tone"][value="simple"]');
-  toneRadio.checked = true;
+  // Select Q1 (learning)
+  const learningRadio = f.doc.querySelector('input[name="usage_purpose"][value="learning"]');
+  learningRadio.checked = true;
 
-  // Fill optional fields
+  // Fill some optional fields
+  const toneRadio = f.doc.querySelector('input[name="assistant_tone"][value="simple"]');
+  if (toneRadio) toneRadio.checked = true;
+
   const ageInput = f.doc.querySelector('input[name="age"]');
   if (ageInput) ageInput.value = '24';
-
-  const knowledgeRadio = f.doc.querySelector('input[name="knowledge_level"][value="medium"]');
-  if (knowledgeRadio) knowledgeRadio.checked = true;
 
   const form = f.doc.querySelector('[data-onboarding-form]');
   form.dispatchEvent(new f.dom.window.Event('submit', { bubbles: true, cancelable: true }));
@@ -98,9 +96,8 @@ test('submitting onboarding form saves profile and transitions to reader', async
   // Profile should now be marked completed and view navigated to reader
   assert.equal(f.app.state.view, 'reader');
   assert.equal(f.app.state.account.profile_completed, true);
-  assert.equal(f.app.state.account.profile.assistant_tone, 'simple');
-  assert.equal(f.app.state.account.profile.knowledge_level, 'medium');
   assert.equal(f.app.state.account.profile.usage_purpose, 'learning');
+  assert.equal(f.app.state.account.profile.assistant_tone, 'simple');
 
   f.close();
 });
@@ -108,9 +105,9 @@ test('submitting onboarding form saves profile and transitions to reader', async
 test('account view displays profile summary and allows editing preferences', async () => {
   const f = await fixture({
     profile: {
+      usage_purpose: 'academic',
       assistant_tone: 'professional',
-      age: '28',
-      knowledge_level: 'high',
+      occupation: 'پژوهشگر',
     },
     profileCompleted: true,
   });
@@ -126,9 +123,9 @@ test('account view displays profile summary and allows editing preferences', asy
   // Summary should show the saved preferences
   const summary = f.doc.querySelector('.profile-summary');
   assert.ok(summary);
+  assert.match(summary.textContent, /اکادمیک/);
   assert.match(summary.textContent, /حرفه‌ای/);
-  assert.match(summary.textContent, /۲۸/);
-  assert.match(summary.textContent, /زیاد/);
+  assert.match(summary.textContent, /پژوهشگر/);
 
   // Click edit profile
   const editBtn = f.doc.querySelector('[data-action="edit-profile"]');
@@ -140,23 +137,19 @@ test('account view displays profile summary and allows editing preferences', asy
   assert.ok(editForm);
 
   // Pre-filled values check
-  const checkedTone = editForm.querySelector('input[name="assistant_tone"]:checked');
-  assert.equal(checkedTone?.value, 'professional');
-  const checkedKnowledge = editForm.querySelector('input[name="knowledge_level"]:checked');
-  assert.equal(checkedKnowledge?.value, 'high');
-  const ageField = editForm.querySelector('input[name="age"]');
-  assert.equal(ageField?.value, '28');
+  const checkedPurpose = editForm.querySelector('input[name="usage_purpose"]:checked');
+  assert.equal(checkedPurpose?.value, 'academic');
 
-  // Change tone to kids and submit
-  const kidsRadio = editForm.querySelector('input[name="assistant_tone"][value="kids"]');
-  kidsRadio.checked = true;
+  // Change purpose to discussion and submit
+  const discRadio = editForm.querySelector('input[name="usage_purpose"][value="discussion"]');
+  discRadio.checked = true;
   editForm.dispatchEvent(new f.dom.window.Event('submit', { bubbles: true, cancelable: true }));
   await f.app.settled();
   await tick();
 
   // Returns back to account view with updated summary
   assert.equal(f.app.state.view, 'account');
-  assert.match(f.doc.querySelector('.profile-summary').textContent, /برای نوجوان و کودک/);
+  assert.match(f.doc.querySelector('.profile-summary').textContent, /مباحثه/);
 
   f.close();
 });
