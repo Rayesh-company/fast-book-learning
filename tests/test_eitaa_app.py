@@ -404,14 +404,16 @@ def test_the_mobile_face_stays_the_reader_and_eitaa_redirects_to_it(
         with urlopen(Request(base + "/eitaa"), timeout=10) as response:
             assert response.geturl().endswith("/mobile/")
             assert response.status == 200
-        # The reader's data endpoints answer through the same server.
+        # The reader's data endpoints answer through the same server —
+        # and an anonymous caller is the gate's 401 before any dir is
+        # even looked at (F-001: the Book set is Account content).
         try:
             with urlopen(
                 Request(base + "/books/tarhe-kolli.lectures.json"), timeout=10
             ) as response:
-                assert False, "an empty books dir holds no index"
+                assert False, "an anonymous book read must not open"
         except HTTPError as exc:
-            assert exc.code == 404
+            assert exc.code == 401
     finally:
         stop_gate(server, original)
 

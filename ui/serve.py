@@ -1314,7 +1314,12 @@ class SessionHandler(SimpleHTTPRequestHandler):
         number, audio file, duration, the «بدون مقدمه» boundaries,
         pages — a few KB instead of the 45MB alignment file, which only
         the word-level sync will ever need to download. The dataset
-        must be in the Book set; an absent package answers 404."""
+        must be in the Book set; an absent package answers 404.
+        Account-gated (F-001 of the 2026-10-24 review): the Book set is
+        the paying Customer's content — every /books surface speaks
+        only to a logged-in Account now."""
+        if resolve_identity(self) is None:
+            return
         match = re.fullmatch(r"/books/([A-Za-z0-9_-]+)\.lectures\.summary\.json", path)
         if not match or match.group(1) not in BOOK_DATASETS:
             self._drain_request_body()
@@ -1326,7 +1331,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self.send_error(404, "Not found")
             return
         body = json.dumps(summary, ensure_ascii=False).encode("utf-8")
-        self._cache_policy = "public, max-age=300"
+        self._cache_policy = "private, max-age=300"
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -1347,7 +1352,17 @@ class SessionHandler(SimpleHTTPRequestHandler):
         The reader fetches the extension-less ``/book`` form on purpose:
         download managers (IDM among them) intercept requests whose URL
         ends in ``.pdf`` and answer the page with an empty takeover —
-        the recorded 204 that left the reader dark (2026-09-13)."""
+        the recorded 204 that left the reader dark (2026-09-13).
+
+        Account-gated (F-001): the Book set is the paying Customer's
+        content — the PDF, the full-text index, the lecture alignment —
+        so an anonymous caller is the standard 401 before the route
+        even looks at a name. The browser clients ride the HttpOnly
+        cookie (same-origin fetches carry it, pdf.js's Range requests
+        included); the native clients' <img>/<audio> fetches ride the
+        cookie /auth/me re-plants for a Bearer holder."""
+        if resolve_identity(self) is None:
+            return
         book = re.fullmatch(
             r"/books/([A-Za-z0-9_-]+?)(/book|\.pdf|\.lectures\.json)", path
         )
@@ -1450,7 +1465,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 self.send_response(304)
                 self.send_header("ETag", etag)
                 self.send_header(
-                    "Cache-Control", "public, max-age=0, must-revalidate"
+                    "Cache-Control", "private, max-age=0, must-revalidate"
                 )
                 self.end_headers()
                 return
@@ -1465,7 +1480,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self.send_header("ETag", etag)
             self.send_header("Accept-Ranges", "bytes")
             self.send_header(
-                "Cache-Control", "public, max-age=0, must-revalidate"
+                "Cache-Control", "private, max-age=0, must-revalidate"
             )
             if suffix == "pdf" and path.endswith(".pdf"):
                 self.send_header(
@@ -1502,6 +1517,8 @@ class SessionHandler(SimpleHTTPRequestHandler):
         copy loop swallows the broken pipe like the page rasters
         do)."""
         audio_dir = lecture_audio_dir()
+        if resolve_identity(self) is None:
+            return
         match = re.fullmatch(
             r"/books/([A-Za-z0-9_-]+)/lectures/([A-Za-z0-9_.-]+\.mp3)", path
         )
@@ -1580,7 +1597,10 @@ class SessionHandler(SimpleHTTPRequestHandler):
         overlays transparent text geometry for selection and highlights.
         Renders are cached on disk keyed by dataset, page, and width
         bucket; the w parameter is clamped and bucketed to bound the
-        cache."""
+        cache. Account-gated (F-001): the rasters are the Book's own
+        pixels."""
+        if resolve_identity(self) is None:
+            return
         match = self._PAGE_WIDTH_RE.fullmatch(path)
         query = parse_qs(urlparse(self.path).query)
         if not match or match.group(1) not in BOOK_DATASETS:
@@ -1626,7 +1646,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 self._drain_request_body()
                 self.send_error(404, "Not found")
                 return
-        self._cache_policy = "max-age=604800, immutable"
+        self._cache_policy = "private, max-age=604800, immutable"
         self.send_response(200)
         self.send_header("Content-Type", "image/png")
         self.send_header("Content-Length", str(len(body)))
@@ -2025,6 +2045,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 "role": account["role"],
                 "user": user,
             },
+            extra_headers=[self._auth_cookie_header(token)],
         )
 
     def _eitaa_link(self) -> None:
@@ -2064,6 +2085,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 "role": account["role"],
                 "user": user,
             },
+            extra_headers=[self._auth_cookie_header(token)],
         )
 
     def _eitaa_unlink(self) -> None:
@@ -2230,11 +2252,23 @@ class SessionHandler(SimpleHTTPRequestHandler):
     def _auth_me(self) -> None:
         """The whoami read: the Account behind the cookie, or the same
         401 every gated endpoint answers — one shape, so the sheet's
-        overlay hook treats it one way."""
+        overlay hook treats it one way.
+
+        The Bearer callers' cookie re-plant (F-001's client half): the
+        native app's WebView loses its cookie jar at a restart while
+        the token in its secure store survives, and /auth/me is the
+        boot call both clients make — a whoami that authenticated by
+        Bearer alone re-plants the HttpOnly cookie the Book routes'
+        <img>/<audio>/pdf.js fetches ride (they cannot carry an
+        Authorization header). A caller already holding the cookie
+        gets no second Set-Cookie."""
         account = resolve_account(self)
         if account is None:
             self._json_error(401, AUTH_LOGIN_401_DETAIL)
             return
+        extra_headers = []
+        if not self._cookie_token():
+            extra_headers.append(self._auth_cookie_header(_request_token(self)))
         self._send_json(
             200,
             {
@@ -2242,6 +2276,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 "role": account["role"],
                 "phone": account["phone"],
             },
+            extra_headers=extra_headers,
         )
 
     def _otp_request(self) -> None:

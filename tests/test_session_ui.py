@@ -355,7 +355,11 @@ def test_session_ui_never_serves_from_stale_cache():
     text = SERVE.read_text(encoding="utf-8")
     assert "Cache-Control" in text
     assert 'getattr(self, "_cache_policy", None) or "no-cache"' in text
-    assert '"max-age=604800, immutable"' in text
+    # The rasters' immutable policy turned private with the Book gate
+    # (F-001, 2026-10-24): an Account's cached pages must never serve
+    # from a SHARED proxy cache — private keeps them in the caller's
+    # own jar while the immutable revalidation stays.
+    assert '"private, max-age=604800, immutable"' in text
 
 
 def test_switching_a_sitting_is_instant_and_guarded():

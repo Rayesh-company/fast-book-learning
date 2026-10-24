@@ -12,7 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import urllib.request
 
 from tests.conftest import REPO_ROOT
-from tests.helpers import with_gate, stop_gate
+from tests.helpers import (
+    cookie_for,
+    ensure_account,
+    with_gate,
+    stop_gate,
+)
 from tools.build_page_index import build_page_index, split_pages
 
 import ui.serve as serve
@@ -61,9 +66,25 @@ def test_build_page_index_writes_sorted_json(tmp_path):
 
 PDF_MAGIC = b"%PDF"
 
+# The Book routes' seeded reader (F-001): the book reads ride one
+# operator Account's login cookie.
+READER_PHONE = "09120000600"
 
-def _get_raw(base, path):
-    request = urllib.request.Request(base + path)
+_COOKIE_CACHE: dict = {}
+
+
+def _reader_cookie(base) -> str:
+    cached = _COOKIE_CACHE.get(base)
+    if cached is None:
+        email = ensure_account(READER_PHONE)
+        cached = cookie_for(base, email)
+        _COOKIE_CACHE[base] = cached
+    return cached
+
+
+def _get_raw(base, path, cookie=None):
+    headers = {"Cookie": cookie} if cookie else {}
+    request = urllib.request.Request(base + path, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             return response.status, response.headers, response.read()
@@ -71,10 +92,13 @@ def _get_raw(base, path):
         return exc.code, exc.headers, exc.read()
 
 
-def _conditional_raw(base, path, headers):
+def _conditional_raw(base, path, headers, cookie=None):
     """One GET with extra request headers — a 304 answer is an HTTPError
     to urllib, so the conditional reads go through here."""
-    request = urllib.request.Request(base + path, headers=headers)
+    merged = dict(headers)
+    if cookie:
+        merged["Cookie"] = cookie
+    request = urllib.request.Request(base + path, headers=merged)
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             return response.status, response.headers, response.read()
@@ -92,13 +116,14 @@ def test_books_routes_serve_pdf_and_index(tmp_path):
     original_dir = serve.BOOKS_DIR
     serve.BOOKS_DIR = books
     base, server, originals = with_gate(tmp_path, None)
+    cookie = _reader_cookie(base)
     try:
-        status, headers, body = _get_raw(base, "/books/tarhe-kolli.pdf")
+        status, headers, body = _get_raw(base, "/books/tarhe-kolli.pdf", cookie)
         assert status == 200
         assert headers["Content-Type"].startswith("application/pdf")
         assert body.startswith(PDF_MAGIC)
 
-        status, headers, body = _get_raw(base, "/books/tarhe-kolli.pages.json")
+        status, headers, body = _get_raw(base, "/books/tarhe-kolli.pages.json", cookie)
         assert status == 200
         assert headers["Content-Type"].startswith("application/json")
         assert "متن" in body.decode("utf-8")
@@ -106,18 +131,18 @@ def test_books_routes_serve_pdf_and_index(tmp_path):
         # The reader's extension-less data form — no ".pdf" in the URL
         # for download managers to sniff (the recorded IDM takeover) —
         # and the explicit ".pdf" form as an attachment download.
-        status, headers, body = _get_raw(base, "/books/tarhe-kolli/book")
+        status, headers, body = _get_raw(base, "/books/tarhe-kolli/book", cookie)
         assert status == 200
         assert headers["Content-Type"].startswith("application/pdf")
         assert body.startswith(PDF_MAGIC)
         assert "attachment" not in (headers.get("Content-Disposition") or "")
 
-        status, headers, _ = _get_raw(base, "/books/tarhe-kolli.pdf")
+        status, headers, _ = _get_raw(base, "/books/tarhe-kolli.pdf", cookie)
         assert status == 200
         assert "attachment" in (headers.get("Content-Disposition") or "")
 
         # HTTP Range request (206 Partial Content)
-        req = urllib.request.Request(base + "/books/tarhe-kolli/book", headers={"Range": "bytes=0-3"})
+        req = urllib.request.Request(base + "/books/tarhe-kolli/book", headers={"Range": "bytes=0-3", "Cookie": cookie})
         with urllib.request.urlopen(req) as resp:
             assert resp.status == 206
             assert resp.headers["Content-Range"].startswith("bytes 0-3/")
@@ -135,6 +160,7 @@ def test_books_routes_reject_unknown_dataset_and_traversal(tmp_path):
     original_dir = serve.BOOKS_DIR
     serve.BOOKS_DIR = books
     base, server, originals = with_gate(tmp_path, None)
+    cookie = _reader_cookie(base)
     try:
         for path in (
             "/books/unknown-dataset.pdf",
@@ -142,7 +168,7 @@ def test_books_routes_reject_unknown_dataset_and_traversal(tmp_path):
             "/books/tarhe-kolli.docx",
             "/books/70143-336.pages.json.exe",
         ):
-            status, _, _ = _get_raw(base, path)
+            status, _, _ = _get_raw(base, path, cookie)
             assert status == 404, path
     finally:
         stop_gate(server, originals)
@@ -156,7 +182,7 @@ def test_books_route_missing_file_is_404(tmp_path):
     serve.BOOKS_DIR = books
     base, server, originals = with_gate(tmp_path, None)
     try:
-        status, _, _ = _get_raw(base, "/books/70143-336.pdf")
+        status, _, _ = _get_raw(base, "/books/70143-336.pdf", _reader_cookie(base))
         assert status == 404
     finally:
         stop_gate(server, originals)
@@ -182,7 +208,7 @@ def test_book_page_route_renders_and_caches(tmp_path):
     base, server, originals = with_gate(tmp_path, None)
     try:
         status, headers, body = _get_raw(
-            base, "/books/tarhe-kolli/page/14.png?w=640"
+            base, "/books/tarhe-kolli/page/14.png?w=640", _reader_cookie(base)
         )
         assert status == 200
         assert headers["Content-Type"] == "image/png"
@@ -190,11 +216,11 @@ def test_book_page_route_renders_and_caches(tmp_path):
         # the width bucket: 640 survives clamping unchanged
         assert (cache / "tarhe-kolli-p14-w640.png").exists()
         # second request serves from the cache — identical bytes
-        status2, _, body2 = _get_raw(base, "/books/tarhe-kolli/page/14.png?w=640")
+        status2, _, body2 = _get_raw(base, "/books/tarhe-kolli/page/14.png?w=640", _reader_cookie(base))
         assert status2 == 200
         assert body2 == body
         # a clamped width lands on the same bucket as its round value
-        status3, _, body3 = _get_raw(base, "/books/tarhe-kolli/page/14.png?w=650")
+        status3, _, body3 = _get_raw(base, "/books/tarhe-kolli/page/14.png?w=650", _reader_cookie(base))
         assert status3 == 200
         assert body3 == body
     finally:
@@ -222,9 +248,9 @@ def test_book_page_route_missing_pdf_is_404_not_500(tmp_path):
     serve.RENDER_CACHE_DIR = cache
     base, server, originals = with_gate(tmp_path, None)
     try:
-        status, _, _ = _get_raw(base, "/books/tarhe-kolli/page/572.png?w=640")
+        status, _, _ = _get_raw(base, "/books/tarhe-kolli/page/572.png?w=640", _reader_cookie(base))
         assert status == 404
-        status2, _, _ = _get_raw(base, "/books/tarhe-kolli/book")
+        status2, _, _ = _get_raw(base, "/books/tarhe-kolli/book", _reader_cookie(base))
         assert status2 == 404
     finally:
         stop_gate(server, originals)
@@ -246,7 +272,7 @@ def test_book_page_route_rejects_bad_input(tmp_path):
             "/books/../secret/page/1.png",
             "/books/tarhe-kolli/page/1.gif",
         ):
-            status, _, _ = _get_raw(base, path)
+            status, _, _ = _get_raw(base, path, _reader_cookie(base))
             assert status == 404, path
     finally:
         stop_gate(server, originals)
@@ -263,18 +289,16 @@ def test_book_routes_carry_etag_and_answer_304(tmp_path):
     original_dir = serve.BOOKS_DIR
     serve.BOOKS_DIR = books
     base, server, originals = with_gate(tmp_path, None)
+    cookie = _reader_cookie(base)
     try:
-        status, headers, _ = _get_raw(base, "/books/tarhe-kolli/book")
+        status, headers, _ = _get_raw(base, "/books/tarhe-kolli/book", cookie)
         assert status == 200
         etag = headers["ETag"]
         assert etag
         assert "must-revalidate" in (headers.get("Cache-Control") or "")
 
-        req = urllib.request.Request(
-            base + "/books/tarhe-kolli/book", headers={"If-None-Match": etag}
-        )
         status304, headers304, body304 = _conditional_raw(
-            base, "/books/tarhe-kolli/book", {"If-None-Match": etag}
+            base, "/books/tarhe-kolli/book", {"If-None-Match": etag}, cookie
         )
         assert status304 == 304
         assert headers304["ETag"] == etag
@@ -283,13 +307,14 @@ def test_book_routes_carry_etag_and_answer_304(tmp_path):
         # A changed file moves the ETag — the stat pair is the validator.
         (books / "tarhe-kolli.pdf").write_bytes(PDF_MAGIC + b"fake2")
         status_new, _, _ = _conditional_raw(
-            base, "/books/tarhe-kolli/book", {"If-None-Match": etag}
+            base, "/books/tarhe-kolli/book", {"If-None-Match": etag}, cookie
         )
         assert status_new == 200
 
         # Range requests keep their 206 (pdf.js's lazy page fetches).
         ranged = urllib.request.Request(
-            base + "/books/tarhe-kolli/book", headers={"Range": "bytes=0-3"}
+            base + "/books/tarhe-kolli/book",
+            headers={"Range": "bytes=0-3", "Cookie": cookie},
         )
         with urllib.request.urlopen(ranged) as resp3:
             assert resp3.status == 206
@@ -309,7 +334,7 @@ def test_pages_index_gzips_when_accepted(tmp_path):
     try:
         req = urllib.request.Request(
             base + "/books/tarhe-kolli.pages.json",
-            headers={"Accept-Encoding": "gzip"},
+            headers={"Accept-Encoding": "gzip", "Cookie": _reader_cookie(base)},
         )
         with urllib.request.urlopen(req) as resp:
             assert resp.status == 200

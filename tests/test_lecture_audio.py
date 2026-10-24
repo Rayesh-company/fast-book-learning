@@ -19,7 +19,7 @@ from tests.conftest import REPO_ROOT
 sys.path.insert(0, str(REPO_ROOT))
 
 from ui import serve  # noqa: E402
-from tests.helpers import stop_gate, with_gate  # noqa: E402
+from tests.helpers import cookie_for, ensure_account, stop_gate, with_gate  # noqa: E402
 
 MP3 = b"fake-lecture-audio-bytes-0123456789"
 
@@ -32,8 +32,10 @@ class EmptyUpstream:
         raise AssertionError("lecture routes must never phone an upstream")
 
 
-def _get(base, path, range_header=None):
+def _get(base, path, range_header=None, cookie=None):
     headers = {"Range": range_header} if range_header else {}
+    if cookie:
+        headers["Cookie"] = cookie
     request = Request(base + path, headers=headers)
     try:
         with urlopen(request, timeout=10) as response:
@@ -52,25 +54,26 @@ def test_lecture_audio_serves_json_and_mp3_with_range(tmp_path, monkeypatch):
     monkeypatch.setattr(serve, "BOOKS_DIR", books)
     monkeypatch.setenv("LECTURE_AUDIO_DIR", str(audio))
     base, server, original = with_gate(tmp_path, EmptyUpstream())
+    cookie = cookie_for(base, ensure_account("09120000700"))
     try:
         # The index rides beside the PDF it aligns to.
-        status, headers, body = _get(base, "/books/tarhe-kolli.lectures.json")
+        status, headers, body = _get(base, "/books/tarhe-kolli.lectures.json", cookie=cookie)
         assert status == 200
         assert body == b'{"format":1}'
         assert "application/json" in headers["Content-Type"]
         # One session's MP3, whole and ranged — seeking is the player.
-        status, headers, body = _get(base, "/books/tarhe-kolli/lectures/session_01.mp3")
+        status, headers, body = _get(base, "/books/tarhe-kolli/lectures/session_01.mp3", cookie=cookie)
         assert status == 200 and body == MP3
         assert headers["Content-Type"] == "audio/mpeg"
         assert headers["Accept-Ranges"] == "bytes"
         status, headers, body = _get(
-            base, "/books/tarhe-kolli/lectures/session_01.mp3", "bytes=5-9"
+            base, "/books/tarhe-kolli/lectures/session_01.mp3", "bytes=5-9", cookie=cookie
         )
         assert status == 206
         assert body == MP3[5:10]
         assert headers["Content-Range"] == f"bytes 5-9/{len(MP3)}"
         status, headers, body = _get(
-            base, "/books/tarhe-kolli/lectures/session_01.mp3", "bytes=-4"
+            base, "/books/tarhe-kolli/lectures/session_01.mp3", "bytes=-4", cookie=cookie
         )
         assert status == 206 and body == MP3[-4:]
         # The allowlist is the traversal guard: a dataset outside the
@@ -82,7 +85,7 @@ def test_lecture_audio_serves_json_and_mp3_with_range(tmp_path, monkeypatch):
             "/books/tarhe-kolli/lectures/%2E%2E%2Fsecret.mp3",
             "/books/tarhe-kolli/lectures/session_01.txt",
         ):
-            status, _headers, _body = _get(base, path)
+            status, _headers, _body = _get(base, path, cookie=cookie)
             assert status == 404, path
     finally:
         stop_gate(server, original)
@@ -95,11 +98,12 @@ def test_lecture_audio_routes_refuse_without_the_package(tmp_path, monkeypatch):
     try:
         # No package configured: the mp3 route 404s while the index
         # route still serves whatever the books dir genuinely holds.
+        cookie = cookie_for(base, ensure_account("09120000700"))
         status, _headers, _body = _get(
-            base, "/books/tarhe-kolli/lectures/session_01.mp3"
+            base, "/books/tarhe-kolli/lectures/session_01.mp3", cookie=cookie
         )
         assert status == 404
-        status, _headers, _body = _get(base, "/books/tarhe-kolli.lectures.json")
+        status, _headers, _body = _get(base, "/books/tarhe-kolli.lectures.json", cookie=cookie)
         assert status == 404  # the tmp books dir holds no index either
     finally:
         stop_gate(server, original)
@@ -184,8 +188,12 @@ def test_the_summary_route_serves_the_players_slim_index(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(serve, "BOOKS_DIR", books)
     base, server, original = with_gate(tmp_path, EmptyUpstream())
+    cookie = cookie_for(base, ensure_account("09120000700"))
     try:
-        request = Request(base + "/books/tarhe-kolli.lectures.summary.json")
+        request = Request(
+            base + "/books/tarhe-kolli.lectures.summary.json",
+            headers={"Cookie": cookie},
+        )
         with urlopen(request, timeout=10) as response:
             payload = json.loads(response.read())
         assert response.status == 200
@@ -197,7 +205,13 @@ def test_the_summary_route_serves_the_players_slim_index(tmp_path, monkeypatch):
         assert "sentences" not in row and "cues" not in row
         # A dataset outside the Book set answers the same 404.
         try:
-            urlopen(Request(base + "/books/nope.lectures.summary.json"), timeout=10)
+            urlopen(
+                Request(
+                    base + "/books/nope.lectures.summary.json",
+                    headers={"Cookie": cookie},
+                ),
+                timeout=10,
+            )
             assert False, "foreign dataset must 404"
         except HTTPError as exc:
             assert exc.code == 404
