@@ -458,7 +458,7 @@ URL پایه با `EXPO_PUBLIC_API_URL` (پیش‌فرض: `https://booksai.rayes
 | `/eitaa/auth` | POST | امضای initData | `{initData}` → `{bound, token?, email?, role?, user}` (۱=تبادل، ۰=درِ ورود) |
 | `/eitaa/link` | POST | امضای initData + گذرواژه | `{initData,email,password}` → توکن + ثبت اتصال (یک در، یک‌بار) |
 | `/eitaa/unlink` | POST | Account + امضای initData | حذف اتصال خودِ تماس‌گیرنده → `{deleted}` |
-| `/books/:d/book · page/:n.png · …` | GET | — | PDF و رستر صفحات (ETag/immutable) |
+| `/books/:d/book · page/:n.png · …` | GET | Account | PDF، رستر صفحات، متن صفحات، صدای جلسات (ETag/immutable؛ بررسی ۲۰۲۶-۱۰-۲۴ — دارایی مشتری، گیت کامل) |
 | `/health` (پروکسی) · `/livez` | GET | — | سلامت |
 | `/admin` · `/admin/*` | GET/POST | admin | میز مدیر: صدور، شارژ، پیوند، رخداد |
 
