@@ -23,3 +23,444 @@ html,body{height:100%;min-height:100%;background:var(--bg);color:var(--ink)}body
 .note-search .icon-button{flex:none}
 
 .product-shell[data-type="reader"] .drawer-title,.product-shell[data-type="reader"] .account-button{flex-shrink:0}
+
+/* User Profile and Onboarding Styles */
+.onboarding-page{max-width:540px;padding:40px 20px;justify-content:flex-start}
+.onboarding-page h1{font-size:22px;line-height:1.6}
+.onboarding-page>p{font-size:13px;line-height:1.8;color:var(--muted);margin:10px 0 24px}
+.profile-form{display:flex;flex-direction:column;gap:20px;width:100%}
+.question-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.question-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.question-title{font-size:14px;font-weight:600;color:var(--ink);line-height:1.6}
+.question-desc{font-size:12px;color:var(--muted);line-height:1.7}
+.badge-req{font-size:11px;background:var(--accent-soft);color:var(--accent);padding:2px 8px;border-radius:8px;font-weight:600;white-space:nowrap}
+.badge-opt{font-size:11px;background:var(--soft);color:var(--muted);padding:2px 8px;border-radius:8px;white-space:nowrap}
+.options-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.choice-option{display:inline-flex;align-items:center;cursor:pointer;position:relative;font-size:13px;user-select:none}
+.choice-option input[type="radio"]{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+.choice-option span{display:inline-flex;align-items:center;padding:7px 14px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);transition:all 120ms ease;min-height:38px}
+.choice-option input[type="radio"]:checked+span{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.choice-option:hover span{border-color:var(--accent)}
+.question-card input[type="number"],.question-card input[type="text"]{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:10px 14px;font-size:14px;width:100%;box-sizing:border-box}
+.profile-summary{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin:10px 0 16px;display:flex;flex-direction:column;gap:10px}
+.profile-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;line-height:1.8;border-bottom:1px solid var(--soft);padding-bottom:6px}
+.profile-row:last-child{border-bottom:0;padding-bottom:0}
+.profile-row span{color:var(--muted)}
+.profile-row strong{color:var(--ink);font-weight:600}
+
+/* RTL composer tools keep a stable neutral scope control. */
+.product-shell .composer-tools{direction:rtl;gap:12px}
+.pages-pill-group{display:inline-flex;align-items:center;direction:rtl;width:168px;max-width:calc(100% - 56px);flex-shrink:0}
+.pages-pill-group .pages-button{flex:1;min-width:0;border-radius:0 22px 22px 0;border-left:0;direction:rtl;background:transparent;color:var(--ink);border-color:var(--line)}
+.pages-pill-group .pages-button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.pages-pill-group .pages-options-button{height:44px;min-width:44px;border:1px solid var(--line);border-radius:22px 0 0 22px;padding:0 9px;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--ink)}
+.pages-pill-group .pages-options-button svg{width:13px;height:13px}
+.product-shell .topbar .reader-return{position:absolute;left:12px;right:auto;top:14px}
+.product-shell .topbar:has(.reader-return) h3,.product-shell .topbar:has(.reader-return) p{max-width:calc(100vw - 128px)}
+.product-shell .history-item .icon-button{width:44px;min-width:44px}
+.session-popover{position:absolute;z-index:6;width:196px;max-width:calc(100% - 16px);padding:6px 12px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 24px var(--shadow);direction:rtl}
+.session-popover button{display:flex;align-items:center;gap:12px;min-height:48px;width:100%;padding:8px 4px;text-align:right;font-size:13px}
+.session-popover button+button{border-top:1px solid var(--line)}
+.session-popover button svg{width:19px;height:19px}
+.session-popover button:focus-visible{outline-offset:0;border-radius:8px}
+.session-popover button:hover{background:var(--soft);filter:none}
+
+/* Markdown styling in assistant responses and floating response cards */
+.assistant h1, .assistant h2, .assistant h3, .assistant h4, .assistant h5, .assistant h6,
+.response-card h1, .response-card h2, .response-card h3, .response-card h4, .response-card h5, .response-card h6 {
+  font-weight: 700;
+  line-height: 1.6;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  color: var(--ink);
+}
+.assistant h1, .assistant h2, .response-card h1, .response-card h2 { font-size: 18px; }
+.assistant h3, .response-card h3 { font-size: 16px; }
+.assistant h4, .assistant h5, .assistant h6, .response-card h4, .response-card h5, .response-card h6 { font-size: 15px; }
+
+.assistant > *:first-child, .response-card .assistant > *:first-child {
+  margin-top: 0;
+}
+
+.assistant ul, .assistant ol,
+.response-card ul, .response-card ol {
+  margin: 10px 0;
+  padding-right: 22px;
+  padding-left: 0;
+}
+.assistant li, .response-card li {
+  margin-bottom: 6px;
+  line-height: 1.85;
+}
+.assistant li:last-child, .response-card li:last-child {
+  margin-bottom: 0;
+}
+
+.assistant blockquote, .response-card blockquote {
+  margin: 12px 0;
+  padding: 8px 14px;
+  border-right: 3px solid var(--accent);
+  background: var(--soft);
+  border-radius: 4px 0 0 4px;
+  color: var(--muted);
+}
+.assistant blockquote p, .response-card blockquote p {
+  margin: 0;
+}
+.assistant blockquote p + p, .response-card blockquote p + p {
+  margin-top: 8px;
+}
+
+.assistant code, .response-card code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  background: var(--soft);
+  padding: 2px 6px;
+  border-radius: 6px;
+  word-break: break-word;
+}
+
+.assistant pre, .response-card pre {
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: var(--soft);
+  border-radius: 12px;
+  overflow-x: auto;
+  direction: ltr;
+  text-align: left;
+  border: 1px solid var(--line);
+}
+.assistant pre code, .response-card pre code {
+  padding: 0;
+  background: none;
+  font-size: 13px;
+  display: block;
+  word-break: normal;
+}
+
+.assistant hr, .response-card hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 16px 0;
+}
+
+.assistant strong, .response-card strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.assistant em, .response-card em {
+  font-style: italic;
+}
+
+.assistant del, .response-card del {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.assistant a, .response-card a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.assistant .table-wrap, .response-card .table-wrap {
+  overflow-x: auto;
+  margin: 12px 0;
+  -webkit-overflow-scrolling: touch;
+}
+.assistant table, .response-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: right;
+}
+.assistant th, .assistant td, .response-card th, .response-card td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+}
+.assistant th, .response-card th {
+  background: var(--soft);
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Apple Design: Translucent Materials, Vibrancy & Depth (WWDC 2018/2026)
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+  --apple-glass-bg: rgba(255, 254, 250, 0.82);
+  --apple-glass-chrome: rgba(250, 248, 243, 0.84);
+  --apple-glass-border: rgba(0, 0, 0, 0.08);
+  --apple-glass-rim: rgba(255, 255, 255, 0.8);
+  --apple-sheet-bg: rgba(255, 254, 250, 0.95);
+  --apple-drawer-bg: rgba(255, 254, 250, 0.92);
+  --apple-shadow-sm: 0 2px 8px rgba(27, 40, 35, 0.06);
+  --apple-shadow-md: 0 8px 24px rgba(27, 40, 35, 0.08);
+  --apple-shadow-lg: 0 16px 40px rgba(27, 40, 35, 0.12);
+}
+
+body.dark {
+  color-scheme: dark;
+  --apple-glass-bg: rgba(36, 42, 40, 0.82);
+  --apple-glass-chrome: rgba(32, 37, 36, 0.84);
+  --apple-glass-border: rgba(255, 255, 255, 0.1);
+  --apple-glass-rim: rgba(255, 255, 255, 0.12);
+  --apple-sheet-bg: rgba(36, 42, 40, 0.95);
+  --apple-drawer-bg: rgba(32, 37, 36, 0.92);
+  --apple-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --apple-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --apple-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* 1. Typography & Hierarchy (Section 15) */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.product-shell .topbar h3,
+.panel-topbar h1 {
+  letter-spacing: -0.015em;
+  font-weight: 600;
+}
+
+.assistant {
+  font-size: 15.5px !important;
+  line-height: 1.95 !important;
+  letter-spacing: 0;
+}
+
+.product-shell .user-message {
+  border-radius: 20px 20px 6px 20px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  font-size: 15px !important;
+  line-height: 1.85 !important;
+}
+
+/* 2. Apple Translucent Topbars */
+.product-shell .topbar,
+.panel-topbar {
+  background: var(--apple-glass-chrome) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border-bottom: 1px solid var(--apple-glass-border) !important;
+  box-shadow: 0 1px 0 var(--apple-glass-rim);
+}
+
+/* 3. Apple Floating Chat Composer */
+.product-shell .chat-composer {
+  background: var(--apple-glass-bg) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  border: 1px solid var(--apple-glass-border) !important;
+  border-radius: 28px !important;
+  box-shadow: var(--apple-shadow-md), inset 0 1px 0 var(--apple-glass-rim) !important;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.product-shell .chat-composer:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 8px 24px rgba(27, 40, 35, 0.1), inset 0 1px 0 var(--apple-glass-rim) !important;
+  outline: none !important;
+}
+
+/* 4. Apple Translucent Bottom Reader Navigation */
+.reader-navigation {
+  background: var(--apple-glass-chrome) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border-top: 1px solid var(--apple-glass-border) !important;
+}
+
+/* 5. Apple Blurred Scrim */
+.drawer-scrim,
+.sheet-scrim {
+  background: rgba(18, 24, 22, 0.28) !important;
+  backdrop-filter: blur(10px) brightness(0.92) !important;
+  -webkit-backdrop-filter: blur(10px) brightness(0.92) !important;
+}
+
+/* 6. Apple Bottom Sheets with Pull Handle */
+.sheet,
+.app-sheet {
+  background: var(--apple-sheet-bg) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  border-radius: 28px 28px 0 0 !important;
+  border-top: 1px solid var(--apple-glass-rim) !important;
+  box-shadow: var(--apple-shadow-lg) !important;
+  position: relative;
+}
+
+.sheet::before,
+.app-sheet::before {
+  content: "" !important;
+  display: block !important;
+  width: 36px !important;
+  height: 5px !important;
+  border-radius: 999px !important;
+  background: currentColor !important;
+  opacity: 0.2 !important;
+  margin: 0 auto 16px !important;
+}
+
+/* 7. Apple Side Drawer */
+.drawer {
+  background: var(--apple-drawer-bg) !important;
+  backdrop-filter: blur(32px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
+  border-left: 1px solid var(--apple-glass-border) !important;
+  box-shadow: var(--apple-shadow-lg) !important;
+}
+
+/* 8. Apple Segmented Controls */
+.theme-options {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 4px;
+  border-radius: 14px;
+  display: inline-flex;
+  gap: 4px;
+}
+body.dark .theme-options {
+  background: rgba(255, 255, 255, 0.07);
+}
+.theme-options button {
+  border: 0 !important;
+  border-radius: 10px !important;
+  padding: 7px 16px !important;
+  min-height: 38px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--muted) !important;
+  background: transparent !important;
+  transition: all 180ms cubic-bezier(0.32, 0.72, 0, 1) !important;
+}
+.theme-options button[aria-pressed="true"] {
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 0.5px 1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 9. Interactive Citations & Chips */
+.cite-sent {
+  padding: 2px 7px !important;
+  border-radius: 7px !important;
+  background: var(--cite-soft) !important;
+  border-bottom: 1.5px solid var(--cite) !important;
+  transition: background-color 150ms ease, color 150ms ease, transform 100ms ease !important;
+}
+.cite-sent:hover {
+  background: var(--soft) !important;
+  color: var(--cite) !important;
+}
+
+/* 10. Study Card / Cards */
+.study-card {
+  border-radius: 18px !important;
+  border: 1px solid var(--apple-glass-border) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--apple-shadow-sm) !important;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+/* 11. Notebook Tabs */
+.note-tabs {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 4px;
+  border-radius: 14px;
+  width: fit-content;
+}
+body.dark .note-tabs {
+  background: rgba(255, 255, 255, 0.06);
+}
+.note-tabs button {
+  border: 0 !important;
+  border-radius: 10px !important;
+  padding: 6px 16px !important;
+  min-height: 38px !important;
+  color: var(--muted) !important;
+  transition: all 180ms cubic-bezier(0.32, 0.72, 0, 1) !important;
+}
+.note-tabs button[aria-selected="true"] {
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 12. Floating Jump Button */
+.jump-latest {
+  background: var(--apple-glass-bg) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--apple-glass-border) !important;
+  box-shadow: var(--apple-shadow-md), inset 0 1px 0 var(--apple-glass-rim) !important;
+}
+
+/* 13. Scope Pill Group */
+.pages-pill-group {
+  border: 1px solid var(--apple-glass-border) !important;
+  border-radius: 22px !important;
+  background: rgba(0, 0, 0, 0.03) !important;
+  transition: all 180ms ease !important;
+}
+body.dark .pages-pill-group {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+.pages-pill-group:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+body.dark .pages-pill-group:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+.pages-pill-group .pages-button {
+  border: 0 !important;
+  border-radius: 0 22px 22px 0 !important;
+}
+.pages-pill-group .pages-options-button {
+  border: 0 !important;
+  border-right: 1px solid var(--apple-glass-border) !important;
+  border-radius: 22px 0 0 22px !important;
+}
+
+/* 14. Primary Action Button */
+.primary-action {
+  border-radius: 16px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  box-shadow: 0 2px 8px rgba(27, 40, 35, 0.16) !important;
+}
+body.dark .primary-action {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 15. Toast */
+.toast {
+  background: rgba(30, 36, 34, 0.92) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--apple-shadow-lg) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Reduced Transparency Mode */
+@media (prefers-reduced-transparency: reduce) {
+  .product-shell .topbar,
+  .panel-topbar,
+  .product-shell .chat-composer,
+  .reader-navigation,
+  .sheet,
+  .app-sheet,
+  .drawer,
+  .jump-latest,
+  .toast {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--surface) !important;
+  }
+}

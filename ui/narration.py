@@ -103,7 +103,7 @@ def _extract_pdf_page(path, page, size, modified_ns):
         raise NarrationError('NARRATION_RUNTIME_UNAVAILABLE')
     try:
         process = subprocess.run([node, str(_PDF_SOURCE), path, str(page)],
-                                 capture_output=True, text=True, timeout=60,
+                                 capture_output=True, text=True, encoding='utf-8', timeout=60,
                                  cwd=_RUNTIME.parent)
         result = json.loads(process.stdout)
         if process.returncode or not result.get('ok') or not isinstance(result.get('text'), str):
@@ -191,7 +191,7 @@ def generate_narration(document, request, *, books_dir=None, provider_options=No
         paragraphs = max(1, len(payload['text']) // 1000 + 1)
         timeout = min(3600, 360 * paragraphs + 30)
         try:
-            process = subprocess.run([node, str(_RUNTIME)], input=json.dumps(payload, ensure_ascii=False), capture_output=True, text=True, timeout=timeout, cwd=_RUNTIME.parent)
+            process = subprocess.run([node, str(_RUNTIME)], input=json.dumps(payload, ensure_ascii=False), capture_output=True, text=True, encoding='utf-8', timeout=timeout, cwd=_RUNTIME.parent)
         except subprocess.TimeoutExpired:
             raise NarrationError('NARRATION_REQUEST_TIMEOUT') from None
         except OSError:

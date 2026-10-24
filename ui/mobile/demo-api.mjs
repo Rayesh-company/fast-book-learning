@@ -16,6 +16,7 @@ export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequi
  });
  const session=id=>data.sessions.find(s=>s.id===Number(id));
  return {demo:true,loginRequired,
+  get lastAsk(){return data.lastAsk;},
   me:async()=>{if(!loginRequired&&!data.account){data.account={phone:'۰۹۱۲۳۴۵۶۷۸۹',email:'',role:'user'};save();}return clone(data.account);},
   login:async()=>{data.account={phone:'۰۹۱۲۳۴۵۶۷۸۹',role:'user'};save();return clone(data.account);},
   logout:async()=>{data.account=null;save();},
@@ -23,6 +24,14 @@ export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequi
   verifyOtp:async(phone,code)=>{if(code!=='123456')throw new Error('کد نمونه ۱۲۳۴۵۶ است.');data.account={phone,role:'user'};save();return clone(data.account);},
   joinWaitlist:async phone=>{await wait();return {phone,joined:true};},
   profile:async()=>({subscription:clone(data.subscription),questions_remaining:data.quota,question_limit:30}),
+  getProfile:async()=>({profile:clone(data.account?.profile||null),profile_completed:Boolean(data.account?.profile_completed)}),
+  saveProfile:async profile=>{
+   if(!data.account)data.account={phone:'۰۹۱۲۳۴۵۶۷۸۹',email:'',role:'user'};
+   data.account.profile=clone(profile);
+   data.account.profile_completed=Boolean(profile?.assistant_tone||profile?.tone||profile?.usage_purpose||profile?.knowledge_level);
+   save();
+   return {profile:clone(data.account.profile),profile_completed:data.account.profile_completed};
+  },
   sessions:async()=>clone([...data.sessions].sort((a,b)=>b.updated_at.localeCompare(a.updated_at))),
   session:async id=>{const s=session(id);if(!s)throw new Error('گفتگو پیدا نشد.');return clone(s);},
   createSession:async(book,title)=>{const s={id:data.sequence++,book,title:title||'گفتگوی تازه',created_at:stamp(),updated_at:stamp(),messages:[]};data.sessions.push(s);save();return clone(s);},
@@ -33,8 +42,11 @@ export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequi
    onStatus?.('در حال جستجو در کتاب');await wait(signal);
    if(data.quota<=0)return {text:'سهمیهٔ پرسش‌های این بازه تمام شده است. مطالعه، یادداشت‌ها و شنیدن کتاب همچنان در دسترس‌اند.',limited:true,citations:[]};
    onStatus?.('در حال نوشتن پاسخ');await wait(signal);data.quota--;save();
-   const page=input.pages?.[0]||100;
-   return {text:'برای فهم این بخش، ابتدا نکتهٔ اصلی را با زبان خودتان بیان کنید؛ سپس آن را به یک مثال از تجربهٔ خودتان پیوند بدهید. برگشتن به متن و بررسی مثال کمک می‌کند برداشتتان را دقیق‌تر کنید.',
+   const page=(input.page??input.pages?.[0])||100;
+   const scope=input.scope||'all';
+   data.lastAsk={book:input.book,page,scope,selection:input.selection,question:input.question};
+   const md = `### راهنمای مطالعه\nبرای فهم این بخش، ابتدا **نکتهٔ اصلی** را با زبان خودتان بیان کنید:\n- یک مثال از *تجربهٔ خودتان* بیاورید.\n- طبق document ${input.book} (page ${page}) تطبیق با متن را بررسی کنید.\n\n> برگشتن به متن و بررسی مثال کمک می‌کند برداشتتان را دقیق‌تر کنید.`;
+    return {text:md,
     citations:input.selection?.text?[{doc:input.book,page,text:input.selection.text}]:[],
     study:{doc:input.book,page,text:'این صفحه را دوباره بخوانید و یک نکتهٔ اصلی از آن بنویسید.'},
     outside:/اینترنت|وب/.test(input.question)?[{text:'برای اطلاعات عمومی می‌توانید منبع بیرون از کتاب را بررسی کنید.',url:'https://fa.wikipedia.org/wiki/یادگیری',title:'یادگیری'}]:[]};

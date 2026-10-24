@@ -1,0 +1,553 @@
+{
+  "built_at": "2026-10-13",
+  "sessions": 28,
+  "original_sentences": 11974,
+  "duration_hours": 26.96,
+  "model": "wav2vec2-persian:3d841795da90cb84a17f4cb8060d57eb690a61e3d4697292a04996772e8dab3b",
+  "alignment_version": "lecture-ctc-words-v5",
+  "totals": {
+    "cues": 39242,
+    "supported_words": 100112,
+    "candidate_words": 142479,
+    "source_words": 162376,
+    "exact_pdf_words": 142284,
+    "quiet_checkpoints": 10903,
+    "bounded_phrase_words": 15590,
+    "low_posterior_words": 1125
+  },
+  "interpretation": "Counts measure accepted highlight coverage, not word timing accuracy. Source words include garbled PDF fragments. Unsupported text has no highlight. No human listening accuracy assessment has been performed.",
+  "per_session": [
+    {
+      "session": 1,
+      "cues": 930,
+      "supported_words": 2616,
+      "candidate_words": 3282,
+      "source_words": 4047,
+      "exact_pdf_words": 3281,
+      "quiet_checkpoints": 316,
+      "bounded_phrase_words": 299,
+      "low_posterior_words": 20,
+      "audio_sha256": "bd81ce763ac133a70179e5760a30aa6e48ffb2e680072b9a0241d946c600ef19"
+    },
+    {
+      "session": 2,
+      "cues": 1439,
+      "supported_words": 3680,
+      "candidate_words": 4958,
+      "source_words": 5681,
+      "exact_pdf_words": 4956,
+      "quiet_checkpoints": 434,
+      "bounded_phrase_words": 572,
+      "low_posterior_words": 39,
+      "audio_sha256": "be211f523b40af4c73b7246ed59df37d8b3d3e5c247ed1250108b55a635ad94c"
+    },
+    {
+      "session": 3,
+      "cues": 1051,
+      "supported_words": 2557,
+      "candidate_words": 3839,
+      "source_words": 4307,
+      "exact_pdf_words": 3835,
+      "quiet_checkpoints": 265,
+      "bounded_phrase_words": 474,
+      "low_posterior_words": 37,
+      "audio_sha256": "40a98a52bb801235aad6f16f110270dbfd3432f4a44cd11f390ac823362e3b0d"
+    },
+    {
+      "session": 4,
+      "cues": 976,
+      "supported_words": 2194,
+      "candidate_words": 3796,
+      "source_words": 4533,
+      "exact_pdf_words": 3778,
+      "quiet_checkpoints": 208,
+      "bounded_phrase_words": 473,
+      "low_posterior_words": 44,
+      "audio_sha256": "5af82c1642a83a8697f4380a70ffeafe1d445ab8dc6abeeddc4b4b7398fef123"
+    },
+    {
+      "session": 5,
+      "cues": 1205,
+      "supported_words": 2694,
+      "candidate_words": 4854,
+      "source_words": 5505,
+      "exact_pdf_words": 4831,
+      "quiet_checkpoints": 279,
+      "bounded_phrase_words": 561,
+      "low_posterior_words": 40,
+      "audio_sha256": "55adaa6570e45a8ffe098d573d90ae93a196072def980976f95b8993911b0c39"
+    },
+    {
+      "session": 6,
+      "cues": 1233,
+      "supported_words": 2821,
+      "candidate_words": 4522,
+      "source_words": 5139,
+      "exact_pdf_words": 4521,
+      "quiet_checkpoints": 285,
+      "bounded_phrase_words": 640,
+      "low_posterior_words": 56,
+      "audio_sha256": "24e5a1b8206d7f5b7a44d322ff3303e0edb4913da0200e960fc90fe84540653c"
+    },
+    {
+      "session": 7,
+      "cues": 1493,
+      "supported_words": 3544,
+      "candidate_words": 5700,
+      "source_words": 6582,
+      "exact_pdf_words": 5677,
+      "quiet_checkpoints": 358,
+      "bounded_phrase_words": 751,
+      "low_posterior_words": 49,
+      "audio_sha256": "77e16b0b479e81d5dacd3b3ca9da0de41a7b5467342f41442858388aa0b7c1ad"
+    },
+    {
+      "session": 8,
+      "cues": 1347,
+      "supported_words": 3215,
+      "candidate_words": 4672,
+      "source_words": 5148,
+      "exact_pdf_words": 4662,
+      "quiet_checkpoints": 383,
+      "bounded_phrase_words": 540,
+      "low_posterior_words": 53,
+      "audio_sha256": "7f5f6e1cbbce3521573874497e659f0c29945ac9b1a840eb60b1489703a2f607"
+    },
+    {
+      "session": 9,
+      "cues": 1381,
+      "supported_words": 3298,
+      "candidate_words": 5581,
+      "source_words": 6084,
+      "exact_pdf_words": 5578,
+      "quiet_checkpoints": 246,
+      "bounded_phrase_words": 669,
+      "low_posterior_words": 57,
+      "audio_sha256": "2a65bdb10e4ee45c2496c30c32d0b9ecf201fe55a22042a3f729540f89c6a319"
+    },
+    {
+      "session": 10,
+      "cues": 1231,
+      "supported_words": 2947,
+      "candidate_words": 4454,
+      "source_words": 5242,
+      "exact_pdf_words": 4450,
+      "quiet_checkpoints": 302,
+      "bounded_phrase_words": 587,
+      "low_posterior_words": 34,
+      "audio_sha256": "48bf31f0f7eed07fc08827fc8a196e8177b1b75cf9b75a487c1da82c800714c2"
+    },
+    {
+      "session": 11,
+      "cues": 1427,
+      "supported_words": 3726,
+      "candidate_words": 5415,
+      "source_words": 6697,
+      "exact_pdf_words": 5405,
+      "quiet_checkpoints": 392,
+      "bounded_phrase_words": 495,
+      "low_posterior_words": 32,
+      "audio_sha256": "932331281a02dac7ddfdb6172e69196b4d1421575e3db52d11ac1881e7b7aea6"
+    },
+    {
+      "session": 12,
+      "cues": 1493,
+      "supported_words": 3600,
+      "candidate_words": 5263,
+      "source_words": 6046,
+      "exact_pdf_words": 5259,
+      "quiet_checkpoints": 354,
+      "bounded_phrase_words": 600,
+      "low_posterior_words": 51,
+      "audio_sha256": "01fcacda6cd5121789546e8d9e872f42bdf9431de759262a5a6d33c936320887"
+    },
+    {
+      "session": 13,
+      "cues": 1484,
+      "supported_words": 3686,
+      "candidate_words": 5309,
+      "source_words": 5899,
+      "exact_pdf_words": 5308,
+      "quiet_checkpoints": 390,
+      "bounded_phrase_words": 595,
+      "low_posterior_words": 50,
+      "audio_sha256": "e3e410ed2cc4bc3e68a8e0a782c9d5d905f62c1af0f362f803f448bee5ea58a3"
+    },
+    {
+      "session": 14,
+      "cues": 1427,
+      "supported_words": 3545,
+      "candidate_words": 4766,
+      "source_words": 5399,
+      "exact_pdf_words": 4755,
+      "quiet_checkpoints": 449,
+      "bounded_phrase_words": 536,
+      "low_posterior_words": 46,
+      "audio_sha256": "40a50c3fc0065a435bc7aaf5aaadb0d92d656ad87c78545cbe056cf6f6fca336"
+    },
+    {
+      "session": 15,
+      "cues": 1540,
+      "supported_words": 3972,
+      "candidate_words": 5297,
+      "source_words": 5956,
+      "exact_pdf_words": 5286,
+      "quiet_checkpoints": 514,
+      "bounded_phrase_words": 485,
+      "low_posterior_words": 49,
+      "audio_sha256": "ee2ee27af741d0a5144a2a64f0f54a09c36fb351c670ded35c6e76e095f137cf"
+    },
+    {
+      "session": 16,
+      "cues": 1968,
+      "supported_words": 5346,
+      "candidate_words": 6615,
+      "source_words": 7275,
+      "exact_pdf_words": 6613,
+      "quiet_checkpoints": 742,
+      "bounded_phrase_words": 601,
+      "low_posterior_words": 35,
+      "audio_sha256": "597d2e3f6d64cc2a36859f4437a957ec44e84f5c9733eac71a9012cb66f07783"
+    },
+    {
+      "session": 17,
+      "cues": 1551,
+      "supported_words": 3788,
+      "candidate_words": 5578,
+      "source_words": 6659,
+      "exact_pdf_words": 5569,
+      "quiet_checkpoints": 400,
+      "bounded_phrase_words": 679,
+      "low_posterior_words": 42,
+      "audio_sha256": "b2b5013c26470bd3d9de960b1371ecdb5194607b5a1d74ab9f5c344ee6244294"
+    },
+    {
+      "session": 18,
+      "cues": 1600,
+      "supported_words": 4109,
+      "candidate_words": 5906,
+      "source_words": 6886,
+      "exact_pdf_words": 5901,
+      "quiet_checkpoints": 391,
+      "bounded_phrase_words": 663,
+      "low_posterior_words": 39,
+      "audio_sha256": "65d56cebe5b892f24e469ba67c654ad9fd2502146107384b2961c1de151492f4"
+    },
+    {
+      "session": 19,
+      "cues": 1435,
+      "supported_words": 3844,
+      "candidate_words": 5131,
+      "source_words": 6012,
+      "exact_pdf_words": 5120,
+      "quiet_checkpoints": 442,
+      "bounded_phrase_words": 578,
+      "low_posterior_words": 30,
+      "audio_sha256": "18c8e860381f6f64dc2958631b4bd4ddb510571a0b2f2d3ee2b97767e945e683"
+    },
+    {
+      "session": 20,
+      "cues": 1844,
+      "supported_words": 4195,
+      "candidate_words": 7278,
+      "source_words": 8320,
+      "exact_pdf_words": 7276,
+      "quiet_checkpoints": 389,
+      "bounded_phrase_words": 869,
+      "low_posterior_words": 67,
+      "audio_sha256": "6567b97d3e2e47570836be8a11f849971d933c7f8ef3a2d9471a42a684464941"
+    },
+    {
+      "session": 21,
+      "cues": 1363,
+      "supported_words": 3941,
+      "candidate_words": 5085,
+      "source_words": 5977,
+      "exact_pdf_words": 5079,
+      "quiet_checkpoints": 424,
+      "bounded_phrase_words": 478,
+      "low_posterior_words": 43,
+      "audio_sha256": "f43cd13accb4c2ddbc5133a53ca1964daec5912c0e095f439af4a6931a6091b0"
+    },
+    {
+      "session": 22,
+      "cues": 1360,
+      "supported_words": 3707,
+      "candidate_words": 4796,
+      "source_words": 5305,
+      "exact_pdf_words": 4792,
+      "quiet_checkpoints": 369,
+      "bounded_phrase_words": 511,
+      "low_posterior_words": 32,
+      "audio_sha256": "6eb068205629f5c5e4365b8041f96d97f5cb974dfc708161395bea399c1eb155"
+    },
+    {
+      "session": 23,
+      "cues": 1500,
+      "supported_words": 4280,
+      "candidate_words": 6063,
+      "source_words": 6679,
+      "exact_pdf_words": 6059,
+      "quiet_checkpoints": 413,
+      "bounded_phrase_words": 637,
+      "low_posterior_words": 45,
+      "audio_sha256": "1246f5b06e218b62bf9e5e4dd59cc6668b41541efb63193395440fd1f0e66017"
+    },
+    {
+      "session": 24,
+      "cues": 1266,
+      "supported_words": 3385,
+      "candidate_words": 4331,
+      "source_words": 5143,
+      "exact_pdf_words": 4328,
+      "quiet_checkpoints": 439,
+      "bounded_phrase_words": 422,
+      "low_posterior_words": 21,
+      "audio_sha256": "2b863d813ebd6c9752cb73f6ca00695a7fa733cb6234fd353e870601d4c5a3c6"
+    },
+    {
+      "session": 25,
+      "cues": 1370,
+      "supported_words": 3609,
+      "candidate_words": 4777,
+      "source_words": 4913,
+      "exact_pdf_words": 4776,
+      "quiet_checkpoints": 423,
+      "bounded_phrase_words": 555,
+      "low_posterior_words": 47,
+      "audio_sha256": "1816572900323845e8d4f05fc07f9546e886fd0be370d27fd1b6f3bdb6d6db0b"
+    },
+    {
+      "session": 26,
+      "cues": 1380,
+      "supported_words": 3850,
+      "candidate_words": 4795,
+      "source_words": 5226,
+      "exact_pdf_words": 4792,
+      "quiet_checkpoints": 446,
+      "bounded_phrase_words": 383,
+      "low_posterior_words": 13,
+      "audio_sha256": "fbfbdb3a504c08f95b63d0bbd82cd6a8d92c359119f8d90abb8c004d430327d2"
+    },
+    {
+      "session": 27,
+      "cues": 1543,
+      "supported_words": 4154,
+      "candidate_words": 5247,
+      "source_words": 6030,
+      "exact_pdf_words": 5241,
+      "quiet_checkpoints": 500,
+      "bounded_phrase_words": 426,
+      "low_posterior_words": 21,
+      "audio_sha256": "307b9ca704848aa2baaafcb7a5d93f41ea9b5865286837d6f6caa683f9be84fd"
+    },
+    {
+      "session": 28,
+      "cues": 1405,
+      "supported_words": 3809,
+      "candidate_words": 5169,
+      "source_words": 5686,
+      "exact_pdf_words": 5156,
+      "quiet_checkpoints": 350,
+      "bounded_phrase_words": 511,
+      "low_posterior_words": 33,
+      "audio_sha256": "e990b1ab679386bf8c34e6eb2d34f7ee17685d27d685e88b3be1a79fb9dc1059"
+    }
+  ],
+  "short_word_fix": {
+    "additional_word_observations": 478,
+    "replaced_word_observations": 351,
+    "net_additional_highlights": 127,
+    "examples": [
+      {
+        "session": 2,
+        "text": "و،",
+        "start": 680.54,
+        "end": 680.56
+      },
+      {
+        "session": 2,
+        "text": "لقمه‌ای",
+        "start": 810.48,
+        "end": 810.9
+      },
+      {
+        "session": 2,
+        "text": "اگر",
+        "start": 1063.94,
+        "end": 1064.32
+      },
+      {
+        "session": 2,
+        "text": "نیروی",
+        "start": 1912.86,
+        "end": 1913.3
+      },
+      {
+        "session": 2,
+        "text": "رد",
+        "start": 1925.74,
+        "end": 1926.2
+      },
+      {
+        "session": 2,
+        "text": "ما",
+        "start": 1949.2,
+        "end": 1949.26
+      },
+      {
+        "session": 2,
+        "text": "روی",
+        "start": 2228.94,
+        "end": 2229.08
+      },
+      {
+        "session": 2,
+        "text": "یک",
+        "start": 2348.58,
+        "end": 2348.8
+      },
+      {
+        "session": 2,
+        "text": "عَل",
+        "start": 2567.46,
+        "end": 2567.6
+      },
+      {
+        "session": 2,
+        "text": "انجام",
+        "start": 2816.98,
+        "end": 2817.84
+      },
+      {
+        "session": 2,
+        "text": "خم",
+        "start": 3054.64,
+        "end": 3054.96
+      },
+      {
+        "session": 2,
+        "text": "چه؟",
+        "start": 3099.5,
+        "end": 3099.66
+      }
+    ],
+    "cause": "Two-letter words were excluded from contextual recovery; raw conjunction text rejected diacritics and punctuation. Recovery now requires both strong acoustic neighbours and full letter support for short words."
+  },
+  "systemic_word_fix": {
+    "causes": [
+      "hard rejection by approximate sentence times",
+      "partial character matches stealing complete word anchors",
+      "discarded overlapping-window context",
+      "neighbour-distance rejection across genuine pauses",
+      "greedy spelling required for noisy words"
+    ],
+    "method": "Generic protected word anchors, bounded phrase CTC recovery, wider candidate search, complete overlapping-window observations, and contextual validation; no per-session or per-word overrides.",
+    "net_additional_highlights_since_v2": 12295,
+    "session3_regression": [
+      {
+        "session": 3,
+        "text": "با",
+        "start": 23.22,
+        "end": 23.28
+      },
+      {
+        "session": 3,
+        "text": "توجه",
+        "start": 23.38,
+        "end": 23.84
+      },
+      {
+        "session": 3,
+        "text": "به",
+        "start": 23.98,
+        "end": 24.1
+      },
+      {
+        "session": 3,
+        "text": "چند",
+        "start": 24.58,
+        "end": 24.82
+      },
+      {
+        "session": 3,
+        "text": "آیه‌ای",
+        "start": 24.9,
+        "end": 25.32
+      },
+      {
+        "session": 3,
+        "text": "به‌دست",
+        "start": 38.96,
+        "end": 39.38
+      },
+      {
+        "session": 3,
+        "text": "اولا",
+        "start": 43.14,
+        "end": 43.52
+      },
+      {
+        "session": 3,
+        "text": "آنهاست؛",
+        "start": 56.54,
+        "end": 57.2
+      },
+      {
+        "session": 3,
+        "text": "رسالت",
+        "start": 63.86,
+        "end": 64.62
+      },
+      {
+        "session": 3,
+        "text": "خود.",
+        "start": 64.84,
+        "end": 65.12
+      },
+      {
+        "session": 3,
+        "text": "رهبر",
+        "start": 82.16,
+        "end": 82.5
+      }
+    ]
+  },
+  "phrase_scope": {
+    "max_words": 8,
+    "max_speech_seconds": 4.0,
+    "boundaries": "pause_sentence_punctuation_or_word_limit"
+  },
+  "display_scope": "sentence",
+  "sentence_focus_count": 11927,
+  "sentence_onsets": {
+    "count": 3537,
+    "missing_prefix_count": 2840,
+    "median_advance_seconds": 0.32,
+    "max_advance_seconds": 2.5,
+    "method": "measured_pause_end",
+    "interpretation": "Display-boundary refinement from acoustic pauses; advances are not a human-validated timing accuracy metric."
+  },
+  "missing_sentence_fix": {
+    "causes": [
+      "whole-fragment PDF matching discarded correctly recognized neighbouring words",
+      "PDF Allah ligature extracted in visual rather than logical character order",
+      "short exact PDF sentences were excluded",
+      "rough source durations vetoed readable transcript candidates",
+      "expanded candidate text displaced neighbouring acoustic matches"
+    ],
+    "restored_sentence_ids": 1064,
+    "reassigned_or_unplaced_sentence_ids": 7,
+    "net_additional_acoustic_words": 6808,
+    "method": "Exact complete word runs in locally matched PDF context; both plausible and expanded transcript contexts validated against identical CTC evidence; one recording-wide monotonic selection. No per-session overrides."
+  },
+  "sentence_edge_fix": {
+    "cause": "Open-edge phrase recovery rejected the anchor sentence prefix/suffix when adjacent sentence candidates were present. Independently, display waited for PDF text extraction despite having PDF-point boxes.",
+    "additional_acoustic_words": 1581,
+    "earlier_first_acoustic_anchor_sentences": 343,
+    "median_anchor_advance_seconds": 0.84,
+    "new_sentence_ids": 6,
+    "reassigned_sentence_ids": 6,
+    "interpretation": "Coverage and model-derived boundary changes, not human-verified timing accuracy. No constant time offset applied."
+  }
+}

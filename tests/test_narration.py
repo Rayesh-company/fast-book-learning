@@ -33,7 +33,7 @@ def controlled_book_authority(monkeypatch):
     def trusted_page(path, page):
         fixture = Path(path).with_suffix('.pages.json')
         if fixture.exists():
-            return json.loads(fixture.read_text())['pages'][str(page)]
+            return json.loads(fixture.read_text(encoding='utf-8'))['pages'][str(page)]
         return real(path, page)
     monkeypatch.setattr(narration, '_canonical_page_text', trusted_page)
 

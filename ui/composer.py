@@ -264,6 +264,20 @@ def _composer_reply(
     call shape through their own seam instead of this module's.
     """
     thinking = _thinking_fields(thinking_type)
+    env_model = os.environ.get("LLM_MODEL")
+    if env_model and model in (COMPOSER_MODEL, "glm-5.3-flash"):
+        model = env_model.removeprefix("openai/")
+    if model == "Qwen3.8-27B-GGUF":
+        model = "unsloth/Qwen3.8-27B-GGUF"
+    endpoint_url = os.environ.get("LLM_ENDPOINT")
+    target_url = (endpoint_url.rstrip("/") + "/chat/completions") if endpoint_url else COMPOSER_URL
+    in_docker = (
+        os.path.exists("/.dockerenv")
+        or os.environ.get("IN_DOCKER") == "1"
+        or (os.name != "nt" and os.environ.get("SESSION_UI_HOST") == "0.0.0.0")
+    )
+    if in_docker:
+        target_url = target_url.replace("127.0.0.1", "host.docker.internal").replace("localhost", "host.docker.internal")
     payload = {
         "model": model,
         "max_tokens": max_tokens,
@@ -271,7 +285,7 @@ def _composer_reply(
     }
     payload.update(thinking)
     request = Request(
-        COMPOSER_URL,
+        target_url,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",

@@ -21,6 +21,17 @@
 .pdf-audio-sheet [data-reader-seek] { margin-top: 12px; padding: 0; height: 44px; }
 .pdf-audio-sheet [data-reader-audio-status], [data-pdf-error], [data-pdf-page-count] { font-size: 12px; line-height: 1.8; margin: 8px 0; color: var(--muted); }
 .pdf-audio-sheet button:disabled { opacity: .5; cursor: default; }
+.pdf-audio-content { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.pdf-audio-content .sheet-field { display: flex; flex-direction: column; gap: 6px; }
+.pdf-audio-content .sheet-field label { font-size: 13px; font-weight: 500; color: var(--ink); }
+.pdf-audio-content select[data-lecture-session] { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--ink); padding: 0 12px; font-size: 14px; }
+.skip-intro-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.skip-intro-label input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+.audio-seek-row { display: flex; align-items: center; gap: 10px; direction: ltr; margin-top: 4px; }
+.audio-seek-row span { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); min-width: 38px; text-align: center; }
+.audio-seek-row [data-reader-seek] { flex: 1; height: 28px; margin: 0; }
+.audio-toggle-btn { flex: 1; }
+.audio-stop-btn { min-width: 60px; }
 .mobile-auth { position: fixed; inset: 0; z-index: 20; background: var(--scrim); display: grid; place-items: center; padding: 20px; }
 .mobile-auth[hidden] { display: none; }
 .mobile-auth form { width: 340px; max-width: 100%; background: var(--surface); color: var(--ink); border-radius: 26px; padding: 24px; }

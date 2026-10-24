@@ -22,16 +22,19 @@ async function fixture(){
 const click=(f,action)=>f.root.querySelector(`[data-action="${action}"]`).click();
 function key(f,key,shiftKey=false){const event=new f.dom.window.KeyboardEvent('keydown',{key,shiftKey,bubbles:true,cancelable:true});f.doc.activeElement.dispatchEvent(event);return event;}
 
-test('wheel panel traps focus, changes pages without confirmation and preserves its PDF on close',async()=>{
+test('wheel panel traps focus, commits only on confirmation and preserves its PDF on cancellation',async()=>{
  const f=await fixture(),trigger=f.root.querySelector('[data-action="pdf-pages"]'),canvas=f.root.querySelector('.book-reader-canvas');
  trigger.focus();trigger.click();const panel=f.root.querySelector('.pdf-page-sheet'),wheel=panel.querySelector('[data-page-wheel]');
  assert.equal(panel.hidden,false);assert.equal(f.doc.activeElement,wheel);assert.equal(f.root.querySelector('.reader-page').hasAttribute('inert'),true);
- const first=panel.querySelector('button'),last=panel.querySelector('input');last.focus();assert.equal(key(f,'Tab').defaultPrevented,true);assert.equal(f.doc.activeElement,first);
+ const first=panel.querySelector('button'),last=panel.querySelector('[type="submit"]');last.focus();assert.equal(key(f,'Tab').defaultPrevented,true);assert.equal(f.doc.activeElement,first);
  key(f,'Tab',true);assert.equal(f.doc.activeElement,last);key(f,'Escape');assert.equal(panel.hidden,true);assert.equal(f.doc.activeElement,trigger);assert.equal(f.root.querySelector('.book-reader-canvas'),canvas);
- trigger.click();key(f,'ArrowDown');await f.runtime.ready();assert.equal(f.root.querySelector('[data-page-number]').textContent,'۱۰۱');assert.equal(wheel.getAttribute('aria-activedescendant'),'wheel-page-101');assert.equal(f.root.querySelector('.reader-chrome').hasAttribute('inert'),true);f.close();
+ trigger.click();wheel.focus();key(f,'ArrowDown');await f.runtime.ready();assert.equal(f.root.querySelector('[data-page-number]').textContent,'۱۰۰');
+ assert.equal(panel.querySelector('[name="page"]').value,'۱۰۱');assert.equal(f.root.querySelector('.reader-chrome').hasAttribute('inert'),true);
+ panel.querySelector('form').dispatchEvent(new f.dom.window.Event('submit',{bubbles:true,cancelable:true}));await f.runtime.ready();
+ assert.equal(f.root.querySelector('[data-page-number]').textContent,'۱۰۱');assert.equal(panel.hidden,true);f.close();
 });
 
-test('only page/contents/search remain as reading tools; keyboard zoom retains the exact question',async()=>{
+test('keyboard zoom retains the exact question without dedicated zoom buttons',async()=>{
  const f=await fixture();click(f,'menu');assert.equal(f.root.querySelector('[data-action="pdf-audio"]'),null);assert.equal(f.root.querySelector('[data-action="pdf-zoom"]'),null);click(f,'close-menu');
  assert.equal(f.root.querySelector('.topbar p'),null);assert.equal(f.root.querySelector('.reader-navigation'),null);
  const selection={text:'lph',pages:[{page:100,start:1,end:4,text:'lph'}]};f.root.querySelector('.phone').dispatchEvent(new f.dom.window.CustomEvent('reader-question',{bubbles:true,detail:selection}));

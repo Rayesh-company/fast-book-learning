@@ -3,7 +3,7 @@ export function createInterfaceMotion(root){
  const doc=root.ownerDocument,win=doc.defaultView;
  const preference=win.matchMedia?.('(prefers-reduced-motion: reduce)');
  const active=new Set(),ghosts=new Set(),byNode=new WeakMap();
- const ease='cubic-bezier(0.22, 1, 0.36, 1)';
+ const ease='cubic-bezier(0.32, 0.72, 0, 1)';
  let disposed=false;
  const canAnimate=()=>!disposed&&!preference?.matches&&typeof win.Element.prototype.animate==='function';
  const shell=()=>root.querySelector('.product-shell');
@@ -26,7 +26,11 @@ export function createInterfaceMotion(root){
   const backdrop=ghost.querySelector('.drawer-scrim,.sheet-scrim');
   const remove=()=>{ghost.remove();ghosts.delete(ghost);};
   if(backdrop)play(backdrop,[{opacity:1},{opacity:0}],150,panel?undefined:remove);
-  if(panel)play(panel,[{opacity:1,transform:'translate(0,0)'},{opacity:0,transform:panel.matches('.drawer')?'translateX(36px)':'translateY(16px)'}],160,()=>{ghost.remove();ghosts.delete(ghost);});
+  if(panel){
+   const isFloating=panel.matches('.reader-floating');
+   const frames=isFloating?[{opacity:1,transform:'translate(0,0) scale(1)'},{opacity:0,transform:'translate(-90px,14px) scale(0.2)'}]:[{opacity:1,transform:'translate(0,0)'},{opacity:0,transform:panel.matches('.drawer')?'translateX(36px)':'translateY(16px)'}];
+   play(panel,frames,isFloating?200:160,()=>{ghost.remove();ghosts.delete(ghost);});
+  }
   else if(!backdrop)remove();
  }
  function enterOverlays(){
@@ -64,7 +68,10 @@ export function createInterfaceMotion(root){
  function afterFloating(previous){
   const current=floatingSnapshot();if(current.kind===previous.kind)return;
   if(previous.node&&(!current.node||current.kind==='minimised'))leave([previous.node]);
-  if(!previous.node&&current.node){reveal(current.node,10,210);return;}
+  if(!previous.node&&current.node){
+   play(current.node,[{opacity:0,transform:'translate(-80px,14px) scale(0.25)'},{opacity:1,transform:'translate(4px,-2px) scale(1.02)',offset:0.7},{opacity:1,transform:'translate(0,0) scale(1)'}],320);
+   return;
+  }
   if(current.kind==='response')reveal(current.node?.querySelector('.response-card'),10,220);
   else if(current.kind==='minimised')reveal(current.node?.querySelector('.restore-response'),4,150);
   else reveal(current.node?.querySelector('.floating-bar'),0,150);

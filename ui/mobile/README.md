@@ -49,13 +49,13 @@ python ui/mobile/share.py --host 0.0.0.0 --port 8766 --books-dir /absolute/path/
 
 ## اتصال موجود و کار دور بعد
 
-`api.mjs` فقط به مسیرهای موجود مخزن وصل است. تغییر نام نشست در سرویس فعلی،
-ورود پیامکی/پذیرش فهرست انتظار، اشتراک و زرین‌پال، سهمیهٔ ۳۰ پرسش در ۵ ساعت،
-تبدیل گفتار به متن و ایجنت جدید Mastra هنوز سرویس ندارند؛ رابط واقعی به‌جای
-اعلام موفقیت خطای قابل‌فهم نشان می‌دهد. وضعیت اشتراک/سهمیهٔ ناشناخته عدد ساختگی ندارد.
-پاسخ فعلی از مسیر بازیابی و پاسخ استنادی استفاده می‌کند؛ صفحات انتخاب‌شده در
-فرادادهٔ پیام محفوظ‌اند، ولی سرویس موجود بازیابی را به آن بازه محدود نمی‌کند.
-نمای نمونه جریان‌های این قابلیت‌ها را برای بررسی طراحی پوشش می‌دهد.
+`api.mjs` به مسیرهای موجود مخزن و عامل گفت‌وگوی Mastra متصل است. پرسش‌های
+همراه از طریق مسیر جریانی `/agent/chat` (SSE) ارسال و پردازش می‌شوند؛ استنادات کتاب
+به‌صورت پیوند مستقیم به صفحات کتاب‌خوان باز می‌شوند و پاسخ‌های بیرونی با نشان
+«بیرون از کتاب» و پیوند منابع وب مشخص می‌گردند. تغییر نام نشست در سرویس فعلی،
+ورود پیامکی/پذیرش فهرست انتظار، اشتراک و زرین‌پال و تبدیل گفتار به متن هنوز سرویس ندارند؛
+رابط واقعی به‌جای اعلام موفقیت خطای قابل‌فهم نشان می‌دهد. وضعیت اشتراک/سهمیهٔ ناشناخته
+عدد ساختگی ندارد. نمای نمونه جریان‌های این قابلیت‌ها را برای بررسی طراحی پوشش می‌دهد.
 
 کتاب‌خوان و صوت در `../book-reader` و `../narration` مستقل‌اند؛ تولید صوت واقعی
 به تنظیم کلید و هم‌ترازی جمله‌ها نیاز دارد. کد طوبی منبع فقط خوانده شده است؛
@@ -93,9 +93,8 @@ python ui/mobile/share.py --host 0.0.0.0 --port 8766 --books-dir /absolute/path/
 کانون را به دکمهٔ قبلی برمی‌گرداند. جابه‌جایی از منوی میزبان به ابزار PDF
 از رویداد `reader-tools-open` انجام می‌شود تا دو پنل هم‌زمان کانون را نگیرند.
 
-بزرگ‌نمایی مقصد مستقل در نوار پایین و منو دارد؛ درصد نمایش و بازنشانی اندازه
-در همان پنل‌اند. دکمهٔ رفتن به صفحه نیز ناحیهٔ لمس ۴۴ پیکسلی دارد. ابزارهای
-منو در سه گروهِ داخل کتاب، مطالعه و گفتگو/یادداشت آمده‌اند.
+بزرگ‌نمایی با ژست دو انگشتی و میان‌برهای صفحه‌کلید در دسترس است.
+دکمهٔ رفتن به صفحه ناحیهٔ لمس ۴۴ پیکسلی دارد.
 
 راهنمای کوتاه انتخاب متن تا اولین انتخاب یا بستن نمایش داده می‌شود؛ وضعیتش
 همراه تنظیمات همان حساب ذخیره می‌شود. ورودی پرسش همچنان در حالت پیش‌فرض
@@ -109,8 +108,10 @@ The product reader now uses an RTL horizontal swipe (right = next), a two-finger
 PDF pinch (75–300%), and small audio/page controls that fade after five idle
 seconds. Native selection and zoomed panning take precedence over page turns.
 Keyboard users can turn with left/right and zoom with +, - and 0 on the reader.
-The page badge opens a scroll-snap wheel with arrow/Home/End navigation and a
-single-field Enter shortcut. Its focus trap shares the existing panel lifecycle.
+The page badge and chat context control share session/page scroll-snap wheels
+with arrow/Home/End navigation, direct numeric entry, and explicit confirmation.
+The session limits the page wheel to its cover and reading pages; uncovered pages
+remain reachable through «بدون جلسه». The focus trap shares the existing panel lifecycle.
 
 Reader questions show a first-three/last-three word excerpt only. The complete
 canonical selection stays attached to the draft and request. Outside taps,
@@ -119,8 +120,20 @@ to the current chat without sending. A previous ordinary chat draft is retained
 and restored when returning to reading. Empty composers show the microphone;
 nonempty composers show send, and pending answers show stop.
 
-`continuous-audio.mjs` queues layout-derived paragraph ranges against the existing
-Book narration endpoint, retaining canonical offsets and real cue timings. It
-prepares at most one paragraph ahead, continues across pages, and cancels stale
-preparation on manual navigation/disposal. The LAN demo still never generates
-real narration or enables providers. PDF images and the Tuba checkout are unchanged.
+The product's central player now controls recorded session audio exclusively. Its
+previous/next controls seek to paragraphs whose PDF geometry overlaps existing
+lecture timings, preserving pause/play across page boundaries within the session.
+Tap the handle/body or hold any compact control for two seconds to expand without
+starting playback. Expanded controls include seek, ±10 seconds, session choice,
+intro skipping, and 0.75–2× speed. Opening/closing the player preserves playback;
+manual navigation pauses it. A plain page tap cannot start an unused player.
+The standalone narration modules and server endpoints remain available to their
+other hosts; the product reader never requests provider-generated narration.
+
+Saved highlights use a separate overlay from lecture focus, join selected word
+runs into continuous line strips, and rehydrate from notebook selections after
+page/zoom remounts or a return to reading. Canonical text and offsets are unchanged.
+Chat's scope control stays neutral in both states, with context on the right and
+record/send/stop on the left. The header book button restores the last reading
+position. Conversation overflow actions appear beside their row inside the open
+drawer, with Rename/Delete only, keyboard navigation, and deletion confirmation.

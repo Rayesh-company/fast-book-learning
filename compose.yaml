@@ -40,18 +40,18 @@ services:
       GRAPH_DATABASE_PROVIDER: postgres_demo
       CACHE_BACKEND: postgres
       ENABLE_BACKEND_ACCESS_CONTROL: "false"
-      LLM_PROVIDER: custom
-      LLM_MODEL: openai/glm-5.3-flash
+      LLM_PROVIDER: ${LLM_PROVIDER:-custom}
+      LLM_MODEL: ${LLM_MODEL:-openai/glm-5.3-flash}
       # Chat routes through AvalAI since 2026-09-13 — the Z.AI coding-plan
       # weekly quota was exhausted (error 1310, reset 2026-09-15 17:06).
       # AvalAI carries the GLM family; the key rides .env as LLM_API_KEY.
-      LLM_ENDPOINT: https://api.avalai.ir/v1
-      EMBEDDING_PROVIDER: openai_compatible
+      LLM_ENDPOINT: ${LLM_ENDPOINT:-https://api.avalai.ir/v1}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai_compatible}
       # The embedder is frozen into the ingested pgvector tables — a
       # stack whose data predates ADR 0004 pins small/1536 in .env
       # (README, VPS deploy).
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
-      EMBEDDING_ENDPOINT: https://api.avalai.ir/v1
+      EMBEDDING_ENDPOINT: ${EMBEDDING_ENDPOINT:-https://api.avalai.ir/v1}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-"3072"}
       EMBEDDING_BATCH_SIZE: "32"
       EMBEDDING_RATE_LIMIT_ENABLED: "true"
@@ -62,14 +62,14 @@ services:
       LLM_RATE_LIMIT_INTERVAL: "60"
       LLM_MIN_RETRY_ATTEMPTS: "6"
       LLM_MIN_RETRY_SECONDS: "1800"
-      LLM_EXTRACTION_PROVIDER: custom
-      LLM_EXTRACTION_MODEL: openai/glm-5.3-flash
-      LLM_EXTRACTION_ENDPOINT: https://api.avalai.ir/v1
-      LLM_EXTRACTION_API_KEY: ${EMBEDDING_API_KEY}
-      LLM_SUMMARIZATION_PROVIDER: custom
-      LLM_SUMMARIZATION_MODEL: openai/glm-5.3-flash
-      LLM_SUMMARIZATION_ENDPOINT: https://api.avalai.ir/v1
-      LLM_SUMMARIZATION_API_KEY: ${EMBEDDING_API_KEY}
+      LLM_EXTRACTION_PROVIDER: ${LLM_EXTRACTION_PROVIDER:-${LLM_PROVIDER:-custom}}
+      LLM_EXTRACTION_MODEL: ${LLM_EXTRACTION_MODEL:-${LLM_MODEL:-openai/glm-5.3-flash}}
+      LLM_EXTRACTION_ENDPOINT: ${LLM_EXTRACTION_ENDPOINT:-${LLM_ENDPOINT:-https://api.avalai.ir/v1}}
+      LLM_EXTRACTION_API_KEY: ${LLM_EXTRACTION_API_KEY:-${EMBEDDING_API_KEY}}
+      LLM_SUMMARIZATION_PROVIDER: ${LLM_SUMMARIZATION_PROVIDER:-${LLM_PROVIDER:-custom}}
+      LLM_SUMMARIZATION_MODEL: ${LLM_SUMMARIZATION_MODEL:-${LLM_MODEL:-openai/glm-5.3-flash}}
+      LLM_SUMMARIZATION_ENDPOINT: ${LLM_SUMMARIZATION_ENDPOINT:-${LLM_ENDPOINT:-https://api.avalai.ir/v1}}
+      LLM_SUMMARIZATION_API_KEY: ${LLM_SUMMARIZATION_API_KEY:-${EMBEDDING_API_KEY}}
       LLM_ANSWER_STREAMING: "true"
     volumes:
       - cognee_data:/cognee-storage/data
@@ -111,16 +111,16 @@ services:
       GRAPH_DATABASE_PROVIDER: postgres_demo
       CACHE_BACKEND: postgres
       ENABLE_BACKEND_ACCESS_CONTROL: "false"
-      LLM_PROVIDER: custom
-      LLM_MODEL: openai/glm-5.3-flash
+      LLM_PROVIDER: ${LLM_PROVIDER:-custom}
+      LLM_MODEL: ${LLM_MODEL:-openai/glm-5.3-flash}
       # Same AvalAI routing as cognee (2026-09-13, quota exhaustion).
-      LLM_ENDPOINT: https://api.avalai.ir/v1
-      EMBEDDING_PROVIDER: openai_compatible
+      LLM_ENDPOINT: ${LLM_ENDPOINT:-https://api.avalai.ir/v1}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai_compatible}
       # The embedder is frozen into the ingested pgvector tables — a
       # stack whose data predates ADR 0004 pins small/1536 in .env
       # (README, VPS deploy).
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
-      EMBEDDING_ENDPOINT: https://api.avalai.ir/v1
+      EMBEDDING_ENDPOINT: ${EMBEDDING_ENDPOINT:-https://api.avalai.ir/v1}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-"3072"}
       EMBEDDING_BATCH_SIZE: "8"
       EMBEDDING_RATE_LIMIT_ENABLED: "true"
@@ -149,6 +149,50 @@ services:
     networks:
       - cognee-network
 
+  agent:
+    build: ./agent
+    image: chat-with-books-agent:latest
+    container_name: chat-with-books-agent
+    profiles:
+      - session
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # The generated server's own dials: 4111 in-container, all
+      # interfaces, the LibSQL thread store on the persisted volume.
+      PORT: "4111"
+      MASTRA_HOST: 0.0.0.0
+      MASTRA_STORAGE_URL: file:/data/mastra.sqlite
+      MASTRA_DUCKDB_PATH: /data/mastra-observability.duckdb
+      # deepseek-v4.1-flash via Avalai (ADR-0018); the key rides the
+      # same root-.env LLM_API_KEY the cognee services read.
+      CHAT_AGENT_MODEL: ${CHAT_AGENT_MODEL:-avalai/deepseek-v4.1-flash}
+      AVALAI_API_KEY: ${AVALAI_API_KEY:-${LLM_API_KEY}}
+      AVALAI_BASE_URL: ${AVALAI_BASE_URL:-${LLM_ENDPOINT:-https://api.avalai.ir/v1}}
+      AVALAI_SEARCH_TOOL: ${AVALAI_SEARCH_TOOL:-perplexity-search}
+      # The Book pool rides the session service's /agent/recall seam
+      # (ADR-0016/0018), container-to-container.
+      PYTHON_CORE_URL: http://session:8765
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
+      MASTRA_STUDIO_PATH: /app/.mastra/output/studio
+    ports:
+      - "${AGENT_STUDIO_PORT:-127.0.0.1:4112}:4111"
+    volumes:
+      # The agent's conversation memory (durable threads, ADR-0014's
+      # persistence leg) — a rebuild must not throw it away.
+      - agent_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4111/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - cognee-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   session:
     build:
       context: ./ui
@@ -164,14 +208,20 @@ services:
         condition: service_healthy
       cognee-next-tier:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       LLM_API_KEY: ${LLM_API_KEY}
       # The composer (picker, phase-2 writer, dive calls) builds its URL
       # from LLM_ENDPOINT — routed to AvalAI with the services above
       # (2026-09-13, Z.AI quota exhaustion). Its default fallback in
       # composer.py stays the Z.AI coding endpoint.
-      LLM_ENDPOINT: https://api.avalai.ir/v1
+      LLM_ENDPOINT: ${LLM_ENDPOINT:-https://api.avalai.ir/v1}
       LLM_MODEL: ${LLM_MODEL:-openai/glm-5.3-flash}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-"3072"}
+      FROZEN_EMBEDDING_MODEL: ${FROZEN_EMBEDDING_MODEL:-${EMBEDDING_MODEL:-text-embedding-3-large}}
+      FROZEN_EMBEDDING_DIMENSIONS: ${FROZEN_EMBEDDING_DIMENSIONS:-${EMBEDDING_DIMENSIONS:-"3072"}}
       # Independent Book narration: credentials remain server-side.
       AVALAI_TTS_API_KEY: ${AVALAI_TTS_API_KEY:-}
       AVALAI_API_KEY: ${AVALAI_API_KEY:-}
@@ -184,9 +234,12 @@ services:
       # A Next-tier search can pass ten minutes; the relay waits on its
       # own leash (serve.py default 1200s).
       NEXT_TIER_TIMEOUT: ${NEXT_TIER_TIMEOUT:-1200}
+      IN_DOCKER: "1"
       SESSION_UI_HOST: 0.0.0.0
       SESSION_UI_PORT: "8765"
       SESSION_UI_QUOTA_DB: /data/usage.sqlite3
+      DAILY_CHAT_LIMIT: 
+      UNLIMITED_ACCOUNTS: 
       # The Account store (ADR-0013) persists beside the quota counts on
       # the same volume — a container rebuild must not throw the issued
       # Accounts away.
@@ -196,6 +249,13 @@ services:
       # generates a per-process secret and warns that a restart logs
       # every Account out.
       AUTH_SECRET: ${AUTH_SECRET:-}
+      # The Mastra chat agent's seam token (ADR-0016/0018): the agent
+      # service presents it on /agent/recall's X-Agent-Token header.
+      AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
+      # The Learner-facing seam's upstream (ADR-0018): the agent
+      # service's generate route, container-to-container.
+      AGENT_URL: http://agent:4111
+      AGENT_TIMEOUT: ${AGENT_TIMEOUT:-240}
       # Research Mode's sessions persist beside the quota counts on the
       # same volume (ADR-0008) — a container rebuild must not throw an
       # in-progress investigation away.
@@ -264,10 +324,12 @@ services:
       # The lecture sessions' recorded MP3s (the کتاب‌خوان's lecture
       # player): the read-only mount one level up, per the delivery
       # guide's method two.
-      LECTURE_AUDIO_DIR: /lecture-audio
+      LECTURE_AUDIO_DIR: ${LECTURE_AUDIO_DIR:-/lecture-audio}
+      LECTURE_AUDIO_BASE_URL: ${LECTURE_AUDIO_BASE_URL:-}
     volumes:
       - session_quota:/data
-      # The Book set's PDFs + page indexes (ADR-0007), served by
+      # The Book set's PDFs + page indexes (ADR-0007) and the committed
+      # lecture audio (books/<id>/lectures/session_NN.mp3), served by
       # serve.py's /books routes. Default BOOKS_DIR resolves to /books —
       # ui/serve.py's parent — so the mount point matches the dev layout.
       - ./books:/books:ro
@@ -294,6 +356,8 @@ services:
       start_period: 10s
     networks:
       - cognee-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     image: cognee/cognee-ui:latest
@@ -320,3 +384,4 @@ volumes:
   cognee_data:
   cognee_system:
   session_quota:
+  agent_data:

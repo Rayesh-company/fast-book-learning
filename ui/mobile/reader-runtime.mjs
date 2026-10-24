@@ -1,11 +1,12 @@
 import { createBookReader, PDF_RENDER_OPTIONS } from '../book-reader/index.mjs';
 import { installNarrationControls } from '../book-reader/audio-controls.mjs';
 import { createPanelFocus } from './panel-focus.mjs';
-import { installContinuousAudio } from '../book-reader/continuous-audio.mjs';
+import { installLecturePlayer } from '../book-reader/lecture-player.mjs';
 import { pdfParagraphs } from '../book-reader/paragraphs.mjs';
 import { readPdfText } from '../book-reader/pdf-text.mjs';
 import { buildPdfTextIndex } from '../book-reader/pdf-content.mjs';
-import { installReaderGestures, installReaderChrome } from './reader-interactions.mjs';
+import { installReaderGestures, installReaderChrome, installPlayerGestures } from './reader-interactions.mjs';
+import {installPageSessionPicker} from './page-session-picker.mjs';
 
 const titles = { 'tarhe-kolli': 'طرح کلی اندیشۀ اسلامی در قرآن', '70143-336': 'انسان ۲۵۰ ساله' };
 const digits = n => String(n).replace(/\d/g, c => '۰۱۲۳۴۵۶۷۸۹'[c]);
@@ -103,7 +104,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
     const oldScroll = state.viewport.scrollTop;
     const selected=keepContext?state.reader?.captureSelection():null;
     if (keepContext) state.reader?.removePage(state.page);
-    else { if(!audio)state.controls?.reset();
+    else { if(!audio){state.controls?.reset();state.lecture?.pause();}
       if(state.product)state.reader?.removePage(state.page);else state.reader?.clear();state.selection = null; state.actionSelection = null;
       state.phone.querySelector('.reader-selection-actions').hidden = true;
       if (state.phone.readerQuestion&&!audio) state.phone.dispatchEvent(new doc.defaultView.CustomEvent('reader-question-reset', {bubbles:true}));
@@ -133,7 +134,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
     if(prev)prev.disabled=state.page===1;if(next)next.disabled=state.page===pdf.numPages;
     if(readButton)readButton.disabled=false;
     const data=buildPdfTextIndex(indexed.content,state.page);
-    state.pageData?.set(state.page,Promise.resolve({index:data.index,paragraphs:pdfParagraphs(data.index,data.indexItems,state.page)}));
+    state.pageData?.set(state.page,Promise.resolve({index:data.index,indexItems:data.indexItems,height:page.getViewport({scale:1}).height,paragraphs:pdfParagraphs(data.index,data.indexItems,state.page)}));
     state.chrome?.sync();
     if(selected){
       const passage=selected.pages.find(p=>p.page===state.page),index=mounted.index;
@@ -152,6 +153,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
     }
     await mounted.painted;
     if (current()) state.surface.querySelector('.pdf-placeholder')?.remove();
+    if(current()&&!audio&&!keepContext)await state.lecture?.pageChanged();
     if (current()) state.phone.dispatchEvent(new doc.defaultView.CustomEvent('book-page-ready', {bubbles:true, detail:{page:state.page,numPages:pdf.numPages,outline:state.outline||[]}}));
     } catch (error) { if (current()) fail(state,error); }
   }
@@ -188,14 +190,16 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
           if(!state.pageData.has(page))state.pageData.set(page,(async()=>{
             const pdfPage=await state.pdf.getPage(page),content=await readPdfText(pdfPage,pdfjs.OPS.showText);
             const data=buildPdfTextIndex(content,page);
-            return {index:data.index,paragraphs:pdfParagraphs(data.index,data.indexItems,page)};
+            return {index:data.index,indexItems:data.indexItems,height:pdfPage.getViewport({scale:1}).height,paragraphs:pdfParagraphs(data.index,data.indexItems,page)};
           })().catch(error=>{state.pageData.delete(page);throw error;}));
           return state.pageData.get(page);
         };
-        state.controls=installContinuousAudio({element:phone,fetchImpl:audioFetch,reader:state.reader,
-          getContext:()=>({doc:state.book,page:state.page,numPages:state.pdf.numPages}),getPageData:pageData,
-          showPage:async page=>{if(page===state.page){await state.ready;return;}await render(state,page,false,{audio:true});}});
         state.chrome=installReaderChrome({phone,getPage:()=>state.page,getCount:()=>state.pdf.numPages,goToPage:changePage});
+        state.lecture=installLecturePlayer({element:phone,reader:state.reader,book:state.book,fetchImpl,getPageData:pageData,
+          getPage:()=>state.page,showPage:async page=>{if(page===state.page){await state.ready;return;}state.ready=render(state,page,false,{audio:true});await state.ready;},
+          onExpanded:open=>{const player=phone.querySelector('[data-lecture-player]');player.dataset.expanded=String(open);phone.style.setProperty('--reader-player-height',`${player.getBoundingClientRect().height||88}px`);state.chrome?.setOpen(open);}});
+        state.playerGestures=installPlayerGestures({root:phone.querySelector('[data-lecture-player]'),expand:()=>state.lecture.open()});
+        phone.lecturePlayer=state.lecture;
         state.gestures=installReaderGestures({viewport:state.viewport,surface:state.surface,getZoom:()=>state.zoom,
           hasSelection:()=>!!state.reader.captureSelection()||!doc.getSelection()?.isCollapsed,
           turnPage:direction=>{const page=Math.max(1,Math.min(state.pdf.numPages,state.page+direction));if(page!==state.page)changePage(page);},
@@ -229,8 +233,8 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
 
   function remove(state) {
     state.phone.dataset.pdfScroll = String(state.viewport.scrollTop);
-    state.revision++; state.panelFocus.dispose(); state.chrome?.dispose();state.gestures?.dispose();state.controls?.dispose(); state.reader?.clear(); state.observer?.disconnect();
-    delete state.phone.bookReader; records.delete(state.phone);
+    state.revision++; state.panelFocus.dispose(); state.chrome?.dispose();state.gestures?.dispose();state.controls?.dispose(); state.lecture?.dispose();state.playerGestures?.dispose();state.picker?.dispose(); state.reader?.clear(); state.observer?.disconnect();
+    delete state.phone.bookReader; delete state.phone.lecturePlayer; records.delete(state.phone);
   }
 
   function reconcile() {
@@ -252,7 +256,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
 
   function closeSheets(phone,{restore=true}={}) {
     phone.querySelectorAll('.reader-tools .sheet,.pdf-page-sheet,.pdf-audio-sheet,.pdf-zoom-sheet,[data-pdf-dismiss]').forEach(node => { if (node.matches('.sheet,.sheet-scrim')) node.hidden = true; });
-    const state=records.get(phone);state?.panelFocus.close({restore});state?.chrome?.setOpen(false);if(state&&restore)state.toolTrigger=null;
+    const state=records.get(phone);state?.panelFocus.close({restore});state?.chrome?.setOpen(state.lecture?.expanded??false);state?.picker?.dispose();if(state)state.picker=null;if(state&&restore)state.toolTrigger=null;
   }
   function syncZoom(state) {
     state.phone.querySelectorAll('[data-pdf-zoom-value]').forEach(node=>node.textContent=`${digits(Math.round(state.zoom*100))}٪`);
@@ -269,6 +273,15 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
     if(!panel)return;
     phone.querySelector('.sheet-scrim[data-pdf-dismiss]').hidden=false;panel.hidden=false;syncZoom(state);
     state.toolTrigger=returnTrigger;
+    if(state.product&&type==='pdf-pages'){
+      const pickerRoot=panel.querySelector('[data-page-session-picker]');
+      state.picker=installPageSessionPicker({root:pickerRoot,page:state.page,count:state.pdf.numPages,sessions:state.lecture?.sessions||[]});
+      const picker=state.picker;
+      pickerRoot.querySelector('[data-picker-status]').textContent='در حال دریافت جلسات…';
+      Promise.resolve(state.lecture?.ready).then(()=>{
+        if(!disposed&&records.get(phone)===state&&state.picker===picker)picker.setSessions(state.lecture?.sessions||[]);
+      });
+    }
     state.chrome?.setOpen(true);
     state.panelFocus.open(panel,{trigger:returnTrigger,initial:type==='pdf-pages'?(state.product?'[data-page-wheel]':'input[name="page"]'):'button:not([disabled])',onClose:()=>closeSheets(phone)});
   }

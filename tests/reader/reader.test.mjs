@@ -271,3 +271,52 @@ test('closing the reader during generation prevents delayed autoplay', async () 
   assert.equal(element.querySelector('[data-reader-audio-status]').textContent, '');
   controls.dispose(); reader.clear();
 });
+
+test('lecture boxes in PDF points are drawn scaled onto the rendered page, and clicks map back', async () => {
+  const {p, reader, pdfPage} = renderingFixture();
+  p.surface.getBoundingClientRect = () => ({left: 0, top: 0, width: 750, height: 1050});
+  await reader.mountPage({page:pdfPage, surface:p.surface, width:750}).ready;
+  reader.highlight({page:2, tone:'rough', text:'alpha', boxes:[{page:2, x0:10, y0:20, x1:110, y1:40}]});
+  const overlay = p.surface.querySelector('.book-reader-playback-focus');
+  assert.equal(overlay.dataset.tone, 'rough');
+  const span = overlay.querySelector('span');
+  assert.deepEqual([span.style.left, span.style.top, span.style.width, span.style.height], ['13px', '29px', '154px', '32px']);
+  reader.highlight({page:3, boxes:[{page:3, x0:0, y0:0, x1:1, y1:1}]});
+  assert.equal(overlay.children.length, 0);
+  reader.highlight(null);
+  assert.equal(overlay.dataset.tone, undefined);
+  assert.deepEqual(reader.pointAt(2, 150, 75), {x:100, y:50});
+  assert.equal(reader.pointAt(9, 1, 1), null);
+  reader.clear();
+});
+
+test('lecture highlight appears with the page even while PDF text extraction is pending',async()=>{
+  const {p,reader,pdfPage}=renderingFixture();
+  let finish;
+  pdfPage.getTextContent=()=>new Promise(resolve=>{finish=resolve;});
+  p.surface.getBoundingClientRect=()=>({left:0,top:0,width:500,height:700});
+  reader.highlight({page:2,tone:'exact',boxes:[{page:2,x0:10,y0:20,x1:110,y1:40}]});
+  const mounted=reader.mountPage({page:pdfPage,surface:p.surface,width:500});
+  await mounted.painted;
+  try {
+    assert.equal(p.surface.querySelectorAll('.book-reader-playback-focus > span').length,1,
+      'Precomputed lecture geometry must not wait for the selectable text layer');
+    reader.highlight(null);
+    assert.equal(p.surface.querySelectorAll('.book-reader-playback-focus > span').length,0);
+  } finally {finish({items:[]});await mounted.ready;reader.clear();}
+});
+
+test('saved partial highlights survive page remounts and transient playback clearing',async()=>{
+ const {p,reader,pdfPage}=renderingFixture();
+ p.surface.getBoundingClientRect=()=>({left:0,top:0,width:500,height:700});
+ const createRange=p.document.createRange.bind(p.document);
+ p.document.createRange=()=>{const range=createRange();range.getClientRects=()=>[{left:20+range.startOffset*10,top:20,width:(range.endOffset-range.startOffset)*10,height:12}];return range;};
+ reader.setHighlights([{page:2,start:1,end:4,text:'lph'}]);
+ await reader.mountPage({page:pdfPage,surface:p.surface,width:500}).ready;
+ const saved=()=>p.surface.querySelector('.book-reader-saved-highlights');
+ assert.equal(saved().children.length,1);assert.equal(saved().firstChild.style.left,'30px');assert.equal(saved().firstChild.style.width,'30px');
+ reader.highlight({page:2,boxes:[{page:2,x0:10,y0:10,x1:100,y1:20}]});reader.highlight(null);assert.equal(saved().children.length,1);
+ reader.removePage(2);await reader.mountPage({page:pdfPage,surface:p.surface,width:750}).ready;assert.equal(saved().children.length,1);
+ reader.setHighlights([{page:2,start:1,end:4,text:'wrong'}]);assert.equal(saved().children.length,0);
+ reader.clear();
+});

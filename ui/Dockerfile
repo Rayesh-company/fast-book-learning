@@ -17,9 +17,10 @@ RUN npm ci --omit=dev && if [ "$NARRATION_WITH_ALIGNMENT" = "1" ]; then npm ci -
 FROM python:3.12-slim
 
 WORKDIR /app
+ENV IN_DOCKER=1
 COPY --from=narration-runtime /usr/local/bin/node /usr/local/bin/node
 RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 libatomic1 libgomp1 && rm -rf /var/lib/apt/lists/*
-COPY serve.py guard.py quotas.py composer.py picker.py dive.py ask.py chat_store.py research.py research_store.py recall_more.py page_resolver.py accounts.py otp.py audit.py console.py migrate.py report.py ledger.py session_store.py note_store.py narration.py narration_cache.py eitaa.py eitaa_store.py throttle.py index.html eitaa_app.html manifest.webmanifest sw.js ./
+COPY serve.py guard.py quotas.py composer.py picker.py dive.py ask.py chat_store.py research.py research_store.py recall_more.py page_resolver.py accounts.py otp.py audit.py console.py migrate.py report.py ledger.py session_store.py note_store.py narration.py narration_cache.py eitaa.py eitaa_store.py throttle.py lectures.py agent_client.py question_window.py seam.py store_kernel.py telemetry.py dotenv_helper.py index.html eitaa_app.html manifest.webmanifest sw.js ./
 # The PWA's icon set (ADR-0019) — generated from source by
 # tools/make_pwa_icons.py, committed beside the manifest that serves it.
 COPY icons /app/icons

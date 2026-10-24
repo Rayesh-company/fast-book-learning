@@ -58,6 +58,14 @@ gaps clear focus. Timing ranges cannot overlap; text must exactly equal its
 canonical page slice before geometry is drawn. There is no guessed highlight
 for an unavailable page. Audio URLs and listeners are released on disposal.
 
+Lecture read-along uses precomputed geometry instead of the text layer:
+`highlight({ page, boxes: [{x0, y0, x1, y1}], tone })` paints PDF-point
+rectangles (top-left origin) scaled to the page's current width; `tone` is
+`exact`, `rough` or `held`. `pointAt(page, clientX, clientY)` maps a click
+back to PDF points. `lecture-sync.mjs` holds the pure timing lookup and
+`lecture-player.mjs` the controls; see the repository README, «Lecture
+read-along».
+
 ## Source provenance
 
 The following algorithms were copied from the indicated Tuba files with types

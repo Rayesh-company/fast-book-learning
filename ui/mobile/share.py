@@ -16,9 +16,15 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import os
 import re
+import sys
 from urllib.parse import unquote, urlsplit
 
 UI_DIR = Path(__file__).resolve().parents[1]
+try:
+    from ui import lectures
+except ImportError:  # run as a script: python ui/mobile/share.py
+    sys.path.insert(0, str(UI_DIR))
+    import lectures
 BOOK_IDS = {"tarhe-kolli", "70143-336"}
 STATIC_TYPES = {".html", ".css", ".mjs", ".js", ".woff2", ".woff", ".ttf", ".svg", ".png", ".jpg"}
 

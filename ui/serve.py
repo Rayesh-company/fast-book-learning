@@ -21,6 +21,7 @@ from pathlib import Path
 import queue
 import re
 import secrets
+import socket
 import sys
 import time
 import threading
@@ -28,6 +29,13 @@ from stat import S_ISREG
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.request import Request, urlopen
+
+try:
+    from ui.dotenv_helper import load_env
+except ImportError:
+    from dotenv_helper import load_env
+
+load_env()
 
 try:
     # The visual pipeline: pages of the Books rasterized by a real PDF
@@ -42,6 +50,25 @@ except ImportError:  # pragma: no cover - the container installs it
 try:
     # The deep modules behind this facade; the re-exports below keep the
     # tests' single `from ui import serve` import seam.
+    from ui.agent_client import (
+        AGENT_FAILED_DETAIL,
+        AGENT_UNREACHABLE_DETAIL,
+        AgentError,
+        AgentStream,
+        CHAT_ANSWER_ERROR,
+        CHAT_ANSWER_FINALIZED,
+        LearnerTurnContext,
+        agent_answer,
+        sse_frame,
+        validated_datasets,
+    )
+    from ui.question_window import (
+        QUESTION_WINDOW_HOURS,
+        QUESTION_WINDOW_LIMIT,
+        questions_in_window,
+        record_question,
+        window_state,
+    )
     from ui.guard import (
         _fuzzy_window,
         _stream_with_offsets,
@@ -57,6 +84,7 @@ try:
     from ui.quotas import (
         DAILY_CHAT_LIMIT,
         chats_today,
+        is_unlimited,
         normalize_phone,
         record_chat,
     )
@@ -70,8 +98,10 @@ try:
         deduct_balance,
         ensure_admin,
         get_balance,
+        get_profile,
         list_accounts,
         normalize_local_phone,
+        save_profile,
         verify_login,
     )
     from ui import otp
@@ -112,7 +142,9 @@ try:
         parse_broaden_reply,
         recall_more,
     )
-    from ui.page_resolver import install as install_page_resolver
+    from ui.page_resolver import (
+        install as install_page_resolver,
+    )
     from ui.dive import (
         BOOK_DATASETS,
         DIVE_MAX_RETRIEVAL_ROUNDS,
@@ -128,7 +160,7 @@ try:
     from ui.report import research_session_report
     from ui import chat_store
     from ui.chat_store import latest_chat
-    from ui.ask import ask_pool
+    from ui.ask import ask_pool, distill_pool
     from ui.research import (
         COMMAND_AUDIT,
         COMMAND_BRIEF,
@@ -186,7 +218,29 @@ try:
         turn_status_payload,
         with_references,
     )
+    from ui import lectures
+    from ui import telemetry
+    abort_phone_research = abort_account_research
 except ImportError:  # the container runs this file as a script beside the modules
+    from agent_client import (
+        AGENT_FAILED_DETAIL,
+        AGENT_UNREACHABLE_DETAIL,
+        AgentError,
+        AgentStream,
+        CHAT_ANSWER_ERROR,
+        CHAT_ANSWER_FINALIZED,
+        LearnerTurnContext,
+        agent_answer,
+        sse_frame,
+        validated_datasets,
+    )
+    from question_window import (
+        QUESTION_WINDOW_HOURS,
+        QUESTION_WINDOW_LIMIT,
+        questions_in_window,
+        record_question,
+        window_state,
+    )
     from guard import (
         _fuzzy_window,
         _stream_with_offsets,
@@ -202,6 +256,7 @@ except ImportError:  # the container runs this file as a script beside the modul
     from quotas import (
         DAILY_CHAT_LIMIT,
         chats_today,
+        is_unlimited,
         normalize_phone,
         record_chat,
     )
@@ -215,15 +270,17 @@ except ImportError:  # the container runs this file as a script beside the modul
         deduct_balance,
         ensure_admin,
         get_balance,
+        get_profile,
         list_accounts,
         normalize_local_phone,
+        save_profile,
         verify_login,
     )
     import otp
     import audit, migrate, throttle
     from console import console_html
     from report import research_session_report
-    from ask import ask_pool
+    from ask import ask_pool, distill_pool
     from chat_store import latest_chat
     import chat_store
     from composer import (
@@ -261,7 +318,9 @@ except ImportError:  # the container runs this file as a script beside the modul
         parse_broaden_reply,
         recall_more,
     )
-    from page_resolver import install as install_page_resolver
+    from page_resolver import (
+        install as install_page_resolver,
+    )
     from dive import (
         BOOK_DATASETS,
         DIVE_MAX_RETRIEVAL_ROUNDS,
@@ -331,6 +390,9 @@ except ImportError:  # the container runs this file as a script beside the modul
         turn_status_payload,
         with_references,
     )
+    import lectures
+    import telemetry
+    abort_phone_research = abort_account_research
 
 UI_DIR = Path(__file__).resolve().parent
 # The Book set's PDFs and per-page text indexes (tools/build_page_index.py).
@@ -432,7 +494,7 @@ RENDER_LOCK = threading.Lock()
 PDF_DOCS_CACHE: dict[str, object] = {}
 PDF_DOCS_CACHE_CAP = 2
 COGNEE_URL = os.environ.get("COGNEE_URL", "http://127.0.0.1:8000").rstrip("/")
-HOST = os.environ.get("SESSION_UI_HOST", "127.0.0.1")
+HOST = os.environ.get("SESSION_UI_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SESSION_UI_PORT", "8765"))
 PROXY_TIMEOUT = 600
 
@@ -560,6 +622,11 @@ ADMIN_ERROR_NOTES = {
 PROFILE_METERED_BADGE = "اندازه‌گیری‌شده"
 PROFILE_ESTIMATED_BADGE = "تخمینی"
 
+# The 429 refusal names the reopen time in Farsi digits (issue #23) —
+# the server-side twin of the sheet's toPersianDigits, so the prose and
+# the counter render the same clock.
+_PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
+
 # The generated-once-per-process secret lives here; auth_secret() reads
 # the env on every call so a test (or an operator) that pins
 # AUTH_SECRET always wins over a cached value.
@@ -614,6 +681,7 @@ def ensure_first_admin_from_env() -> None:
     if not email or not password:
         return
     if ensure_admin(email, password):
+        credit_balance(email, 999_999_999_999)
         audit_quiet(audit.ADMIN_SEEDED, actor_email=email, detail={"email": email})
         sys.stderr.write(
             f"مدیر نخستین از ADMIN_EMAIL ساخته شد ({email}) و در "
@@ -703,6 +771,36 @@ def _request_token(handler):
     return ""
 
 
+DEV_ACCOUNT_EMAIL = "dev@local"
+
+
+def is_login_disabled() -> bool:
+    """Check if authentication requirements are bypassed for local dev/preview."""
+    if os.environ.get("DISABLE_LOGIN") == "0":
+        return False
+    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+        return os.environ.get("DISABLE_LOGIN") == "1"
+    return os.environ.get("DISABLE_LOGIN", "1") == "1"
+
+
+def _ensure_dev_account():
+    """Ensure a local dev account exists when login is bypassed."""
+    try:
+        from ui import accounts
+    except ImportError:
+        import accounts
+    acc = accounts.account_by_email(DEV_ACCOUNT_EMAIL)
+    if acc is None:
+        accounts.create_account(DEV_ACCOUNT_EMAIL, "dev", "09123456789", "admin")
+        accounts.credit_balance(DEV_ACCOUNT_EMAIL, 999_999_999_999)
+        accounts.save_profile(
+            DEV_ACCOUNT_EMAIL,
+            {"usage_purpose": "academic", "subscription": {"active": True}},
+        )
+        acc = accounts.account_by_email(DEV_ACCOUNT_EMAIL)
+    return acc
+
+
 def resolve_identity(handler):
     """The gate flip (ADR-0013), finished (T21, GitLab #23): the
     Account's EMAIL — the identity every store now keys by — derived
@@ -725,6 +823,10 @@ def resolve_identity(handler):
     else:
         account = None
     if account is None:
+        if is_login_disabled():
+            dev = _ensure_dev_account()
+            if dev is not None:
+                return dev["email"]
         handler._json_error(401, AUTH_LOGIN_401_DETAIL)
         return None
     return account["email"]
@@ -737,8 +839,13 @@ def resolve_account(handler):
     same 401 before its role check."""
     claims = verify_token(_request_token(handler))
     if claims is None:
+        if is_login_disabled():
+            return _ensure_dev_account()
         return None
-    return account_by_email(claims["email"])
+    acc = account_by_email(claims["email"])
+    if acc is None and is_login_disabled():
+        return _ensure_dev_account()
+    return acc
 
 
 # The live line (ADR-0020): one in-process hub — per-Account subscriber
@@ -1178,6 +1285,20 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 from narration import narration_status
             self._send_json(200, narration_status())
             return
+        if path.startswith("/books/") and "/lectures" in path:
+            # Lecture read-along (ui/lectures.py): session timings, page
+            # boxes and the recorded audio — the Account's read, like the
+            # narration status above.
+            if resolve_identity(self) is None:
+                return
+            try:
+                from ui import lectures
+            except ImportError:
+                import lectures
+            if lectures.handle(self, path, BOOKS_DIR, BOOK_DATASETS):
+                return
+            self.send_error(404, "Not found")
+            return
         if path.startswith("/books/") and "/page/" in path:
             self._book_page_image(path)
             return
@@ -1232,8 +1353,25 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # mirror of the system — a read, never a mutation.
             self._admin_console()
             return
+        if path == "/admin/requests":
+            self._admin_requests_list()
+            return
+        if path.startswith("/admin/requests/"):
+            rest = path[len("/admin/requests/"):]
+            if not rest:
+                self._json_error(404, "شناسه درخواست یافت نشد")
+                return
+            if rest.endswith("/trace.json"):
+                req_id = rest[:-len("/trace.json")]
+                self._admin_request_json(req_id)
+            else:
+                self._admin_request_detail(rest)
+            return
         if path == "/profile/data":
             self._profile_data()
+            return
+        if path == "/api/user/profile":
+            self._user_profile_get()
             return
         if path == "/sessions":
             # The Session store's list (T27 stage 3, GitLab #40): the
@@ -1250,6 +1388,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             if rest.isdigit():
                 self._session_get(int(rest))
                 return
+        if path == "/agent/chat/history":
+            self._agent_chat_history()
+            return
         if path.startswith("/books/") and "/lectures/" in path:
             self._lecture_audio(path)
             return
@@ -1257,6 +1398,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self._lectures_summary(path)
             return
         if path.startswith("/books/"):
+            if "/lectures" in path:
+                self._book_lectures(path)
+                return
             self._book_file(path)
             return
         if self._serve_static(path):
@@ -1337,6 +1481,48 @@ class SessionHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _book_lectures(self, path: str) -> None:
+        """Lecture audio manifests, session timing data, and Range-enabled audio streaming."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        lectures_match = re.fullmatch(r"/books/([A-Za-z0-9_-]+)/lectures(?:/(\d+)(?:/(audio))?)?", path)
+        if not lectures_match:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        book_id = lectures_match.group(1)
+        session_str = lectures_match.group(2)
+        is_audio = bool(lectures_match.group(3))
+        if book_id not in BOOK_DATASETS:
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        ext_dir = os.environ.get("LECTURE_AUDIO_DIR")
+        if not session_str:
+            summary = lectures.load_lectures_summary(BOOKS_DIR, book_id, ext_dir)
+            if summary is None:
+                self._drain_request_body()
+                self.send_error(404, "Not found")
+                return
+            self._send_json(200, summary)
+            return
+        session_num = int(session_str)
+        if not is_audio:
+            session_data = lectures.get_session_data(BOOKS_DIR, book_id, session_num, ext_dir)
+            if session_data is None:
+                self._drain_request_body()
+                self.send_error(404, "Not found")
+                return
+            self._send_json(200, session_data)
+            return
+        audio_file = lectures.get_session_audio_file(BOOKS_DIR, book_id, session_num, ext_dir)
+        if audio_file is None or not audio_file.is_file():
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+        lectures.stream_audio_range(self, audio_file, head=False)
 
     def _book_file(self, path: str) -> None:
         """One Book asset — ``/books/<dataset>/book`` (the PDF, for the
@@ -1766,9 +1952,15 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 break
             length -= len(chunk)
 
-    def _json_error(self, status: int, detail: str) -> None:
+    def _json_error(self, status: int, detail: str, extra: dict = None) -> None:
+        # extra merges into the error body (issue #23: the 429 refusal
+        # carries the window's structured state beside its Farsi prose)
+        # without touching the drain every caller relies on.
         self._drain_request_body()
-        self._send_json(status, {"detail": detail})
+        payload = {"detail": detail}
+        if extra:
+            payload.update(extra)
+        self._send_json(status, payload)
 
     def _send_json(self, status: int, payload: dict, extra_headers=()) -> None:
         """One JSON reply. The caller must have consumed the request body
@@ -1836,6 +2028,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
         that cannot be paid for never starts. A turn or phase already
         running finishes; only the NEXT spend is stopped. The daily
         quota still applies on top of the Balance, never instead."""
+        acc = account_by_email(account)
+        if acc and acc.get("role") == "admin":
+            return True
         if get_balance(account) <= 0:
             self._json_error(
                 402,
@@ -1855,7 +2050,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return None
         if not self._balance_gate(account):
             return None
-        if chats_today(account) >= DAILY_CHAT_LIMIT:
+        acc = account_by_email(account)
+        is_exempt = (acc and acc.get("role") == "admin") or is_unlimited(account)
+        if not is_exempt and chats_today(account) >= DAILY_CHAT_LIMIT:
             self._json_error(
                 429, "شمار گفتگوهای امروز این حساب پر شده است؛ فردا بیایید."
             )
@@ -2245,6 +2442,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
     def _auth_logout(self) -> None:
         """Clear the cookie client-side. The token is stateless, so the
         server has nothing to revoke — its signed expiry ends it."""
+        self._drain_request_body()
         self._send_json(
             200, {"detail": AUTH_LOGOUT_DETAIL}, extra_headers=[self._clear_cookie_header()]
         )
@@ -2268,13 +2466,23 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         extra_headers = []
         if not self._cookie_token():
-            extra_headers.append(self._auth_cookie_header(_request_token(self)))
+            req_tok = _request_token(self)
+            if req_tok:
+                extra_headers.append(self._auth_cookie_header(req_tok))
+            elif is_login_disabled():
+                token = issue_token(account["email"], account["role"])
+                extra_headers.append(self._auth_cookie_header(token))
+        elif is_login_disabled() and verify_token(self._cookie_token()) is None:
+            token = issue_token(account["email"], account["role"])
+            extra_headers.append(self._auth_cookie_header(token))
         self._send_json(
             200,
             {
                 "email": account["email"],
                 "role": account["role"],
                 "phone": account["phone"],
+                "profile": account.get("profile"),
+                "profile_completed": account.get("profile_completed", False),
             },
             extra_headers=extra_headers,
         )
@@ -2534,10 +2742,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
             abort_account_research(account)
             # The ask's own ledger entry (T22): input-side size
             # estimate, like the recall POST always recorded.
+            request_id = secrets.token_hex(16)
             record_size_estimate(
-                account, "ask", int(self.headers.get("Content-Length", "0") or "0")
+                account,
+                "ask",
+                int(self.headers.get("Content-Length", "0") or "0"),
+                request_id=request_id,
             )
-            self._ask(account)
+            self._ask(account, request_id=request_id)
         if path == "/admin/accounts":
             # The console's issuance form (T26, GitLab #28): the same
             # act as /auth/accounts, wearing the page's shape.
@@ -2553,6 +2765,64 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # phone joins its Account, and the stores' pre-account rows
             # follow the mapping — audited, from the browser.
             self._admin_attach()
+            return
+        if path == "/api/user/profile":
+            self._user_profile_save()
+            return
+        if path == "/agent/chat":
+            account = resolve_identity(self)
+            if account is None:
+                return
+            if not self._balance_gate(account):
+                return
+            acc = account_by_email(account)
+            phone = (acc.get("phone") if acc and acc.get("phone") else account)
+            # The Question window (ADR-0017/0018): a Learner message
+            # that RECEIVES an agent answer is one Question, inside 30
+            # per rolling 5 hours. A full window stops the next message;
+            # an answer already in flight finishes and meters on landing.
+            # ONE store read feeds both the gate and the refusal (#21
+            # fixup): window_state clamps remaining at
+            # max(LIMIT - count, 0), so remaining <= 0 holds exactly
+            # when questions_in_window(phone) >= QUESTION_WINDOW_LIMIT —
+            # the gate's old count compare, equivalent by construction —
+            # and the refusal's prose and extra draw from the same state.
+            state = window_state(phone)
+            if state["remaining"] <= 0:
+                # The refusal names when the window reopens (issue #23),
+                # from the store's own read — the same reopens_at the
+                # sheet's counter will render then, never a bare "try
+                # later". The clock is the server's local time, the
+                # Learner's clock, in Farsi digits.
+                reopen = time.localtime(state["reopens_at"])
+                clock = f"{reopen.tm_hour:02d}:{reopen.tm_min:02d}".translate(
+                    _PERSIAN_DIGITS
+                )
+                self._json_error(
+                    429,
+                    "پنجرهٔ پرسش‌های این حساب در پنج ساعت گذشته پر شده است؛"
+                    f" ساعت {clock} دوباره باز می‌شود.",
+                    extra={"window": state},
+                )
+                return
+            # A new ask owns the sheet exactly like /ask (issue #26): the
+            # phone's in-flight research turns abort cooperatively.
+            abort_account_research(account)
+            # The Question's own ledger entry (T22's pattern): an
+            # input-side size estimate — the model calls happen in the
+            # agent service, so the Toman ledger sees the volume, not
+            # tokens it never metered.
+            request_id = secrets.token_hex(16)
+            record_size_estimate(
+                account,
+                "agent",
+                int(self.headers.get("Content-Length", "0") or "0"),
+                request_id=request_id,
+            )
+            self._agent_chat(phone, account=account, request_id=request_id)
+            return
+        if path == "/agent/recall":
+            self._agent_recall()
             return
         if path == "/api/v1/recall":
             account = self._gate_account()
@@ -2809,7 +3079,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _ask(self, account: str) -> None:
+    def _ask(self, account: str, request_id: str | None = None) -> None:
         """The retrieval-only ask (ADR-0014): the first answer's Evidence
         pool with NO LLM completion in the loop — one only_context search
         per selected Book over the main Cognee service, so the pool is
@@ -2833,9 +3103,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # The body is already read above, so _send_json is safe.
             self._send_json(400, {"detail": "پرسش را بنویسید."})
             return
-        sources = ask_pool(query.strip(), datasets)
+        if not request_id:
+            request_id = secrets.token_hex(16)
+        sources = ask_pool(query.strip(), datasets, session_id=request_id)
         chat_id = secrets.token_hex(8)
-        chat_store.create_chat(chat_id, account, query.strip(), datasets, sources)
+        chat_store.create_chat(
+            chat_id, account, query.strip(), datasets, sources, request_id=request_id
+        )
+        telemetry.write_qa_entry(request_id, query.strip(), "", (datasets or [""])[0])
         _publish_event(
             account,
             "chat.asked",
@@ -2845,8 +3120,183 @@ class SessionHandler(SimpleHTTPRequestHandler):
         )
         self._send_json(
             200,
-            {"chat_id": chat_id, "sources": sources, "pool_size": len(sources)},
+            {
+                "chat_id": chat_id,
+                "sources": sources,
+                "pool_size": len(sources),
+                "request_id": request_id,
+            },
         )
+
+    def _agent_chat(self, phone: str, account: str | None = None, request_id: str | None = None) -> None:
+        """The Learner-facing seam (ADR-0018), STREAMED (issue #26): the
+        sheet's chat surface — the Learner's message goes to the Mastra
+        agent's stream route (its tools are the Book pool through
+        /agent/recall and web search), the agent's answer relays to the
+        sheet UNBUFFERED as it is composed (the _relay close-delimited
+        pattern: one readline at a time onto the socket), and the seam's
+        own terminal frame ends the stream — chat-answer-finalized when
+        an answer completed, chat-answer-error when it failed, stalled
+        past its leash, or carried no answer. Metering and persistence
+        stay COMPLETION-ANCHORED: one ANSWERED message records one
+        Question and persists one exchange (the guaranteed-marked form
+        #24 built, identical in shape to the non-streamed persistence,
+        so the reload restores the same transcript); a failed, stalled,
+        or abandoned stream records and persists nothing. The gates
+        before this handler (identity, Balance, window, the research
+        abort, the size estimate) keep today's JSON error shapes. The
+        thread is stable per phone, so the agent's own memory carries
+        the conversation even though the sheet renders from this
+        store."""
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except (ValueError, KeyError, TypeError):
+            # The body is already read above, so _send_json is safe.
+            self._send_json(400, {"detail": "پرسش را بنویسید."})
+            return
+        if not request_id:
+            request_id = secrets.token_hex(16)
+        try:
+            turn = LearnerTurnContext.from_request(
+                phone, account, payload, request_id=request_id
+            )
+        except ValueError as err:
+            self._send_json(400, {"detail": "پرسش را بنویسید."})
+            return
+        stream = AgentStream(turn)
+        # Close-delimited SSE (HTTP/1.0): no Content-Length, lines hit
+        # the socket as they arrive — the sheet reads the body with
+        # getReader() and renders progressively.
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.end_headers()
+        for line in stream:
+            try:
+                self.wfile.write(line)
+            except OSError:
+                # ABANDONED: the Learner's connection died mid-stream —
+                # abort the upstream and answer nothing; this Question
+                # was never answered, so nothing is metered and nothing
+                # persists (the browser gate exercises the disconnect;
+                # this branch's ordering is pinned statically in
+                # test_session_ui).
+                stream.abort()
+                stream.close()
+                return
+        stream.close()
+        reply = stream.reply
+        if reply is None:
+            # The stream already ended with the honest-error frame — no
+            # Question, no exchange.
+            return
+        # The answer COMPLETED: this message is one Question (ADR-0018)
+        # — metered here, once, only on completion.
+        record_question(phone)
+        # The persisted exchange carries the guaranteed-marked form
+        # (#24, ADR-0018): the answer text plus the web-sourced flag and
+        # sources the seam derived from the streamed tool-result frames
+        # — a reload re-renders the «بیرون از کتاب» marking from this
+        # stored form with no agent call and no re-billing.
+        chat_store.record_agent_exchange(
+            phone,
+            turn.thread_id,
+            turn.query,
+            reply["text"],
+            reply["web_sourced"],
+            reply["sources"],
+            request_id=request_id,
+        )
+        telemetry.write_qa_entry(
+            request_id,
+            turn.query,
+            reply["text"],
+            turn.datasets[0] if turn.datasets else "",
+        )
+        # The finalize frame (issue #26): the full answer with the
+        # marking guarantee and the window AFTER this Question landed
+        # (issue #23 — the sheet's counter renders from this frame; the
+        # first answered message shows 29 remaining). The flag is
+        # rendering truth only, never a gate.
+        try:
+            self.wfile.write(
+                sse_frame(
+                    {
+                        "type": CHAT_ANSWER_FINALIZED,
+                        "answer": reply["text"],
+                        "web_sourced": reply["web_sourced"],
+                        "sources": reply["sources"],
+                        "window": window_state(phone),
+                    }
+                )
+            )
+        except OSError:
+            # The answer completed and persisted — only its delivery
+            # failed (the Learner went away between the last delta and
+            # the finalize); the reload restores the exchange.
+            sys.stderr.write(
+                "%s - agent stream client went away at finalize\n"
+                % self.address_string()
+            )
+
+    def _agent_chat_history(self) -> None:
+        """The agent conversation's restore read (ADR-0014/0018): the
+        phone's persisted transcript — question/answer exchanges, oldest
+        first. No LLM call, no metering: a reload restores without
+        re-billing. The identity comes from the login cookie (ADR-0013),
+        and one phone's reload never reads another's conversation."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        acc = account_by_email(account)
+        phone = (acc.get("phone") if acc and acc.get("phone") else account)
+        self._send_json(
+            200,
+            {
+                "thread_id": f"learner-{phone}",
+                "messages": chat_store.agent_conversation(phone),
+                # The window recomputed fresh (issue #23): the restore
+                # read initializes the sheet's counter from the store,
+                # never from a reply an earlier visit cached.
+                "window": window_state(phone),
+            },
+        )
+
+    def _agent_recall(self) -> None:
+        """The agent seam (ADR-0016/0018): the Mastra chat agent's
+        search-books tool calls this for the Book pool — the SAME
+        parsed only_context passages /ask builds (ui.ask.ask_pool),
+        never duplicated on the TS side. There is no phone gate: the
+        caller is the agent service presenting the shared
+        AGENT_SERVICE_TOKEN (hmac-compared; a missing token env keeps
+        the seam closed). No metering and no chat row here: the
+        Question window meters Learner messages on the Learner-facing
+        seam, not the agent's tool rounds (ADR-0018). A bad token is
+        401; a malformed body 400; a searcher that finds nothing is
+        200 {"passages": []} — the honest empty the agent reports."""
+        expected = os.environ.get("AGENT_SERVICE_TOKEN", "")
+        presented = self.headers.get("X-Agent-Token", "")
+        if not expected or not hmac.compare_digest(expected, presented):
+            self._drain_request_body()
+            self._send_json(401, {"detail": "agent token required"})
+            return
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            query = payload["query"]
+            if not isinstance(query, str) or not query.strip():
+                raise ValueError("query is required")
+            datasets = validated_datasets(payload.get("datasets"))
+        except (ValueError, KeyError, TypeError):
+            # The body is already read above, so _send_json is safe.
+            self._send_json(400, {"detail": "query is required"})
+            return
+        session_id = payload.get("session_id") if isinstance(payload, dict) else None
+        if not isinstance(session_id, str):
+            session_id = None
+        raw_pool = ask_pool(query.strip(), datasets, session_id=session_id)
+        distilled = distill_pool(query.strip(), raw_pool)
+        self._send_json(200, {"passages": distilled})
 
     def _chat_latest(self) -> None:
         """The reload's restore read (ADR-0014): the Account's newest ask
@@ -3184,6 +3634,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
                     "yesterday_spend_toman": day_total(row["email"], yesterday),
                     "today_spend_toman": today_total(row["email"]),
                     "chats_today": chats_today(row["email"]),
+                    "quota_limit": "نامحدود" if (row.get("role") == "admin" or is_unlimited(row["email"])) else DAILY_CHAT_LIMIT,
                 }
             )
         now_mono = time.monotonic()
@@ -3229,6 +3680,54 @@ class SessionHandler(SimpleHTTPRequestHandler):
         ).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _admin_requests_list(self) -> None:
+        account = self._admin_gate()
+        if account is None:
+            return
+        query_string = urlparse(self.path).query
+        qs = parse_qs(query_string)
+        filters = {k: v[0] for k, v in qs.items() if v}
+        reqs = telemetry.recent_requests(
+            limit=50,
+            day=filters.get("day"),
+            phone=filters.get("phone"),
+            dataset=filters.get("dataset"),
+            status=filters.get("status"),
+        )
+        body = telemetry.telemetry_list_html(reqs, filters).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _admin_request_detail(self, request_id: str) -> None:
+        account = self._admin_gate()
+        if account is None:
+            return
+        view = telemetry.request_view(request_id)
+        body = telemetry.telemetry_detail_html(view).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _admin_request_json(self, request_id: str) -> None:
+        account = self._admin_gate()
+        if account is None:
+            return
+        data = telemetry.request_json(request_id)
+        body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -3390,6 +3889,54 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 "balance_toman": get_balance(account),
                 "today_toman": today_total(account),
                 "sessions": sessions,
+            },
+        )
+
+    def _user_profile_get(self) -> None:
+        """The Learner's profile read: the Account's learning preferences
+        and onboarding status."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        profile = get_profile(account)
+        self._send_json(
+            200,
+            {
+                "email": account,
+                "profile": profile,
+                "profile_completed": bool(
+                    profile
+                    and (
+                        profile.get("assistant_tone")
+                        or profile.get("tone")
+                        or profile.get("usage_purpose")
+                    )
+                ),
+            },
+        )
+
+    def _user_profile_save(self) -> None:
+        """The Learner's profile update: validate and persist learning preferences."""
+        account = resolve_identity(self)
+        if account is None:
+            return
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except Exception:
+            self._send_json(400, {"detail": "داده‌های ورودی نامعتبر است."})
+            return
+        try:
+            saved = save_profile(account, payload)
+        except ValueError as err:
+            self._send_json(400, {"detail": str(err)})
+            return
+        self._send_json(
+            200,
+            {
+                "ok": True,
+                "profile": saved,
+                "profile_completed": True,
             },
         )
 
@@ -3942,8 +4489,8 @@ class SessionHandler(SimpleHTTPRequestHandler):
 # health stayed green and every search died. Present-but-wrong pins refuse
 # the start here, loudly; absent pins (a bare dev run outside compose)
 # cannot contradict the data and pass.
-FROZEN_EMBEDDING_MODEL = "text-embedding-3-large"
-FROZEN_EMBEDDING_DIMENSIONS = "3072"
+FROZEN_EMBEDDING_MODEL = os.environ.get("FROZEN_EMBEDDING_MODEL", "text-embedding-3-large")
+FROZEN_EMBEDDING_DIMENSIONS = os.environ.get("FROZEN_EMBEDDING_DIMENSIONS", "3072")
 
 
 def check_embedding_pin() -> None:
@@ -3965,6 +4512,14 @@ def check_embedding_pin() -> None:
             + " — سرویس اجرا نمی‌شود. مقدارهای ثابت را در .env بگذارید: "
             + f"EMBEDDING_MODEL={FROZEN_EMBEDDING_MODEL} ، EMBEDDING_DIMENSIONS={FROZEN_EMBEDDING_DIMENSIONS} (ADR-0004)."
         )
+
+
+class SheetServer(ThreadingHTTPServer):
+    # The capacity bar is 100 concurrent chat asks (ADR-0017) — now 100
+    # concurrent agent answers (ADR-0018). The default listen backlog of
+    # 5 resets simultaneous connects outright; the first capacity
+    # rehearsal caught exactly that (39/100 WinError 10054 resets).
+    request_queue_size = 256
 
 
 def main() -> None:
@@ -3993,8 +4548,20 @@ def main() -> None:
             sys.stderr.write(
                 f"BOOK PDF MISSING: {dataset} — the reader can draw only already-cached pages\n"
             )
-    server = ThreadingHTTPServer((HOST, PORT), SessionHandler)
+    server = SheetServer((HOST, PORT), SessionHandler)
     print(f"Session sheet http://{HOST}:{PORT}", flush=True)
+    if HOST in ("0.0.0.0", ""):
+        lan_ip = "127.0.0.1"
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                lan_ip = s.getsockname()[0]
+        except Exception:
+            pass
+        if lan_ip and lan_ip != "127.0.0.1":
+            print(f"  Local access:   http://localhost:{PORT}/", flush=True)
+            print(f"  Network access: http://{lan_ip}:{PORT}/", flush=True)
+            print(f"  Mobile UI:      http://{lan_ip}:{PORT}/mobile/", flush=True)
     print(f"Proxying /api/v1/recall and /health to {COGNEE_URL}", flush=True)
     print(f"Relaying /next-tier-recall to {NEXT_TIER_URL}", flush=True)
     print(f"Running Research Mode turns against {NEXT_TIER_URL}", flush=True)

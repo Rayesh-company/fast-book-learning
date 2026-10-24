@@ -9,7 +9,10 @@ ui/usage.sqlite3
 ui/accounts.sqlite3
 # The customer PDFs stay out of git; provision books/ from the
 # cognee storage export (see ADR-0007). The text indexes ship.
+# Exception: tarhe-kolli's PDF is a fixed asset committed with its lecture
+# audio — the read-along's page boxes were computed from exactly this file.
 books/*.pdf
+!books/tarhe-kolli.pdf
 # The page rasters' disk cache (ADR-0017) — regenerable by design.
 render-cache/
 # The offline build's planted wheels (ui/Dockerfile) — they ride the
@@ -25,6 +28,9 @@ ui/narration/node_modules/
 ui/narration/alignment/node_modules/
 models/
 .scratch/
+scratch/
+chat-with-books-handoff/
+fast-book-audio-delivery/
 *.dump
 *.tar
 *.tar.gz
@@ -35,6 +41,10 @@ ui/audit.sqlite3
 # The worktree's runtime stores — the deployed copies live on /data.
 ui/research.sqlite3
 ui/sessions.sqlite3
+ui/notes.sqlite3
+ui/mind-map/
+.impeccable/
+ui/chats.sqlite3
 
 # The pilot bench Accounts (credentials) — local only, never committed.
 benchmark/pilot/accounts.json
@@ -56,10 +66,31 @@ ui/ota/manifest.json
 # The برنامک's binding store (ADR-0021) — the deployed copy lives on
 # /data; the worktree's is runtime data, never git.
 ui/eitaa.sqlite3
-ui/notes.sqlite3
 # The SMS login's waitlist (2026-10-23) — the deployed copy lives on
 # /data; the worktree's is runtime data, never git.
 ui/waitlist.sqlite3
 # A built APK is a build artifact (rule 001: mobile ships OTA, never a
 # new binary) — locally built for an emulator flavor, never committed.
 mobile/*.apk
+
+# Lecture audio ships as MP3 under books/<id>/lectures/; the FLAC masters
+# and any scratch MP3 encodes elsewhere stay out.
+*.flac
+*.mp3
+!books/*/lectures/*.mp3
+
+# The Mastra chat agent service (ADR-0018)
+agent/node_modules/
+agent/.mastra/
+agent/dist/
+agent/src/mastra/public/data/
+
+# Reticle browser-test artifacts
+.reticle/
+
+# Local e2e scratch
+e2e-tmp/
+agent-dev.log
+agent/data/
+data/
+node_modules/

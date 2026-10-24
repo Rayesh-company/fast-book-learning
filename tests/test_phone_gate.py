@@ -90,6 +90,9 @@ def composer_replies():
 # with/stop pair) lives in tests.helpers — shared with the deep-dive
 # endpoint tests, so neither test module is the other's library.
 from tests.helpers import (
+    TEST_PASSWORD,
+    TEST_BALANCE_TOMAN,
+    raw_post,
     account_email_for_phone,  # noqa: E402
     GateServer,
     patch_accounts,
@@ -171,6 +174,41 @@ def test_a_valid_phone_passes_and_the_chat_is_recorded(tmp_path):
     # One upstream call — the recall itself — and one recorded chat.
     assert len(upstream.calls) == 1
     assert serve.chats_today(account_email_for_phone("09123456789")) == 1
+
+
+def test_unlimited_account_and_admin_bypass_daily_limit(tmp_path):
+    upstream = FakeUpstream()
+    base, server, original = with_gate(tmp_path, upstream)
+    try:
+        import urllib.request
+        from ui import accounts
+        unlimited_email = "aubed9@gmail.com"
+        accounts.create_account(unlimited_email, TEST_PASSWORD, role="operator")
+        accounts.adjust_balance(unlimited_email, TEST_BALANCE_TOMAN)
+
+        login_req = urllib.request.Request(
+            base + "/auth/login",
+            data=json.dumps({"email": unlimited_email, "password": TEST_PASSWORD}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(login_req, timeout=10) as resp:
+            cookie = resp.headers.get("Set-Cookie", "").split(";", 1)[0].strip()
+
+        for _ in range(10):
+            serve.record_chat(unlimited_email)
+
+        status, payload = raw_post(
+            base,
+            "/api/v1/recall",
+            {"searchType": "HYBRID_COMPLETION", "query": "پرسش؟"},
+            cookie=cookie,
+        )
+    finally:
+        stop_gate(server, original)
+    assert status == 200
+    assert len(upstream.calls) == 1
+    assert serve.chats_today(unlimited_email) == 11
 
 
 def test_five_chats_is_the_daily_limit_and_other_phones_unaffected(tmp_path):

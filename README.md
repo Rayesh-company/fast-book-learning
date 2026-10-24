@@ -186,6 +186,49 @@ One timestamped archive holds everything git does not — **the memory layer's `
   ```
 - **Restore** — T15 (#21) ships `scripts/restore.sh` and the drill is rehearsed: the newest archive is restored into a throwaway Postgres on port `5433` (never the live stack) and verified — the rehearsal transcript and the ritual live in `docs/restore-drill.md`. The raw path stays HANDOFF.md's: `pg_restore -U cognee -d cognee_db --clean --if-exists` (prefix `MSYS_NO_PATHCONV=1` on Git Bash), unpack the stores and books into the tree.
 
+## Lecture read-along (درس‌گفتار)
+
+خواننده می‌تواند صوت درس‌گفتارِ هر جلسه را پخش کند و عبارتِ در حال خوانده‌شدن روی همان صفحهٔ PDF کتاب هایلایت می‌شود؛ صفحه خودکار ورق می‌خورد و با لمس یک عبارت صوت به همان‌جا می‌رود.
+
+Playback uses acoustic word timings from the shipped MP3s and exact PDF word
+boxes. A local Persian CTC model recognizes character anchors, permits omitted
+Book text and extra speech, and aligns supported words in their observed audio
+neighbourhoods. Visible focus covers the complete current sentence, using
+exact PDF geometry, from its measured speech onset through its last observed word. Internal
+pauses and missing-word gaps keep the same range and tone; focus clears when
+the sentence ends. Word timestamps still control page turns. The
+original `sentences` remain as the source record and legacy-format fallback.
+Rebuild instructions, model provenance and accuracy limits are recorded in
+[docs/lecture-checkpoints.md](docs/lecture-checkpoints.md).
+
+The product reader (`/mobile/`) shows a headphones button when the open Book has a lecture index. It opens a bar with the session (جلسه) picker, play/pause, ±10 s, a seek bar, «بدون مقدمه» (start at the lecture's `lecture_start`, skipping the recorded intro) and a caption of the current sentence. The sentence is highlighted **on the rendered PDF page**, and page changes follow observed word timestamps. Clicking a placed sentence seeks its first observed speech. Internal pauses keep the sentence highlight unchanged; it clears after the sentence ends. Starting the lecture pauses the TTS narration and vice versa. Legacy sentence-only indexes retain sentence focus and their original page timing.
+
+**Data.** `books/<id>.lectures.json` (committed, like `.pages.json`) holds per session the audio file name, duration, intro/outro marks, coverage and the Book's sentences with `start`/`end` seconds, `page`/`page_end`, `confidence`, flags (`quran`, `garbled_pdf_text`, `interpolated`, `rough_timing`, `low_confidence`, `out_of_order`, `fuzzy_boxes`) and `boxes` — `[page, x0, y0, x1, y1]` in PDF points, top-left origin, one per text line. Build it once per Book from the aligner's `reader_alignment.json` and the same PDF edition the reader serves:
+
+```bash
+python3 tools/build_lecture_index.py \
+    --alignment path/to/reader_alignment.json --pdf books/tarhe-kolli.pdf --book tarhe-kolli
+# → books/tarhe-kolli.lectures.json: 28 sessions, 11974 sentences, 11971 with boxes (10455 exact, 1516 fuzzy)
+```
+
+The builder clusters PDF words by visual baseline and orders each line right-to-left (avoiding horizontal overlaps when InDesign splits lines around diacritics or Quranic spans), rejoins mid-sentence PDF line breaks, splits compound entries sentence-by-sentence (including pairing each inline Arabic phrase with its immediate Persian translation), and matches each sentence against the page's body words (running header and footnote zone excluded) on a letters-only normalisation. It also orders timings by start and clips overlaps. A sentence it cannot place keeps its timing and shows in the caption only. `tests/fixtures/lectures-sample.json` is a small sample of the format.
+
+**Assets in git.** The Book PDF and the lecture audio are fixed assets and are committed:
+
+- `books/tarhe-kolli.pdf` — exactly the PDF the page boxes were computed from (Sahba interactive v1.0; its SHA-256 is recorded as `source.boxes_pdf_sha256` in the index and pinned by a test). The other Book's PDF stays out of git (ADR-0007).
+- `books/tarhe-kolli/lectures/session_01.mp3` … `session_28.mp3` — MP3, 32 kbps, mono, 22.05 kHz, ≈ 388 MB total for 28 sessions (about 27 h), each file far under GitHub's 100 MB limit, playing natively across all desktop and mobile browsers (including Linux Chromium/Opera builds that ship without proprietary AAC decoders).
+
+The server streams `books/<id>/lectures/<file>` with HTTP Range at `/books/<id>/lectures/<n>/audio` — no setting needed; compose's existing `./books:/books:ro` mount carries it into the container. Optional overrides: `LECTURE_AUDIO_DIR` (another folder holding `<id>/session_NN.mp3` or `session_NN.mp3`; when set it is the only local source) or `LECTURE_AUDIO_BASE_URL` (e.g. `https://cdn.example/lectures/{book}/`; the browser then fetches `<base>/session_NN.mp3` directly).
+
+**Routes** (Account-gated on `ui/serve.py`, like the narration status; open on the LAN preview host like its PDFs): `GET /books/<id>/lectures` (session list, `audio_available`), `GET /books/<id>/lectures/<n>` (timings, boxes, `page_sizes`, `audio_url`), `GET /books/<id>/lectures/<n>/audio`. Try it without the stack:
+
+```bash
+python ui/mobile/share.py --host 127.0.0.1 --port 8766 --books-dir books
+# open http://127.0.0.1:8766/mobile/?demo=1 and tap the headphones button
+```
+
+Code: `tools/build_lecture_index.py`, `ui/lectures.py`, `ui/book-reader/lecture-sync.mjs` (binary-search lookup, page split, hit test), `ui/book-reader/lecture-player.mjs` (controls), box painting in `ui/book-reader/index.mjs`. Tests: `tests/test_lectures.py`, `tests/reader/lecture.test.mjs`.
+
 ## Tests
 
 ```powershell

@@ -1,0 +1,472 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T09:11:40.254018+00:00",
+  "title": "Design System: کتاب و همراه",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0859 184.33)",
+          "oklch(26.43% 0.0859 184.33)",
+          "oklch(37.86% 0.0859 184.33)",
+          "oklch(49.29% 0.0859 184.33)",
+          "oklch(60.71% 0.0859 184.33)",
+          "oklch(72.14% 0.0859 184.33)",
+          "oklch(83.57% 0.0859 184.33)",
+          "oklch(95.0% 0.0859 184.33)"
+        ]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0138 174.16)",
+          "oklch(26.43% 0.0138 174.16)",
+          "oklch(37.86% 0.0138 174.16)",
+          "oklch(49.29% 0.0138 174.16)",
+          "oklch(60.71% 0.0138 174.16)",
+          "oklch(72.14% 0.0138 174.16)",
+          "oklch(83.57% 0.0138 174.16)",
+          "oklch(95.0% 0.0138 174.16)"
+        ]
+      },
+      "citation": {
+        "role": "secondary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0912 252.37)",
+          "oklch(26.43% 0.0912 252.37)",
+          "oklch(37.86% 0.0912 252.37)",
+          "oklch(49.29% 0.0912 252.37)",
+          "oklch(60.71% 0.0912 252.37)",
+          "oklch(72.14% 0.0912 252.37)",
+          "oklch(83.57% 0.0912 252.37)",
+          "oklch(95.0% 0.0912 252.37)"
+        ]
+      },
+      "citation-soft": {
+        "role": "secondary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0912 252.37)",
+          "oklch(26.43% 0.0912 252.37)",
+          "oklch(37.86% 0.0912 252.37)",
+          "oklch(49.29% 0.0912 252.37)",
+          "oklch(60.71% 0.0912 252.37)",
+          "oklch(72.14% 0.0912 252.37)",
+          "oklch(83.57% 0.0912 252.37)",
+          "oklch(95.0% 0.0912 252.37)"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0070 88.64)",
+          "oklch(26.43% 0.0070 88.64)",
+          "oklch(37.86% 0.0070 88.64)",
+          "oklch(49.29% 0.0070 88.64)",
+          "oklch(60.71% 0.0070 88.64)",
+          "oklch(72.14% 0.0070 88.64)",
+          "oklch(83.57% 0.0070 88.64)",
+          "oklch(95.0% 0.0070 88.64)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0054 95.10)",
+          "oklch(26.43% 0.0054 95.10)",
+          "oklch(37.86% 0.0054 95.10)",
+          "oklch(49.29% 0.0054 95.10)",
+          "oklch(60.71% 0.0054 95.10)",
+          "oklch(72.14% 0.0054 95.10)",
+          "oklch(83.57% 0.0054 95.10)",
+          "oklch(95.0% 0.0054 95.10)"
+        ]
+      },
+      "soft": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0083 91.48)",
+          "oklch(26.43% 0.0083 91.48)",
+          "oklch(37.86% 0.0083 91.48)",
+          "oklch(49.29% 0.0083 91.48)",
+          "oklch(60.71% 0.0083 91.48)",
+          "oklch(72.14% 0.0083 91.48)",
+          "oklch(83.57% 0.0083 91.48)",
+          "oklch(95.0% 0.0083 91.48)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0086 184.65)",
+          "oklch(26.43% 0.0086 184.65)",
+          "oklch(37.86% 0.0086 184.65)",
+          "oklch(49.29% 0.0086 184.65)",
+          "oklch(60.71% 0.0086 184.65)",
+          "oklch(72.14% 0.0086 184.65)",
+          "oklch(83.57% 0.0086 184.65)",
+          "oklch(95.0% 0.0086 184.65)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0106 161.08)",
+          "oklch(26.43% 0.0106 161.08)",
+          "oklch(37.86% 0.0106 161.08)",
+          "oklch(49.29% 0.0106 161.08)",
+          "oklch(60.71% 0.0106 161.08)",
+          "oklch(72.14% 0.0106 161.08)",
+          "oklch(83.57% 0.0106 161.08)",
+          "oklch(95.0% 0.0106 161.08)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0087 128.57)",
+          "oklch(26.43% 0.0087 128.57)",
+          "oklch(37.86% 0.0087 128.57)",
+          "oklch(49.29% 0.0087 128.57)",
+          "oklch(60.71% 0.0087 128.57)",
+          "oklch(72.14% 0.0087 128.57)",
+          "oklch(83.57% 0.0087 128.57)",
+          "oklch(95.0% 0.0087 128.57)"
+        ]
+      },
+      "selection": {
+        "role": "secondary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0202 233.87)",
+          "oklch(26.43% 0.0202 233.87)",
+          "oklch(37.86% 0.0202 233.87)",
+          "oklch(49.29% 0.0202 233.87)",
+          "oklch(60.71% 0.0202 233.87)",
+          "oklch(72.14% 0.0202 233.87)",
+          "oklch(83.57% 0.0202 233.87)",
+          "oklch(95.0% 0.0202 233.87)"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.1395 27.29)",
+          "oklch(26.43% 0.1395 27.29)",
+          "oklch(37.86% 0.1395 27.29)",
+          "oklch(49.29% 0.1395 27.29)",
+          "oklch(60.71% 0.1395 27.29)",
+          "oklch(72.14% 0.1395 27.29)",
+          "oklch(83.57% 0.1395 27.29)",
+          "oklch(95.0% 0.1395 27.29)"
+        ]
+      },
+      "dark-primary": {
+        "role": "primary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0796 180.43)",
+          "oklch(26.43% 0.0796 180.43)",
+          "oklch(37.86% 0.0796 180.43)",
+          "oklch(49.29% 0.0796 180.43)",
+          "oklch(60.71% 0.0796 180.43)",
+          "oklch(72.14% 0.0796 180.43)",
+          "oklch(83.57% 0.0796 180.43)",
+          "oklch(95.0% 0.0796 180.43)"
+        ]
+      },
+      "dark-primary-soft": {
+        "role": "primary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0332 171.30)",
+          "oklch(26.43% 0.0332 171.30)",
+          "oklch(37.86% 0.0332 171.30)",
+          "oklch(49.29% 0.0332 171.30)",
+          "oklch(60.71% 0.0332 171.30)",
+          "oklch(72.14% 0.0332 171.30)",
+          "oklch(83.57% 0.0332 171.30)",
+          "oklch(95.0% 0.0332 171.30)"
+        ]
+      },
+      "dark-citation": {
+        "role": "secondary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0830 253.41)",
+          "oklch(26.43% 0.0830 253.41)",
+          "oklch(37.86% 0.0830 253.41)",
+          "oklch(49.29% 0.0830 253.41)",
+          "oklch(60.71% 0.0830 253.41)",
+          "oklch(72.14% 0.0830 253.41)",
+          "oklch(83.57% 0.0830 253.41)",
+          "oklch(95.0% 0.0830 253.41)"
+        ]
+      },
+      "dark-citation-soft": {
+        "role": "secondary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0830 253.41)",
+          "oklch(26.43% 0.0830 253.41)",
+          "oklch(37.86% 0.0830 253.41)",
+          "oklch(49.29% 0.0830 253.41)",
+          "oklch(60.71% 0.0830 253.41)",
+          "oklch(72.14% 0.0830 253.41)",
+          "oklch(83.57% 0.0830 253.41)",
+          "oklch(95.0% 0.0830 253.41)"
+        ]
+      },
+      "dark-background": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0075 182.38)",
+          "oklch(26.43% 0.0075 182.38)",
+          "oklch(37.86% 0.0075 182.38)",
+          "oklch(49.29% 0.0075 182.38)",
+          "oklch(60.71% 0.0075 182.38)",
+          "oklch(72.14% 0.0075 182.38)",
+          "oklch(83.57% 0.0075 182.38)",
+          "oklch(95.0% 0.0075 182.38)"
+        ]
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0092 173.64)",
+          "oklch(26.43% 0.0092 173.64)",
+          "oklch(37.86% 0.0092 173.64)",
+          "oklch(49.29% 0.0092 173.64)",
+          "oklch(60.71% 0.0092 173.64)",
+          "oklch(72.14% 0.0092 173.64)",
+          "oklch(83.57% 0.0092 173.64)",
+          "oklch(95.0% 0.0092 173.64)"
+        ]
+      },
+      "dark-soft": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0108 168.08)",
+          "oklch(26.43% 0.0108 168.08)",
+          "oklch(37.86% 0.0108 168.08)",
+          "oklch(49.29% 0.0108 168.08)",
+          "oklch(60.71% 0.0108 168.08)",
+          "oklch(72.14% 0.0108 168.08)",
+          "oklch(83.57% 0.0108 168.08)",
+          "oklch(95.0% 0.0108 168.08)"
+        ]
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0093 113.16)",
+          "oklch(26.43% 0.0093 113.16)",
+          "oklch(37.86% 0.0093 113.16)",
+          "oklch(49.29% 0.0093 113.16)",
+          "oklch(60.71% 0.0093 113.16)",
+          "oklch(72.14% 0.0093 113.16)",
+          "oklch(83.57% 0.0093 113.16)",
+          "oklch(95.0% 0.0093 113.16)"
+        ]
+      },
+      "dark-muted": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0113 158.77)",
+          "oklch(26.43% 0.0113 158.77)",
+          "oklch(37.86% 0.0113 158.77)",
+          "oklch(49.29% 0.0113 158.77)",
+          "oklch(60.71% 0.0113 158.77)",
+          "oklch(72.14% 0.0113 158.77)",
+          "oklch(83.57% 0.0113 158.77)",
+          "oklch(95.0% 0.0113 158.77)"
+        ]
+      },
+      "dark-line": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0132 158.37)",
+          "oklch(26.43% 0.0132 158.37)",
+          "oklch(37.86% 0.0132 158.37)",
+          "oklch(49.29% 0.0132 158.37)",
+          "oklch(60.71% 0.0132 158.37)",
+          "oklch(72.14% 0.0132 158.37)",
+          "oklch(83.57% 0.0132 158.37)",
+          "oklch(95.0% 0.0132 158.37)"
+        ]
+      },
+      "dark-floating": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0110 167.96)",
+          "oklch(26.43% 0.0110 167.96)",
+          "oklch(37.86% 0.0110 167.96)",
+          "oklch(49.29% 0.0110 167.96)",
+          "oklch(60.71% 0.0110 167.96)",
+          "oklch(72.14% 0.0110 167.96)",
+          "oklch(83.57% 0.0110 167.96)",
+          "oklch(95.0% 0.0110 167.96)"
+        ]
+      },
+      "dark-selection": {
+        "role": "secondary",
+        "tonalRamp": [
+          "oklch(15.0% 0.0371 231.35)",
+          "oklch(26.43% 0.0371 231.35)",
+          "oklch(37.86% 0.0371 231.35)",
+          "oklch(49.29% 0.0371 231.35)",
+          "oklch(60.71% 0.0371 231.35)",
+          "oklch(72.14% 0.0371 231.35)",
+          "oklch(83.57% 0.0371 231.35)",
+          "oklch(95.0% 0.0371 231.35)"
+        ]
+      },
+      "dark-danger": {
+        "role": "neutral",
+        "tonalRamp": [
+          "oklch(15.0% 0.0877 27.00)",
+          "oklch(26.43% 0.0877 27.00)",
+          "oklch(37.86% 0.0877 27.00)",
+          "oklch(49.29% 0.0877 27.00)",
+          "oklch(60.71% 0.0877 27.00)",
+          "oklch(72.14% 0.0877 27.00)",
+          "oklch(83.57% 0.0877 27.00)",
+          "oklch(95.0% 0.0877 27.00)"
+        ]
+      }
+    },
+    "shadows": [
+      {
+        "name": "composer",
+        "value": "0 3px 15px var(--shadow)",
+        "purpose": "ورودی گفتگو"
+      },
+      {
+        "name": "floating-response",
+        "value": "0 5px 22px var(--shadow)",
+        "purpose": "پاسخ روی PDF"
+      },
+      {
+        "name": "drawer",
+        "value": "-8px 0 24px var(--shadow)",
+        "purpose": "منوی سمت راست"
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "گذارهای کوتاه و قابل قطع"
+      },
+      {
+        "name": "drawer-enter",
+        "value": "240ms",
+        "purpose": "ورود منوی راست"
+      },
+      {
+        "name": "sheet-enter",
+        "value": "220ms",
+        "purpose": "ورود پنل پایین"
+      },
+      {
+        "name": "overlay-exit",
+        "value": "160ms",
+        "purpose": "خروج پنل"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-mobile-max",
+        "value": "360px"
+      },
+      {
+        "name": "wide-min",
+        "value": "780px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "اقدام اصلی",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "دکمهٔ اصلی فرم و اقدام تأیید.",
+      "html": "<button type=\"button\" class=\"ds-primary\">ذخیره</button>",
+      "css": ".ds-primary{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;transition:transform 120ms cubic-bezier(.22,1,.36,1),background-color 120ms cubic-bezier(.22,1,.36,1);width:100%;min-height:48px;border:0;border-radius:14px;font-size:14px;background:var(--accent);color:var(--surface);cursor:pointer}.ds-primary:hover{filter:brightness(.95);transform:translateY(-1px)}.ds-primary:active{transform:scale(.97)}.ds-primary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}.ds-primary:hover,.ds-primary:active{transform:none}}"
+    },
+    {
+      "name": "دکمهٔ آیکونی",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "کنترل خنثی با سطح لمس دایره‌ای.",
+      "html": "<button type=\"button\" class=\"ds-icon\" aria-label=\"منو\"><svg width=\"21\" height=\"21\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><path d=\"M4 6h16M4 12h16M4 18h10\"/></svg></button>",
+      "css": ".ds-icon{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;transition:transform 120ms cubic-bezier(.22,1,.36,1),background-color 120ms cubic-bezier(.22,1,.36,1);width:44px;height:44px;border:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:transparent;color:var(--ink);cursor:pointer}.ds-icon:hover{background:var(--accent-soft)}.ds-icon:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}.ds-icon:active{transform:scale(.97)}@media(prefers-reduced-motion:reduce){.ds-icon{transition:none}.ds-icon:active{transform:none}}"
+    },
+    {
+      "name": "کنترل زمینه",
+      "kind": "chip",
+      "refersTo": "chip-scope",
+      "description": "ظاهر خنثی برای زمینهٔ صفحه یا کل کتاب.",
+      "html": "<button type=\"button\" class=\"ds-scope\">صفحهٔ ۱۰۰</button>",
+      "css": ".ds-scope{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;transition:transform 120ms cubic-bezier(.22,1,.36,1),background-color 120ms cubic-bezier(.22,1,.36,1);height:44px;border:1px solid var(--line);border-radius:22px;padding:0 12px;font-size:13px;background:transparent;color:var(--ink);cursor:pointer}.ds-scope:hover{filter:brightness(.95)}.ds-scope:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}.ds-scope:active{transform:scale(.97)}@media(prefers-reduced-motion:reduce){.ds-scope{transition:none}.ds-scope:active{transform:none}}"
+    },
+    {
+      "name": "کارت مطالعه",
+      "kind": "card",
+      "refersTo": "study-card",
+      "description": "بازگشت از پاسخ به منبع کتاب.",
+      "html": "<article class=\"ds-study\"><strong>طرح کلی اندیشۀ اسلامی در قرآن</strong><p>صفحهٔ ۱۰۰</p><button type=\"button\">بازکردن کتاب</button></article>",
+      "css": ".ds-study{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;border:1px solid var(--line);border-radius:16px;padding:13px 15px;color:var(--ink);background:transparent;font-size:13px}.ds-study p{font-size:12px;line-height:1.8;color:var(--muted);margin:7px 0}.ds-study button{font:inherit;min-height:44px;padding:0;border:0;background:transparent;color:var(--accent);cursor:pointer}.ds-study button:hover{filter:brightness(.95)}.ds-study button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}"
+    },
+    {
+      "name": "ورودی گفتگو",
+      "kind": "input",
+      "refersTo": "chat-composer",
+      "description": "متن فارسی چندخطی؛ چیدمان کامل ابزارها در DESIGN.md است.",
+      "html": "<div class=\"ds-composer\"><textarea aria-label=\"پرسش از همراه\" placeholder=\"از همراه بپرسید…\"></textarea></div>",
+      "css": ".ds-composer{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:26px;padding:14px 12px 8px;box-shadow:0 3px 15px var(--shadow)}.ds-composer textarea{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;font-size:15px;line-height:1.8;min-height:34px;max-height:150px;width:100%;padding:0 7px;resize:vertical;border:0;background:transparent;color:inherit}.ds-composer textarea::placeholder{color:var(--muted);opacity:1}.ds-composer textarea:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}"
+    },
+    {
+      "name": "پاسخ شناور",
+      "kind": "card",
+      "refersTo": "response-card",
+      "description": "کارت پاسخ مستقل از صفحهٔ اصلی PDF.",
+      "html": "<article class=\"ds-response\"><p>پاسخ همراه در این بخش نمایش داده می‌شود.</p></article>",
+      "css": ".ds-response{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;font-size:15px;line-height:1.9;position:relative;background:var(--float);color:var(--ink);border:1px solid var(--line);border-radius:26px;padding:23px 19px 10px;box-shadow:0 5px 22px var(--shadow);max-height:355px;overflow:auto}.ds-response::before{content:\"\";position:absolute;top:7px;left:calc(50% - 16px);width:32px;height:3px;border-radius:4px;background:var(--muted);opacity:.35}.ds-response p{margin:0}"
+    },
+    {
+      "name": "گزینهٔ منو",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "ردیف راست‌به‌چپ منوی کشویی.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"منوی برنامه\"><button type=\"button\">دفتر یادداشت</button></nav>",
+      "css": ".ds-nav{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;}.ds-nav button{font-family:Vazirmatn,sans-serif;direction:rtl;box-sizing:border-box;width:100%;min-height:48px;padding:0 13px;text-align:right;font-size:14px;border:0;border-radius:12px;background:transparent;color:var(--ink);cursor:pointer}.ds-nav button:hover{background:var(--accent-soft)}.ds-nav button:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "آرام، خوانا، مستقیم",
+    "overview": "این سند زبان بصری فعلی رابط را ثبت می‌کند تا طراحی صفحه‌های جدید در Stitch\nبا محصول موجود هماهنگ بماند. نام محصول و «همراه» موقت‌اند؛ هویت یا لوگوی تازه\nاز این نام‌ها نتیجه‌گیری نشود. اطلاعات محصول در `PRODUCT.md` و بریف صفحه‌ها در\n`docs/design/stitch-mobile-ui-prompt.fa.md` قرار دارد.\n\nاولویت این فاز موبایل است. رابط باید به مطالعهٔ طولانی کمک کند: صفحهٔ اصلی\nPDF در مرکز توجه، کنترل‌ها کم‌حجم، پاسخ همراه در فضای باز و اطلاعات زمینه\nدر مرتبهٔ دوم. کیفیت با تایپوگرافی فارسی، فاصله‌گذاری و وضوح رفتارها شکل می‌گیرد.",
+    "keyCharacteristics": [
+      "فارسی و راست‌به‌چپ، با فونت محلی وزیرمتن.",
+      "زمینهٔ گرم و روشن، متن تیره، اقدام سبزآبی و استناد آبی.",
+      "حالت تیرهٔ مستقل برای رابط؛ صفحه‌آرایی PDF تابع فایل اصلی است.",
+      "لایه‌های شناور نرم برای پرسش و ابزارها؛ سطح مطالعه و پاسخ‌ها ساده می‌ماند."
+    ],
+    "rules": [
+      {
+        "name": "The Source Distinction Rule",
+        "body": "نشانهٔ استناد کتاب از رنگ اقدام جداست.\nمنابع اینترنتی با متن «بیرون از کتاب» و پیوند روشن مشخص می‌شوند؛ رنگ به‌تنهایی کافی نیست.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "**Do** تصمیم‌های این فاز را ابتدا برای موبایل، لمس و صفحه‌کلید باز ارزیابی کن.",
+      "**Do** PDF اصلی، فضای باز پاسخ و هویت آرام فعلی را حفظ کن.",
+      "**Do** در همهٔ صفحه‌ها از نقش‌های رنگ، فونت و فرم مشترک همین سند استفاده کن.",
+      "**Do** کنتراست خوانا، کانون واضح، سطح لمس مناسب و حالت روشن/تیرهٔ سازگار داشته باش.",
+      "**Do** منبع کتاب، متن انتخاب‌شده و محتوای بیرونی را قابل تشخیص نگه دار."
+    ],
+    "donts": [
+      "**Don't** متن PDF را با وزیرمتن بازچینی یا رنگ‌های آن را خودکار معکوس کن.",
+      "**Don't** آواتار، ابزار +، اشتراک‌گذاری یا حالت پژوهش را از الگوهای عمومی چت وارد طرح کن.",
+      "**Don't** برای هر پاراگراف کارت، سایه یا تزئین مستقل بساز.",
+      "**Don't** وضعیت دامنه، انتخاب یا خطا را فقط با تفاوت رنگ بیان کن.",
+      "**Don't** طرح‌های نمونه را مدرک اتصال پرداخت، ثبت‌نام یا سرویس‌های آماده‌نشده معرفی کن."
+    ]
+  }
+}

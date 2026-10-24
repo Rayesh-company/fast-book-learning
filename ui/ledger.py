@@ -26,6 +26,11 @@ import threading
 import time
 from pathlib import Path
 
+try:
+    from ui.store_kernel import open_store
+except ImportError:
+    from store_kernel import open_store
+
 # The tariff (T22): Toman per million tokens, config-held. The defaults
 # are the PM's starting dials for glm-5.3-flash on AvalAI — they are
 # deliberately NOT measured market prices; the shape (config over code)
@@ -55,28 +60,26 @@ LEDGER_DB = os.environ.get(
 _LOCK = threading.Lock()
 
 
+_LEDGER_SCHEMA = """CREATE TABLE IF NOT EXISTS usage_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account TEXT NOT NULL,
+    ts TEXT NOT NULL,
+    day TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    metered INTEGER NOT NULL,
+    input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    cost_toman INTEGER NOT NULL,
+    request_id TEXT
+)"""
+_LEDGER_MIGRATIONS = [
+    ("usage_entries", "account", "RENAME FROM phone"),
+    ("usage_entries", "request_id", "TEXT"),
+]
+
+
 def _connect() -> sqlite3.Connection:
-    con = sqlite3.connect(LEDGER_DB)
-    con.execute(
-        """CREATE TABLE IF NOT EXISTS usage_entries (
-               id INTEGER PRIMARY KEY AUTOINCREMENT,
-               account TEXT NOT NULL,
-               ts TEXT NOT NULL,
-               day TEXT NOT NULL,
-               kind TEXT NOT NULL,
-               metered INTEGER NOT NULL,
-               input_tokens INTEGER NOT NULL,
-               output_tokens INTEGER NOT NULL,
-               cost_toman INTEGER NOT NULL
-           )"""
-    )
-    # A pre-T21 store keys its rows `phone` — the column renames in
-    # place (the values follow when ui/migrate.py runs the attach map).
-    columns = {row[1] for row in con.execute("PRAGMA table_info(usage_entries)")}
-    if "phone" in columns and "account" not in columns:
-        con.execute("ALTER TABLE usage_entries RENAME COLUMN phone TO account")
-        con.commit()
-    return con
+    return open_store(LEDGER_DB, _LEDGER_SCHEMA, _LEDGER_MIGRATIONS)
 
 
 def _today() -> str:
@@ -108,6 +111,7 @@ def record(
     input_tokens: int,
     output_tokens: int,
     metered: bool,
+    request_id: str | None = None,
 ) -> dict:
     """One ledger entry: the Account pays for tokens, the entry says
     whether those tokens were measured or estimated."""
@@ -117,8 +121,8 @@ def record(
         try:
             con.execute(
                 "INSERT INTO usage_entries (account, ts, day, kind, metered,"
-                " input_tokens, output_tokens, cost_toman)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " input_tokens, output_tokens, cost_toman, request_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     account,
                     time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -128,6 +132,7 @@ def record(
                     input_tokens,
                     output_tokens,
                     cost,
+                    request_id,
                 ),
             )
             con.commit()
@@ -144,11 +149,16 @@ def record(
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "cost_toman": cost,
+        "request_id": request_id,
     }
 
 
 def record_composer_call(
-    account: str, kind: str, prompt: str, reply
+    account: str,
+    kind: str,
+    prompt: str,
+    reply,
+    request_id: str | None = None,
 ) -> dict | None:
     """One composer-seam call: metered when the upstream's usage block
     rode the reply, estimated from the text volumes when it did not —
@@ -161,7 +171,14 @@ def record_composer_call(
         output = output if isinstance(output, int) else estimate_tokens(
             _reply_text(reply)
         )
-        return record(account, kind, usage["prompt_tokens"], output, metered=True)
+        return record(
+            account,
+            kind,
+            usage["prompt_tokens"],
+            output,
+            metered=True,
+            request_id=request_id,
+        )
     output_text = _reply_text(reply)
     return record(
         account,
@@ -169,15 +186,26 @@ def record_composer_call(
         estimate_tokens(prompt),
         estimate_tokens(output_text),
         metered=False,
+        request_id=request_id,
     )
 
 
-def record_size_estimate(account: str, kind: str, input_bytes: int) -> dict:
+def record_size_estimate(
+    account: str,
+    kind: str,
+    input_bytes: int,
+    request_id: str | None = None,
+) -> dict:
     """The ask entry (T22): the gate knows only the request's size before
     the relay streams the answer — an input-side estimate, marked
     estimated like every non-metered entry."""
     return record(
-        account, kind, estimate_tokens("x" * max(0, input_bytes)), 0, metered=False
+        account,
+        kind,
+        estimate_tokens("x" * max(0, input_bytes)),
+        0,
+        metered=False,
+        request_id=request_id,
     )
 
 
@@ -292,3 +320,98 @@ def today_total(account: str) -> int:
     """The server-local day's spend for the Account — the number the
     profile (T24) and the console (T25) read."""
     return day_total(account, _today())
+
+
+def get_entries_by_request_id(request_id: str) -> list[dict]:
+    """Queries usage_entries where request_id == request_id ordered by id ASC."""
+    if not request_id:
+        return []
+    with _LOCK:
+        con = _connect()
+        try:
+            con.row_factory = sqlite3.Row
+            rows = con.execute(
+                "SELECT id, ts, account, cost_toman, request_id, input_tokens, output_tokens, metered, kind "
+                "FROM usage_entries WHERE request_id = ? ORDER BY id ASC",
+                (request_id,),
+            ).fetchall()
+            entries = []
+            for r in rows:
+                cost = int(r["cost_toman"] or 0)
+                in_tok = int(r["input_tokens"] or 0)
+                out_tok = int(r["output_tokens"] or 0)
+                is_met = bool(r["metered"])
+                acc = r["account"] or ""
+                entries.append(
+                    {
+                        "id": r["id"],
+                        "ts": r["ts"],
+                        "account": acc,
+                        "phone": acc,
+                        "cost_toman": cost,
+                        "amount_toman": cost,
+                        "request_id": r["request_id"],
+                        "input_tokens": in_tok,
+                        "output_tokens": out_tok,
+                        "metered": is_met,
+                        "is_metered": is_met,
+                        "kind": r["kind"],
+                        "raw_json": None,
+                    }
+                )
+            return entries
+        finally:
+            con.close()
+
+
+def get_request_usage_summary() -> dict[str, dict]:
+    """Queries usage_entries where request_id IS NOT NULL, aggregating by request_id."""
+    with _LOCK:
+        con = _connect()
+        try:
+            con.row_factory = sqlite3.Row
+            rows = con.execute(
+                "SELECT account, ts, day, kind, metered, input_tokens, output_tokens, cost_toman, request_id "
+                "FROM usage_entries WHERE request_id IS NOT NULL AND request_id != '' "
+                "ORDER BY id DESC"
+            ).fetchall()
+        finally:
+            con.close()
+
+    summary: dict[str, dict] = {}
+    for r in rows:
+        req_id = r["request_id"]
+        if not req_id:
+            continue
+        in_tok = int(r["input_tokens"] or 0)
+        out_tok = int(r["output_tokens"] or 0)
+        cost = int(r["cost_toman"] or 0)
+        is_met = bool(r["metered"])
+        acc = r["account"] or ""
+        ts = r["ts"] or ""
+        kind = r["kind"] or ""
+
+        if req_id not in summary:
+            summary[req_id] = {
+                "cost_toman": cost,
+                "input_tokens": in_tok,
+                "output_tokens": out_tok,
+                "tokens": in_tok + out_tok,
+                "metered": is_met,
+                "ts": ts,
+                "phone": acc,
+                "account": acc,
+                "kind": kind,
+            }
+        else:
+            s = summary[req_id]
+            s["cost_toman"] += cost
+            s["input_tokens"] += in_tok
+            s["output_tokens"] += out_tok
+            s["tokens"] += (in_tok + out_tok)
+            if is_met:
+                s["metered"] = True
+            if not s["account"] and acc:
+                s["account"] = acc
+                s["phone"] = acc
+    return summary
