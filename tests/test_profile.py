@@ -261,6 +261,15 @@ def test_the_image_ships_every_module_serve_imports():
             r"^\s*import\s+(?:ui\.)?(\w+)\s*$", serve_src, re.M
         )
     }
+    # The comma-list shape (from ui import audit, migrate, throttle)
+    # escaped the two patterns above once — throttle.py missed the
+    # image and the lock stayed green (caught in the 2026-10-24 review
+    # pass). Every name in that shape is a module the container needs.
+    for match in re.finditer(r"^from ui import (.+)$", serve_src, re.M):
+        for name in match.group(1).split(","):
+            name = name.strip()
+            if name:
+                named.add(name)
     named &= local
     dockerfile = (ui_dir / "Dockerfile").read_text(encoding="utf-8")
     copy_line = next(

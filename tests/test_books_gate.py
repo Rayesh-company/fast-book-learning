@@ -22,7 +22,6 @@ import urllib.request
 
 from tests.conftest import REPO_ROOT
 from tests.helpers import (
-    account_email_for_phone,
     cookie_for,
     ensure_account,
     stop_gate,
