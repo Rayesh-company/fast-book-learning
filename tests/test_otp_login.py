@@ -3,8 +3,9 @@
 فراز اسمس's pattern wire through ui/otp.py. These tests pin the four
 behaviors the door must never lose:
 
-- The fork: a phone no Account carries answers waitlist (nothing sent,
-  nothing charged); a known phone sends and only then records.
+- The refusal for a phone no Account carries: the honest 404 (nothing
+  sent, nothing charged — Accounts stay Admin-issued, the waitlist was
+  retired 2026-10-24); a known phone sends and only then records.
 - The panel's exact dialect: Edge webservice, Authorization header, the
   recipient as ONE E.164 number, the code inside the pattern's own
   variable.
@@ -21,7 +22,7 @@ import urllib.request
 import pytest
 
 from tests.helpers import stop_gate, with_gate
-from ui import accounts, otp
+from ui import accounts, otp, serve
 
 
 @pytest.fixture(autouse=True)
@@ -82,25 +83,29 @@ def _otp_post(base, path, payload):
 def _patched_panel(monkeypatch):
     """A configured panel + a test clock: env-shaped facts on the OTP
     module, the send seam on urlopen, and time.time behind a mutable
-    tick so the cooldown and the TTL are deterministic."""
+    tick so the cooldown and the TTL are deterministic. The pattern
+    param is pinned too: serve.py's import-time load_env() pours the
+    local .env into os.environ (FARAZSMS_PATTERN_PARAM rides a live
+    panel's own name, 'codes'), and the tests must not see the
+    machine's panel — they assert the fixture's 'codeotp' dialect."""
     panel = FakePanel()
     clock = {"t": 1_800_000_000.0}
     monkeypatch.setattr(otp, "FARAZ_API_KEY", "test-panel-key")
     monkeypatch.setattr(otp, "FARAZ_PATTERN_CODE", "otp-pattern-1")
     monkeypatch.setattr(otp, "FARAZ_FROM_NUMBER", "50002178584000")
+    monkeypatch.setattr(otp, "FARAZ_PATTERN_PARAM", "codeotp")
     monkeypatch.setattr(otp, "urlopen", panel)
     monkeypatch.setattr(time, "time", lambda: clock["t"])
     return panel, clock
 
 
-def test_unknown_phone_is_the_waitlist_nothing_sent(tmp_path, monkeypatch):
+def test_unknown_phone_is_the_honest_404_nothing_sent(tmp_path, monkeypatch):
     panel, _ = _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         status, payload = _otp_post(base, "/auth/otp/request", {"phone": "09120000000"})
-        assert status == 200
-        assert payload == {"waitlist": True}
+        assert status == 404
+        assert payload == {"detail": serve.OTP_UNKNOWN_PHONE_404_DETAIL}
         assert panel.sent == []  # no Account, no send, no charge
     finally:
         stop_gate(server, originals)
@@ -112,7 +117,6 @@ def test_known_phone_sends_the_pattern_and_verifies_into_login(
     panel, _ = _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         # with_gate's patch_accounts already owns the store; the phone
         # rides attached in its E.164 dressing — the ten-digit match
         # must see through it.
@@ -120,7 +124,7 @@ def test_known_phone_sends_the_pattern_and_verifies_into_login(
 
         status, payload = _otp_post(base, "/auth/otp/request", {"phone": "۰۹۱۲۱۱۱۲۲۳۳"})
         assert status == 200
-        assert payload == {"waitlist": False}
+        assert payload == {}
         assert len(panel.sent) == 1
         send = panel.sent[0]
         # The panel's own dialect, verified live 2026-10-23.
@@ -169,7 +173,6 @@ def test_the_cooldown_and_the_failed_send(tmp_path, monkeypatch):
     panel, clock = _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         accounts.create_account("a@book.ir", "pass-word-1", phone="09120001111")
 
         assert _otp_post(base, "/auth/otp/request", {"phone": "09120001111"})[0] == 200
@@ -195,7 +198,6 @@ def test_the_days_cap(tmp_path, monkeypatch):
     panel, clock = _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         accounts.create_account("a@book.ir", "pass-word-1", phone="09120001111")
         for _ in range(otp.OTP_DAILY_PER_PHONE):
             assert _otp_post(base, "/auth/otp/request", {"phone": "09120001111"})[0] == 200
@@ -214,7 +216,6 @@ def test_expired_code_never_verifies(tmp_path, monkeypatch):
     panel, clock = _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         accounts.create_account("a@book.ir", "pass-word-1", phone="09120001111")
         assert _otp_post(base, "/auth/otp/request", {"phone": "09120001111"})[0] == 200
         code = panel.sent[0]["body"]["attributes"]["codeotp"]
@@ -232,7 +233,6 @@ def test_unconfigured_panel_is_the_honest_503(tmp_path, monkeypatch):
     monkeypatch.setattr(otp, "FARAZ_API_KEY", "")  # half-configured door
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         accounts.create_account("a@book.ir", "pass-word-1", phone="09120002222")
         status, payload = _otp_post(base, "/auth/otp/request", {"phone": "09120002222"})
         assert status == 503
@@ -242,24 +242,16 @@ def test_unconfigured_panel_is_the_honest_503(tmp_path, monkeypatch):
         stop_gate(server, originals)
 
 
-def test_bad_phones_and_the_waitlist_door(tmp_path, monkeypatch):
+def test_bad_phones_refuse_their_own_400(tmp_path, monkeypatch):
     _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         for bad in ("9120003333", "0912000333", "0091212345678", "+441234567890"):
             status, payload = _otp_post(base, "/auth/otp/request", {"phone": bad})
             assert status == 400, bad
             assert "۱۱ رقم" in payload["detail"]
         status, _ = _otp_post(base, "/auth/otp/request", {"phone": ""})
         assert status == 400
-
-        # The waitlist: idempotent, one row per phone, joined in order.
-        assert _otp_post(base, "/waitlist", {"phone": "09120004444"})[0] == 200
-        assert _otp_post(base, "/waitlist", {"phone": "09120004444"})[0] == 200
-        assert _otp_post(base, "/waitlist", {"phone": "09120005555"})[0] == 200
-        rows = otp.list_waitlist()
-        assert [row["phone"] for row in rows] == ["09120004444", "09120005555"]
     finally:
         stop_gate(server, originals)
 
@@ -268,7 +260,6 @@ def test_a_200_that_says_error_is_still_a_failed_send(tmp_path, monkeypatch):
     panel, clock = _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         accounts.create_account("a@book.ir", "pass-word-1", phone="09120007777")
         # The panel answers HTTP 200 with {"status":"error"} for some
         # refusals — the login never queued, so it must answer 502 and
@@ -288,7 +279,6 @@ def test_five_wrong_guesses_kill_the_code(tmp_path, monkeypatch):
     panel, _ = _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        monkeypatch.setattr(otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3")
         accounts.create_account("a@book.ir", "pass-word-1", phone="09120006666")
         assert _otp_post(base, "/auth/otp/request", {"phone": "09120006666"})[0] == 200
         code = panel.sent[0]["body"]["attributes"]["codeotp"]

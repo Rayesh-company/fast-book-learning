@@ -1,8 +1,8 @@
 """The anonymous doors' per-IP throttle (F-002/F-003 of the 2026-10-24
 review): the login's bucket counts refused credentials only and blocks
-before the verify, the OTP request's and the waitlist's buckets spend
-on every attempt, and the buckets are per-address — one attacker's
-spent budget never locks out another address."""
+before the verify, the OTP doors' buckets spend on every attempt, and
+the buckets are per-address — one attacker's spent budget never locks
+out another address."""
 
 import sys
 from pathlib import Path
@@ -88,7 +88,7 @@ def test_the_otp_request_budget_spends_on_every_knock(tmp_path):
     base, server, original = with_gate(tmp_path, NoUpstream())
     headers = {"X-Real-IP": "203.0.113.10"}
     try:
-        phone = "09350000001"  # no Account — the waitlist fork's 200
+        phone = "09350000001"  # no Account — the honest 404
         for _ in range(30):
             status, payload = raw_post(
                 base,
@@ -96,8 +96,8 @@ def test_the_otp_request_budget_spends_on_every_knock(tmp_path):
                 {"phone": phone},
                 extra_headers=headers,
             )
-            assert status == 200
-            assert payload == {"waitlist": True}
+            assert status == 404
+            assert payload == {"detail": serve.OTP_UNKNOWN_PHONE_404_DETAIL}
         status, payload = raw_post(
             base,
             "/auth/otp/request",
@@ -110,40 +110,13 @@ def test_the_otp_request_budget_spends_on_every_knock(tmp_path):
         stop_gate(server, original)
 
 
-def test_the_waitlist_budget_prices_the_form_spam(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        serve.otp, "WAITLIST_DB", tmp_path / "waitlist.sqlite3"
-    )
-    base, server, original = with_gate(tmp_path, NoUpstream())
-    headers = {"X-Real-IP": "203.0.113.11"}
-    try:
-        for _ in range(10):
-            status, _ = raw_post(
-                base,
-                "/waitlist",
-                {"phone": "09350000002"},
-                extra_headers=headers,
-            )
-            assert status == 200
-        status, payload = raw_post(
-            base,
-            "/waitlist",
-            {"phone": "09350000002"},
-            extra_headers=headers,
-        )
-        assert status == 429
-        assert payload["detail"] == serve.THROTTLE_429_DETAIL
-    finally:
-        stop_gate(server, original)
-
-
 def test_reset_empties_every_bucket(tmp_path):
     throttle.record(throttle.LOGIN_FAILURES, "203.0.113.12")
-    throttle.record(throttle.WAITLIST_JOINS, "203.0.113.12")
+    throttle.record(throttle.OTP_REQUESTS, "203.0.113.12")
     assert throttle.blocked(throttle.LOGIN_FAILURES, "203.0.113.12") is False
     for _ in range(9):
         throttle.record(throttle.LOGIN_FAILURES, "203.0.113.12")
     assert throttle.blocked(throttle.LOGIN_FAILURES, "203.0.113.12") is True
     throttle.reset()
     assert throttle.blocked(throttle.LOGIN_FAILURES, "203.0.113.12") is False
-    assert throttle.allow(throttle.WAITLIST_JOINS, "203.0.113.12") is True
+    assert throttle.allow(throttle.OTP_REQUESTS, "203.0.113.12") is True

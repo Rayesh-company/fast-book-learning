@@ -1,9 +1,9 @@
 """The SMS login (2026-10-23): the OTP layer ADR-0013 parked as
 "layerable later without rework" — the mobile UI's phone-first flow
-(requestOtp → waitlist-or-code → verifyOtp) already spoke its shape,
-and this module is the server half that was never wired.
+(requestOtp → verifyOtp) already spoke its shape, and this module is
+the server half that was never wired.
 
-Three pieces:
+Two pieces:
 
 - The one-time codes: a six-digit secret per phone, five minutes of
   life, at most five wrong tries, one (re)send a minute and ten a day
@@ -18,9 +18,10 @@ Three pieces:
   ride a registered الگو, so the message itself lives in the operator's
   panel, never in this repo. Verified live 2026-10-23: pattern list,
   balance, and a probe send all answered on this dialect.
-- The waitlist: phones with no Account yet — the flow's honest answer
-  to "شماره‌ای که هنوز حساب ندارد" — persisted beside the other
-  stores because it is the sales list, not a login artifact.
+
+(The waitlist store this module once carried was retired 2026-10-24:
+a phone no Account carries answers the request door's honest 404, and
+Accounts stay Admin-issued — ADR-0013.)
 
 The urlopen seam is module-level exactly like serve.py's other
 upstreams: tests patch otp.urlopen and never touch the network.
@@ -32,10 +33,8 @@ import datetime
 import json
 import os
 import secrets
-import sqlite3
 import threading
 import time
-from pathlib import Path
 from urllib.request import Request, urlopen
 
 # The panel's webservice (farazsms.com's documented API, verified live
@@ -59,14 +58,6 @@ OTP_TTL_SECONDS = 300
 OTP_RESEND_SECONDS = 60
 OTP_MAX_ATTEMPTS = 5
 OTP_DAILY_PER_PHONE = 10
-
-# The waitlist's own file (the quotas.py pattern): ui/ in dev, beside
-# the other stores; WAITLIST_DB moves it for tests and deploys.
-WAITLIST_DB = Path(
-    os.environ.get(
-        "WAITLIST_DB", str(Path(__file__).resolve().parent / "waitlist.sqlite3")
-    )
-)
 
 
 class OtpRateLimited(Exception):
@@ -202,40 +193,3 @@ def verify_otp(phone: str, code: str, now: float = None) -> bool:
     a wrong guess (the guesser learns nothing from the difference)."""
     now = time.time() if now is None else now
     return CODES.verify(phone, code, now)
-
-
-def join_waitlist(phone: str) -> None:
-    """One phone onto the waitlist — idempotent: the same phone twice
-    is the same interested person, not two leads."""
-    conn = sqlite3.connect(str(WAITLIST_DB), timeout=5)
-    try:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS waitlist ("
-            "phone TEXT PRIMARY KEY, joined_at TEXT NOT NULL)"
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO waitlist (phone, joined_at)"
-            " VALUES (?, ?)",
-            (phone, datetime.datetime.now().isoformat(timespec="seconds")),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def list_waitlist():
-    """The waitlist in join order — the operator's list when capacity
-    opens (Accounts are still Admin-issued, ADR-0013; the waitlist is
-    who to issue them to)."""
-    conn = sqlite3.connect(str(WAITLIST_DB), timeout=5)
-    try:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS waitlist ("
-            "phone TEXT PRIMARY KEY, joined_at TEXT NOT NULL)"
-        )
-        rows = conn.execute(
-            "SELECT phone, joined_at FROM waitlist ORDER BY joined_at"
-        ).fetchall()
-    finally:
-        conn.close()
-    return [{"phone": row[0], "joined_at": row[1]} for row in rows]

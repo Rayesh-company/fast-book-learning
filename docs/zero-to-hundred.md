@@ -437,6 +437,8 @@ URL پایه با `EXPO_PUBLIC_API_URL` (پیش‌فرض: `https://booksai.rayes
 | مسیر | متد | گیت | بدنه → پاسخ |
 |---|---|---|---|
 | `/auth/login` | POST | — | `{email,password}` → `{email,role,token}` + کوکی |
+| `/auth/otp/request` | POST | — (throttle per-IP) | `{phone}` → `{}` + پیامک کد ۶ رقمی؛ شمارهٔ بی‌Account همان ۴۰۴ صادق (فهرست انتظار حذف ۲۰۲۶-۱۰-۲۴) |
+| `/auth/otp/verify` | POST | — (throttle per-IP) | `{phone,code}` → همان بدنهٔ `/auth/login` + کوکی |
 | `/auth/me` · `/auth/logout` | GET · POST | باز برای رسیدن | whoami / پاک‌کردن کوکی |
 | `/auth/accounts` | POST | admin | صدور Account |
 | `/sessions` | GET · POST | Account | فهرست / `{book,title}` → `{id,…}` |

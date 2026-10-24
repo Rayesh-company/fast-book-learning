@@ -51,3 +51,13 @@ in memory only; delivery rides فراز اسمس (ippanel) pattern messages — 
 never travels as free text, and the الگو lives in the operator's panel, not in
 the repo. A successful verify answers `/auth/login`'s own body: to every later
 endpoint this IS the email login, arrived by phone.
+
+## Addendum — the waitlist retires (2026-10-24)
+
+The PM ordered the waitlist view gone: the flow's fork (waitlist-or-code) is
+deleted outright. A phone no Account carries now answers the request door's
+one honest 404 («این شماره در کتاب و همراه ثبت نشده است.») — nothing sent,
+nothing charged, no sales list kept. The `/waitlist` route, the waitlist
+sqlite store, and its throttle bucket are removed with it. The decision's
+core stands unchanged: Accounts are created only by the Admin; open SMS
+signup would be an explicit amendment of this ADR and has NOT been made.

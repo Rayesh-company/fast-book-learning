@@ -210,13 +210,16 @@ export function createApi({ fetchImpl = fetch } = {}) {
       storeToken(null);
       await request('/auth/logout', { method: 'POST' });
     },
+    // The SMS login (2026-10-23): request sends the code — a phone no
+    // Account carries answers the 404 that shows on the phone form
+    // (the waitlist was retired 2026-10-24); verify answers the email
+    // login's own body.
     requestOtp: phone => request('/auth/otp/request', { method: 'POST', body: { phone } }),
     verifyOtp: async (phone, code) => {
       const payload = await request('/auth/otp/verify', { method: 'POST', body: { phone, code } });
       storeToken(payload.token || null);
       return payload;
     },
-    joinWaitlist: phone => request('/waitlist', { method: 'POST', body: { phone } }),
     profile: async () => {
       await request('/profile/data');
       return { subscription: null, subscription_available: false, questions_remaining: null };

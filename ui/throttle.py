@@ -1,17 +1,17 @@
 """The anonymous doors' per-IP throttle (F-002/F-003 of the 2026-10-24
-security review): /auth/login, the two OTP knocks, and /waitlist are
-the only endpoints an unauthenticated stranger can reach, so they are
-the only ones a per-IP bound protects.
+security review): /auth/login and the two OTP knocks are the only
+endpoints an unauthenticated stranger can reach, so they are the only
+ones a per-IP bound protects.
 
 Two shapes, because the doors differ:
 - The login's bucket counts FAILURES only (blocked() before the
   verify, record() after a refused credential) — a successful login
   never feeds it, so a shared machine's honest users never lock each
   other out and the test suite's many logins stay free.
-- The OTP request's and the waitlist's buckets count EVERY attempt —
-  the phone-account oracle (the waitlist fork's 200) and the waitlist's
-  own write are each one honest-looking request, so the budget must
-  spend on all of them.
+- The OTP request's and verify's buckets count EVERY attempt — the
+  phone-account oracle (the no-Account 404 against the code send) is
+  itself one honest-looking request, so the budget must spend on all
+  of them.
 
 Fixed-window counters in process memory: one server process serves
 the sheet (the compose shape), so a shared store buys nothing yet; a
@@ -35,12 +35,11 @@ _BUCKETS: dict[tuple[str, str], tuple[int, float]] = {}
 # The buckets: (name, budget, window seconds). The login's ten
 # failures per fifteen minutes is the recorded AppSec floor; the OTP
 # request's thirty covers a family of phones sharing one address
-# while still pricing out number-mining; the waitlist's ten prices a
-# form nobody legitimately spams.
+# while still pricing out number-mining; the verify's thirty prices a
+# guesser that rotates numbers against the per-phone five-try cap.
 LOGIN_FAILURES = ("login-fail", 10, 15 * 60)
 OTP_REQUESTS = ("otp-request", 30, 15 * 60)
 OTP_VERIFIES = ("otp-verify", 30, 15 * 60)
-WAITLIST_JOINS = ("waitlist", 10, 15 * 60)
 
 
 def client_ip(handler) -> str:

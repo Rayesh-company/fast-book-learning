@@ -20,9 +20,8 @@ export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequi
   me:async()=>{if(!loginRequired&&!data.account){data.account={phone:'۰۹۱۲۳۴۵۶۷۸۹',email:'',role:'user'};save();}return clone(data.account);},
   login:async()=>{data.account={phone:'۰۹۱۲۳۴۵۶۷۸۹',role:'user'};save();return clone(data.account);},
   logout:async()=>{data.account=null;save();},
-  requestOtp:async phone=>{await wait();return {phone,waitlist:false};},
+  requestOtp:async phone=>{await wait();return {phone};},
   verifyOtp:async(phone,code)=>{if(code!=='123456')throw new Error('کد نمونه ۱۲۳۴۵۶ است.');data.account={phone,role:'user'};save();return clone(data.account);},
-  joinWaitlist:async phone=>{await wait();return {phone,joined:true};},
   profile:async()=>({subscription:clone(data.subscription),questions_remaining:data.quota,question_limit:30}),
   getProfile:async()=>({profile:clone(data.account?.profile||null),profile_completed:Boolean(data.account?.profile_completed)}),
   saveProfile:async profile=>{

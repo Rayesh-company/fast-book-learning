@@ -571,7 +571,11 @@ OTP_UNCONFIGURED_503_DETAIL = (
     "ورود پیامکی روی این سرور تنظیم نشده است؛ از ورود با ایمیل استفاده کنید."
 )
 OTP_SEND_502_DETAIL = "پیامک فرستاده نشد؛ کمی بعد دوباره کد بگیرید."
-WAITLIST_JOINED_DETAIL = "در فهرست انتظار ثبت شدید."
+# The waitlist's retirement (2026-10-24): a phone no Account carries is
+# no longer a fork with its own view — the door's one honest refusal.
+# Accounts stay Admin-issued (ADR-0013), so the answer names the fact
+# the caller can act on: this number is not in the system.
+OTP_UNKNOWN_PHONE_404_DETAIL = "این شماره در کتاب و همراه ثبت نشده است."
 # The برنامک's own refusals (ADR-0021, DRAFT display vocabulary
 # pending PM approval — the CONTEXT.md draft row carries them): the
 # initData that fails the signature or the freshness bound refuses
@@ -2492,16 +2496,16 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def _otp_request(self) -> None:
         """The SMS login's first knock (POST /auth/otp/request): the
-        phone in, the flow's fork out. A phone no Account carries is
-        the waitlist answer — nothing sent, nothing charged, the UI's
-        own 'به فهرست انتظار بپیوندید' view. A known phone sends the
-        six-digit code down فراز اسمس's pattern wire (ui/otp.py owns
-        the cooldown, the daily cap, and the code's five-minute life).
-        The two configuration failures never wear a user's clothing:
-        the unconfigured panel is the same honest 503 the برنامک's
-        unconfigured bot answers, and a refused send answers 502 having
-        charged nothing against the cooldown (ui/otp.py records only
-        after the send succeeds)."""
+        phone in, the code out. A phone no Account carries is the one
+        honest 404 (ADR-0013 — Accounts stay Admin-issued, the waitlist
+        was retired 2026-10-24): nothing sent, nothing charged. A known
+        phone sends the six-digit code down فراز اسمس's pattern wire
+        (ui/otp.py owns the cooldown, the daily cap, and the code's
+        five-minute life). The two configuration failures never wear a
+        user's clothing: the unconfigured panel is the same honest 503
+        the برنامک's unconfigured bot answers, and a refused send
+        answers 502 having charged nothing against the cooldown
+        (ui/otp.py records only after the send succeeds)."""
         length = int(self.headers.get("Content-Length", "0") or "0")
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
@@ -2516,14 +2520,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
             return
         # The request door's per-IP budget (F-003): every knock spends —
-        # the waitlist fork's 200 and the code send alike — so number-
-        # mining this endpoint's oracle costs the attacker its own
-        # window, beside the per-phone cooldown and daily cap.
+        # the no-Account 404 and the code send alike — so number-mining
+        # this endpoint's oracle costs the attacker its own window,
+        # beside the per-phone cooldown and daily cap.
         if not throttle.allow(throttle.OTP_REQUESTS, throttle.client_ip(self)):
             self._send_json(429, {"detail": THROTTLE_429_DETAIL})
             return
         if account_by_phone(phone) is None:
-            self._send_json(200, {"waitlist": True})
+            self._send_json(404, {"detail": OTP_UNKNOWN_PHONE_404_DETAIL})
             return
         if not otp.configured():
             self._send_json(503, {"detail": OTP_UNCONFIGURED_503_DETAIL})
@@ -2535,7 +2539,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
         except otp.OtpSendFailed:
             self._send_json(502, {"detail": OTP_SEND_502_DETAIL})
         else:
-            self._send_json(200, {"waitlist": False})
+            self._send_json(200, {})
 
     def _otp_verify(self) -> None:
         """The SMS login's second knock (POST /auth/otp/verify): the
@@ -2580,32 +2584,6 @@ class SessionHandler(SimpleHTTPRequestHandler):
             },
             extra_headers=[self._auth_cookie_header(token)],
         )
-
-    def _waitlist_join(self) -> None:
-        """The flow's honest dead end made useful (POST /waitlist): a
-        phone with no Account joins the waitlist — idempotent, one row
-        per phone. Accounts stay Admin-issued (ADR-0013); this list is
-        who to issue them to when capacity opens."""
-        length = int(self.headers.get("Content-Length", "0") or "0")
-        try:
-            payload = json.loads(self.rfile.read(length) or b"{}")
-            raw = payload["phone"]
-            if not isinstance(raw, str):
-                raise ValueError("phone must be a string")
-        except (ValueError, KeyError, TypeError):
-            self._send_json(400, {"detail": OTP_BAD_BODY_DETAIL})
-            return
-        phone = normalize_local_phone(raw)
-        if not phone:
-            self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
-            return
-        # The waitlist's per-IP budget: the sales list must not be a
-        # dump a script fills with a generated number space.
-        if not throttle.allow(throttle.WAITLIST_JOINS, throttle.client_ip(self)):
-            self._send_json(429, {"detail": THROTTLE_429_DETAIL})
-            return
-        otp.join_waitlist(phone)
-        self._send_json(200, {"detail": WAITLIST_JOINED_DETAIL})
 
     def _auth_create_account(self) -> None:
         """The Admin issues an operator Account (ADR-0013) — the only
@@ -2705,15 +2683,12 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path == "/auth/otp/request":
             # The SMS login's first knock (2026-10-23): the phone in,
-            # waitlist-or-code out — open like /auth/login, there is no
-            # other door to protect.
+            # the code out — open like /auth/login, there is no other
+            # door to protect.
             self._otp_request()
             return
         if path == "/auth/otp/verify":
             self._otp_verify()
-            return
-        if path == "/waitlist":
-            self._waitlist_join()
             return
         if path == "/auth/accounts":
             self._auth_create_account()

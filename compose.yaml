@@ -300,14 +300,13 @@ services:
       # The SMS login (2026-10-23, فراز اسمس): the panel's facts ride
       # the compose .env like every other credential (webservice:
       # api.iranpayamak.com, Api-Key header); any of the three unset,
-      # /auth/otp/request answers the honest 503 while the waitlist
-      # fork keeps working. The waitlist itself (phones with no
-      # Account) persists on the same volume as the Accounts.
+      # /auth/otp/request answers the honest 503. (The waitlist fork
+      # this comment once described was retired 2026-10-24 — a phone
+      # no Account carries answers the door's honest 404.)
       FARAZSMS_API_KEY: ${FARAZSMS_API_KEY:-}
       FARAZSMS_PATTERN_CODE: ${FARAZSMS_PATTERN_CODE:-}
       FARAZSMS_FROM_NUMBER: ${FARAZSMS_FROM_NUMBER:-}
       FARAZSMS_PATTERN_PARAM: ${FARAZSMS_PATTERN_PARAM:-codeotp}
-      WAITLIST_DB: /data/waitlist.sqlite3
       # The برنامک's bot token (ADR-0021): the Eitaayar panel's token —
       # the initData signature's key and sendMessage's credential.
       # Deploys carry it as a FILE on the volume (EITAA_BOT_TOKEN_FILE,
