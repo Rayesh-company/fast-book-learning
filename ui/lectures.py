@@ -83,7 +83,9 @@ def audio_url(books_dir: Path, dataset: str, session: int) -> str | None:
         return None
     base = os.environ.get("LECTURE_AUDIO_BASE_URL", "").strip()
     if base:
-        return base.replace("{book}", dataset).rstrip("/") + "/" + record["audio"]
+        if "{book}" in base:
+            return base.replace("{book}", dataset).rstrip("/") + "/" + record["audio"]
+        return f"{base.rstrip('/')}/{dataset}/{record['audio']}"
     if audio_file(books_dir, dataset, session) is None:
         return None
     return f"/books/{dataset}/lectures/{session}/audio"
@@ -107,6 +109,7 @@ def lecture_list(books_dir: Path, dataset: str) -> dict | None:
             "coverage": record.get("coverage"),
             "sentences": len(record.get("sentences", [])),
             "audio_available": audio_url(books_dir, dataset, number) is not None,
+            "audio_url": audio_url(books_dir, dataset, number),
         })
     return {"book": dataset, "title": index.get("title"), "sessions": sessions}
 
@@ -119,6 +122,7 @@ def lecture_session(books_dir: Path, dataset: str, session: int) -> dict | None:
         return None
     pages = {str(b[0]) for s in record.get("sentences", []) for b in s.get("boxes", [])}
     sizes = index.get("page_sizes", {})
+    url = audio_url(books_dir, dataset, session)
     payload = {
         "book": dataset,
         "session": session,
@@ -128,7 +132,8 @@ def lecture_session(books_dir: Path, dataset: str, session: int) -> dict | None:
         "book_pages": record.get("book_pages"),
         "cover_page": record.get("cover_page"),
         "coverage": record.get("coverage"),
-        "audio_url": audio_url(books_dir, dataset, session),
+        "audio_available": url is not None,
+        "audio_url": url,
         "page_sizes": {page: sizes[page] for page in sorted(pages, key=int) if page in sizes},
         "sentences": record.get("sentences", []),
     }

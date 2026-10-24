@@ -92,11 +92,11 @@ def test_preview_serves_lectures_manifest_session_and_range_audio(tmp_path):
             assert response.status == 200
             assert response.headers["Content-Type"].startswith("application/json")
             data = json.loads(response.read().decode())
-            assert isinstance(data, list)
-            assert len(data) == 1
-            assert data[0]["session"] == 1
-            assert data[0]["audio_available"] is True
-            assert data[0]["audio_url"] == "/books/tarhe-kolli/lectures/1/audio"
+            sessions = data["sessions"] if isinstance(data, dict) else data
+            assert len(sessions) == 1
+            assert sessions[0]["session"] == 1
+            assert sessions[0]["audio_available"] is True
+            assert sessions[0]["audio_url"] == "/books/tarhe-kolli/lectures/1/audio"
 
         # 2. GET /books/tarhe-kolli/lectures/1
         with urlopen(base + "/books/tarhe-kolli/lectures/1") as response:
@@ -167,7 +167,8 @@ def test_preview_lecture_external_dir_and_base_url(tmp_path, monkeypatch):
         base = f"http://127.0.0.1:{server.server_port}"
         with urlopen(base + "/books/tarhe-kolli/lectures") as response:
             data = json.loads(response.read().decode())
-            assert data[0]["audio_available"] is True
+            sessions = data["sessions"] if isinstance(data, dict) else data
+            assert sessions[0]["audio_available"] is True
         with urlopen(base + "/books/tarhe-kolli/lectures/1/audio") as response:
             assert response.status == 200
             assert response.read() == b"EXT_AUDIO" * 50
@@ -185,8 +186,9 @@ def test_preview_lecture_external_dir_and_base_url(tmp_path, monkeypatch):
         base2 = f"http://127.0.0.1:{server2.server_port}"
         with urlopen(base2 + "/books/tarhe-kolli/lectures") as response:
             data = json.loads(response.read().decode())
-            assert data[0]["audio_available"] is True
-            assert data[0]["audio_url"] == "https://cdn.example.com/audio/tarhe-kolli/session_01.mp3"
+            sessions = data["sessions"] if isinstance(data, dict) else data
+            assert sessions[0]["audio_available"] is True
+            assert sessions[0]["audio_url"] == "https://cdn.example.com/audio/tarhe-kolli/session_01.mp3"
     finally:
         server2.shutdown()
         server2.server_close()

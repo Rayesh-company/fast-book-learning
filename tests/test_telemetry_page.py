@@ -13,6 +13,7 @@ Verifies:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import os
 import re
@@ -417,13 +418,14 @@ def test_the_filters_survive_the_url(tmp_path):
             phone_2, f"learner-{phone_2}", "پرسش دوم", "پاسخ دوم", request_id=req_id_2
         )
 
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         admin_cookie = cookie_for(base, ADMIN_EMAIL)
-        query = f"?day=2026-10-23&phone={phone_1}&dataset=tarhe-kolli&status=ok"
+        query = f"?day={today}&phone={phone_1}&dataset=tarhe-kolli&status=ok"
         st, ct, html = get_req(base, f"/admin/requests{query}", cookie=admin_cookie)
         assert st == 200
 
         # Verify filter inputs maintain their values in the form
-        assert 'name="day" value="2026-10-23"' in html
+        assert f'name="day" value="{today}"' in html
         assert f'name="phone" value="{phone_1}"' in html
         assert 'name="dataset" value="tarhe-kolli"' in html
         assert 'name="status" value="ok"' in html

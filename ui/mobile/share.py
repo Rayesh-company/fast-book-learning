@@ -22,8 +22,12 @@ BOOK_IDS = {"tarhe-kolli", "70143-336"}
 STATIC_TYPES = {".html", ".css", ".mjs", ".js", ".woff2", ".woff", ".ttf", ".svg", ".png", ".jpg"}
 
 
-def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR):
+def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR,
+                    lecture_audio_dir: Path | str | None = None):
     books_dir, ui_dir = books_dir.resolve(), ui_dir.resolve()
+    if lecture_audio_dir:
+        import os
+        os.environ['LECTURE_AUDIO_DIR'] = str(Path(lecture_audio_dir).resolve())
 
     class PreviewHandler(SimpleHTTPRequestHandler):
         def do_GET(self):

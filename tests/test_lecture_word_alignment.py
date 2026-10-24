@@ -44,7 +44,7 @@ class WordAlignmentTests(unittest.TestCase):
         self.assertTrue(all(w['boxes'] for w in words))
 
     def test_real_recognized_session_three_sentence_survives_pdf_spelling_difference(self):
-        fixture = json.loads((Path(__file__).parent/'fixtures/lecture-ctc/session-03-pdf-placement.json').read_text())
+        fixture = json.loads((Path(__file__).parent/'fixtures/lecture-ctc/session-03-pdf-placement.json').read_text(encoding='utf-8'))
         stream = Stream({int(p):words for p,words in fixture['pages'].items()})
         prepared = prepare_words(fixture['session'], stream)
         by_offset = {w['text_start']:w for w in prepared}
