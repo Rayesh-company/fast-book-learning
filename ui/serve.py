@@ -1075,6 +1075,30 @@ class SessionHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), format % args))
 
+    # The security headers (F-004 of the 2026-10-24 review): every
+    # response carries nosniff, a no-referrer promise, and a CSP — the
+    # sheet is same-origin everything (vendored pdf.js, self-hosted
+    # fonts, no CDN), so 'self' with 'unsafe-inline' for the inline
+    # scripts/styles the single-file pages carry is the honest shape.
+    # The برنامک's own surfaces (/mobile, /eitaa) skip the frame
+    # protection: a Telegram-style desktop client may open the
+    # mini-app in an iframe, and DENY there would blank it — nowhere
+    # else frames this server, and the admin console least of all.
+    _SECURITY_CSP = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "media-src 'self' blob:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "worker-src 'self' blob:; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "object-src 'none'"
+    )
+    _FRAMEABLE_PATHS = ("/mobile", "/eitaa")
+
     def end_headers(self) -> None:
         # The sheet is an evolving single page: every load must revalidate,
         # never render a stale cached copy after a deploy (a plain refresh
@@ -1084,6 +1108,17 @@ class SessionHandler(SimpleHTTPRequestHandler):
             "Cache-Control",
             getattr(self, "_cache_policy", None) or "no-cache",
         )
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        path = (self.path or "").split("?", 1)[0]
+        if path.startswith(self._FRAMEABLE_PATHS):
+            self.send_header("Content-Security-Policy", self._SECURITY_CSP)
+        else:
+            self.send_header(
+                "Content-Security-Policy",
+                self._SECURITY_CSP + "; frame-ancestors 'none'",
+            )
+            self.send_header("X-Frame-Options", "DENY")
         # The CORS stamps (ADR-0020): only for a browser Origin on the
         # env's allowlist, and only ever TO that origin — no allowlist,
         # no stamps, the recorded production shape.
