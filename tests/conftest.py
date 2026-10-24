@@ -30,6 +30,17 @@ def _isolated_audit(tmp_path, monkeypatch):
     monkeypatch.setattr(audit, "AUDIT_DB", tmp_path / "audit.sqlite3")
 
 
+@pytest.fixture(autouse=True)
+def _clean_throttle():
+    """Every test starts with empty throttle buckets — the anonymous
+    doors' per-IP counters are module-level state, and one test's
+    hammering must never spend the next test's login budget (the
+    ledger/audit isolation shape)."""
+    from ui import throttle
+
+    throttle.reset()
+
+
 def parse_dotenv(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():

@@ -75,7 +75,7 @@ try:
         verify_login,
     )
     from ui import otp
-    from ui import audit, migrate
+    from ui import audit, migrate, throttle
     from ui.console import console_html
     from ui.composer import (
         COMPOSER_MAX_TOKENS,
@@ -220,7 +220,7 @@ except ImportError:  # the container runs this file as a script beside the modul
         verify_login,
     )
     import otp
-    import audit, migrate
+    import audit, migrate, throttle
     from console import console_html
     from report import research_session_report
     from ask import ask_pool
@@ -499,6 +499,12 @@ OTP_BAD_BODY_DETAIL = "شمارهٔ موبایل را بفرستید."
 OTP_BAD_PHONE_DETAIL = "شمارهٔ موبایل ایرانی را با ۱۱ رقم وارد کنید."
 OTP_BAD_CODE_401_DETAIL = "کد درست نیست یا به پایان رسیده است. دوباره کد بگیرید."
 OTP_RATE_429_DETAIL = "برای درخواست کد جدید یک دقیقه صبر کنید."
+# The per-IP throttle's own refusal (F-002/F-003 of the 2026-10-24
+# review): one Farsi note for every anonymous door's exhausted budget —
+# the guesser learns the bound exists, nothing more.
+THROTTLE_429_DETAIL = (
+    "درخواست‌های این نشانی بیش از حد است؛ کمی بعد دوباره تلاش کنید."
+)
 OTP_UNCONFIGURED_503_DETAIL = (
     "ورود پیامکی روی این سرور تنظیم نشده است؛ از ورود با ایمیل استفاده کنید."
 )
@@ -2173,7 +2179,13 @@ class SessionHandler(SimpleHTTPRequestHandler):
         """The one door: email + password in, the signed HttpOnly cookie
         out — plus the whoami body the sheet reloads against. An unknown
         email and a wrong password answer the identical 401: the
-        difference is never an attacker's to read."""
+        difference is never an attacker's to read.
+
+        The door's throttle (F-002): the per-IP bucket counts REFUSED
+        credentials only, and a spent budget refuses before the verify
+        runs — ten wrong passwords in fifteen minutes from one address
+        buys a quiet door, and a successful login never feeds the
+        bucket, so a shared office's honest logins stay free."""
         length = int(self.headers.get("Content-Length", "0") or "0")
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
@@ -2184,8 +2196,13 @@ class SessionHandler(SimpleHTTPRequestHandler):
         except (ValueError, KeyError, TypeError):
             self._send_json(400, {"detail": AUTH_BAD_LOGIN_BODY_DETAIL})
             return
+        ip = throttle.client_ip(self)
+        if throttle.blocked(throttle.LOGIN_FAILURES, ip):
+            self._send_json(429, {"detail": THROTTLE_429_DETAIL})
+            return
         account = verify_login(email, password)
         if account is None:
+            throttle.record(throttle.LOGIN_FAILURES, ip)
             self._send_json(401, {"detail": AUTH_BAD_CREDENTIALS_DETAIL})
             return
         token = issue_token(account["email"], account["role"])
@@ -2252,6 +2269,13 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if not phone:
             self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
             return
+        # The request door's per-IP budget (F-003): every knock spends —
+        # the waitlist fork's 200 and the code send alike — so number-
+        # mining this endpoint's oracle costs the attacker its own
+        # window, beside the per-phone cooldown and daily cap.
+        if not throttle.allow(throttle.OTP_REQUESTS, throttle.client_ip(self)):
+            self._send_json(429, {"detail": THROTTLE_429_DETAIL})
+            return
         if account_by_phone(phone) is None:
             self._send_json(200, {"waitlist": True})
             return
@@ -2290,6 +2314,12 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if not phone:
             self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
             return
+        # The verify door's own per-IP budget: the per-phone five-attempt
+        # cap prices a guesser who fixes on one number; this prices one
+        # that rotates numbers.
+        if not throttle.allow(throttle.OTP_VERIFIES, throttle.client_ip(self)):
+            self._send_json(429, {"detail": THROTTLE_429_DETAIL})
+            return
         account = account_by_phone(phone)
         if account is None or not otp.verify_otp(phone, str(code).strip()):
             self._send_json(401, {"detail": OTP_BAD_CODE_401_DETAIL})
@@ -2322,6 +2352,11 @@ class SessionHandler(SimpleHTTPRequestHandler):
         phone = normalize_local_phone(raw)
         if not phone:
             self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
+            return
+        # The waitlist's per-IP budget: the sales list must not be a
+        # dump a script fills with a generated number space.
+        if not throttle.allow(throttle.WAITLIST_JOINS, throttle.client_ip(self)):
+            self._send_json(429, {"detail": THROTTLE_429_DETAIL})
             return
         otp.join_waitlist(phone)
         self._send_json(200, {"detail": WAITLIST_JOINED_DETAIL})
