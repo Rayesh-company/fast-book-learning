@@ -248,7 +248,7 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          ssh_transport="ssh -p $DEPLOY_PORT -i $RUNNER_TEMP/cwb-ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/cwb-ssh/known_hosts"
+          ssh_transport="ssh -p $DEPLOY_PORT -i $RUNNER_TEMP/cwb-ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/cwb-ssh/known_hosts -o ServerAliveInterval=15 -o ServerAliveCountMax=6"
           rsync -az --delete \
             -e "$ssh_transport" \
             --exclude='/.git/' \
@@ -258,7 +258,9 @@ jobs:
             --exclude='.env' --exclude='.env.*' \
             --exclude='/books/*.pdf' \
             --exclude='/books/*.lectures.json' \
+            --exclude='/books/*/lectures/' \
+            --exclude='*.mp3' \
             --exclude='/render-cache/' \
             --exclude='ui/*.sqlite3' \
             ./ "${DEPLOY_USER}@${DEPLOY_HOST}:/home/chat-with-books/current/"
-          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" "${DEPLOY_USER}@${DEPLOY_HOST}" 'set -e; cd /home/chat-with-books/current; test -s .env; test -s books/tarhe-kolli.pdf; test -s books/70143-336.pdf; docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session pull postgres cognee cognee-next-tier || echo "registry pull skipped — building from the images already on the box"; docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session up -d --build; for i in $(seq 1 90); do curl -fsS http://127.0.0.1:8765/livez >/dev/null && exit 0; sleep 2; done; echo "Session UI did not become healthy" >&2; exit 1'
+          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" -o ServerAliveInterval=15 -o ServerAliveCountMax=6 "${DEPLOY_USER}@${DEPLOY_HOST}" 'set -e; cd /home/chat-with-books/current; test -s .env; test -s books/tarhe-kolli.pdf; test -s books/70143-336.pdf; docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session pull postgres cognee cognee-next-tier || echo "registry pull skipped — building from the images already on the box"; docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session up -d --build; for i in $(seq 1 90); do curl -fsS http://127.0.0.1:8765/livez >/dev/null && exit 0; sleep 2; done; echo "Session UI did not become healthy" >&2; exit 1'
