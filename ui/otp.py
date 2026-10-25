@@ -19,9 +19,11 @@ Two pieces:
   panel, never in this repo. Verified live 2026-10-23: pattern list,
   balance, and a probe send all answered on this dialect.
 
-(The waitlist store this module once carried was retired 2026-10-24:
-a phone no Account carries answers the request door's honest 404, and
-Accounts stay Admin-issued — ADR-0013.)
+(The waitlist store this module once carried was retired 2026-10-24,
+and the whitelist left with it — the PM's open door, 2026-10-25: the
+request door sends to every Iranian phone and a verified unknown phone
+issues its own Account (serve.py's signup_phone_account). ADR-0013's
+Admin-issued-only posture is superseded by ADR-0017's self-signup.)
 
 The urlopen seam is module-level exactly like serve.py's other
 upstreams: tests patch otp.urlopen and never touch the network.

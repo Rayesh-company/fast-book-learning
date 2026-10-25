@@ -61,3 +61,19 @@ nothing charged, no sales list kept. The `/waitlist` route, the waitlist
 sqlite store, and its throttle bucket are removed with it. The decision's
 core stands unchanged: Accounts are created only by the Admin; open SMS
 signup would be an explicit amendment of this ADR and has NOT been made.
+
+## Addendum — the whitelist retires, the door opens (2026-10-25)
+
+The PM made exactly the explicit amendment the previous addendum said open SMS
+signup would need: any Iranian phone now signs itself in. The request door's
+404 («این شماره در کتاب و همراه ثبت نشده است.») is gone — every valid phone
+gets the code, so the account-existence oracle leaves with the whitelist — and
+a verified phone no Account carries issues its own Account at the verify door
+(`signup_phone_account` in ui/serve.py): the email is the phone's own address
+(`<phone>@phone.local`), the password a secret no one holds (the phone is the
+credential), the phone attached, the role operator. ADR-0017's self-signup
+posture is thereby wired; the Admin-issued-only clause above is superseded for
+phone accounts, while the email door and the Admin console keep issuing
+Accounts as before. The guards stand unchanged: per-IP budgets on both doors
+(F-003), the two-minute resend cooldown, ten codes a day per phone, five wrong
+tries, codes in memory only.

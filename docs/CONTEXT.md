@@ -173,12 +173,12 @@ The Learner's evolving map of the whole Book: created at pre-reading from the Le
 _Avoid_: knowledge graph (Cognee's internal graph is not the Learner's map), diagram, illustration
 
 **Account**:
-The credential the platform recognizes (ADR-0013): an email and a password, issued by the Admin — never self-created — owning one Balance and every Session run under it. It replaced the honor-system phone gate; the phone number is legacy data attached to it, not an identity.
-_Avoid_: user (the glossary does not use the word), profile (the Profile is the Account's own view), registration (Accounts are issued, not registered), phone
+The credential the platform recognizes (ADR-0013; the door opened 2026-10-25): an email and a password, issued by the Admin or self-issued at the SMS door — a phone that verifies its OTP and carries no Account issues one on the spot (the PM's open door), its email the phone's own address, the phone attached to it. It replaced the honor-system phone gate. Owns one Balance and every Session run under it.
+_Avoid_: user (the glossary does not use the word), profile (the Profile is the Account's own view), registration (there is no form; the verified phone is the signup), phone (the phone proves possession; the email stays the identity every store keys by)
 
 **Login**:
-The one entry where an email and a password open the platform to an Account. There is no other door.
-_Avoid_: signup, sign in page (the product has one Login, not flows), phone gate (retired by ADR-0013)
+The entry where an Account opens the platform: the email-and-password door, and beside it the phone-and-OTP door (opened 2026-10-25) — any Iranian phone signs itself in; the whitelist and the waitlist are gone.
+_Avoid_: sign in page (the product has Login doors, not flows), phone gate (the honor-system gate is retired; the phone door is its verified successor)
 
 **Balance (اعتبار)**:
 The prepaid Toman amount on an Account that asks and research turns deduct from; at zero the service stops with the honest Farsi note. Only the Admin tops it up.

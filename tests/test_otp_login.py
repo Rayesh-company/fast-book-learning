@@ -1,11 +1,14 @@
 """The SMS login's laws (the OTP layer ADR-0013 parked, landed
-2026-10-23): the phone-first flow the mobile UI always had, wired to
-فراز اسمس's pattern wire through ui/otp.py. These tests pin the four
-behaviors the door must never lose:
+2026-10-23; the door opened 2026-10-25): the phone-first flow the
+mobile UI always had, wired to فراز اسمس's pattern wire through
+ui/otp.py. These tests pin the four behaviors the door must never
+lose:
 
-- The refusal for a phone no Account carries: the honest 404 (nothing
-  sent, nothing charged — Accounts stay Admin-issued, the waitlist was
-  retired 2026-10-24); a known phone sends and only then records.
+- The open door (the PM's law, 2026-10-25): every Iranian phone gets
+  the code, known Account or not, and a verified unknown phone issues
+  its own Account — the whitelist's 404 is gone and no
+  account-existence oracle survives; a send records only after the
+  panel accepts it.
 - The panel's exact dialect: Edge webservice, Authorization header, the
   recipient as ONE E.164 number, the code inside the pattern's own
   variable.
@@ -99,14 +102,54 @@ def _patched_panel(monkeypatch):
     return panel, clock
 
 
-def test_unknown_phone_is_the_honest_404_nothing_sent(tmp_path, monkeypatch):
-    panel, _ = _patched_panel(monkeypatch)
+def test_unknown_phone_signs_itself_in(tmp_path, monkeypatch):
+    panel, clock = _patched_panel(monkeypatch)
     base, server, originals = with_gate(tmp_path, _ok_upstream)
     try:
-        status, payload = _otp_post(base, "/auth/otp/request", {"phone": "09120000000"})
-        assert status == 404
-        assert payload == {"detail": serve.OTP_UNKNOWN_PHONE_404_DETAIL}
-        assert panel.sent == []  # no Account, no send, no charge
+        # The open door (the PM's law, 2026-10-25): a phone no Account
+        # carries gets the code like any other — no 404, no oracle.
+        status, payload = _otp_post(
+            base, "/auth/otp/request", {"phone": "09350000001"}
+        )
+        assert status == 200
+        assert payload == {}
+        assert len(panel.sent) == 1
+        code = panel.sent[0]["body"]["attributes"]["codeotp"]
+
+        # A wrong code refuses exactly as it does a known phone.
+        status, _ = _otp_post(
+            base, "/auth/otp/verify", {"phone": "09350000001", "code": "000000"}
+        )
+        assert status == 401
+
+        # The right code issues the Account: the phone's own email, the
+        # login body, the token live on /auth/me.
+        status, payload = _otp_post(
+            base, "/auth/otp/verify", {"phone": "09350000001", "code": code}
+        )
+        assert status == 200
+        assert payload["email"] == "09350000001@phone.local"
+        assert payload["role"] == "operator"
+        assert payload["token"]
+        request = urllib.request.Request(
+            base + "/auth/me", headers={"Authorization": f"Bearer {payload['token']}"}
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            assert response.status == 200
+            assert json.load(response)["email"] == "09350000001@phone.local"
+        assert accounts.account_by_phone("09350000001") is not None
+
+        # A second round logs the SAME Account in — no duplicate issues
+        # itself behind the first.
+        clock["t"] += otp.OTP_RESEND_SECONDS + 1
+        assert _otp_post(base, "/auth/otp/request", {"phone": "09350000001"})[0] == 200
+        code2 = panel.sent[1]["body"]["attributes"]["codeotp"]
+        status, payload = _otp_post(
+            base, "/auth/otp/verify", {"phone": "09350000001", "code": code2}
+        )
+        assert status == 200
+        assert payload["email"] == "09350000001@phone.local"
+        assert accounts.account_by_email("09350000001@phone.local") is not None
     finally:
         stop_gate(server, originals)
 

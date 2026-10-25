@@ -84,24 +84,42 @@ def test_successful_logins_never_feed_the_login_bucket(tmp_path):
         stop_gate(server, original)
 
 
-def test_the_otp_request_budget_spends_on_every_knock(tmp_path):
+def test_the_otp_request_budget_spends_on_every_knock(tmp_path, monkeypatch):
+    # The open door (2026-10-25): every knock now SENDS — the per-IP
+    # budget still spends per attempt. The panel is faked so the thirty
+    # sends are cheap and quiet.
+    class _Panel:
+        def __call__(self, request, timeout=None):
+            class _Reply:
+                def read(inner_self):
+                    return b'{"status": "success", "data": {"id": 1}}'
+
+            return _Reply()
+
+    from ui import otp
+
+    monkeypatch.setattr(otp, "CODES", otp._Codes())
+    monkeypatch.setattr(otp, "FARAZ_API_KEY", "test-panel-key")
+    monkeypatch.setattr(otp, "FARAZ_PATTERN_CODE", "otp-pattern-1")
+    monkeypatch.setattr(otp, "FARAZ_FROM_NUMBER", "50002178584000")
+    monkeypatch.setattr(otp, "urlopen", _Panel())
     base, server, original = with_gate(tmp_path, NoUpstream())
     headers = {"X-Real-IP": "203.0.113.10"}
     try:
-        phone = "09350000001"  # no Account — the honest 404
-        for _ in range(30):
-            status, payload = raw_post(
+        # Thirty distinct phones — the per-phone cooldown and daily cap
+        # never fire; the per-IP budget is what runs out.
+        for i in range(30):
+            status, _ = raw_post(
                 base,
                 "/auth/otp/request",
-                {"phone": phone},
+                {"phone": f"0935{i:07d}"},
                 extra_headers=headers,
             )
-            assert status == 404
-            assert payload == {"detail": serve.OTP_UNKNOWN_PHONE_404_DETAIL}
+            assert status == 200, i
         status, payload = raw_post(
             base,
             "/auth/otp/request",
-            {"phone": phone},
+            {"phone": "09350099999"},
             extra_headers=headers,
         )
         assert status == 429

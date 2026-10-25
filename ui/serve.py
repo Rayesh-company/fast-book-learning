@@ -573,11 +573,6 @@ OTP_UNCONFIGURED_503_DETAIL = (
     "ورود پیامکی روی این سرور تنظیم نشده است؛ از ورود با ایمیل استفاده کنید."
 )
 OTP_SEND_502_DETAIL = "پیامک فرستاده نشد؛ کمی بعد دوباره کد بگیرید."
-# The waitlist's retirement (2026-10-24): a phone no Account carries is
-# no longer a fork with its own view — the door's one honest refusal.
-# Accounts stay Admin-issued (ADR-0013), so the answer names the fact
-# the caller can act on: this number is not in the system.
-OTP_UNKNOWN_PHONE_404_DETAIL = "این شماره در کتاب و همراه ثبت نشده است."
 # The برنامک's own refusals (ADR-0021, DRAFT display vocabulary
 # pending PM approval — the CONTEXT.md draft row carries them): the
 # initData that fails the signature or the freshness bound refuses
@@ -703,6 +698,21 @@ def ensure_first_admin_from_env() -> None:
             "مدیری از پیش وجود دارد؛ ADMIN_EMAIL/ADMIN_PASSWORD نادیده "
             "گرفته شد — گذرواژهٔ کسی بی‌کنش عوض نمی‌شود.\n"
         )
+
+
+def signup_phone_account(phone: str) -> dict:
+    """The open door's second half (the PM's law, 2026-10-25): the code
+    proved the phone, so the Account issues itself — the email is the
+    phone's own address (<phone>@phone.local, the token's subject), the
+    password is a secret no one holds (the phone is the credential),
+    the phone rides attached for every store that keys by it, and the
+    role is operator. Idempotent through the email: a lost race between
+    two verifies of the same phone — or an Admin email Account that
+    already carries the synthetic address — lands on the existing
+    Account instead of erroring."""
+    email = f"{phone}@phone.local"
+    created = create_account(email, secrets.token_urlsafe(18), phone=phone)
+    return created if created is not None else account_by_email(email)
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -2499,16 +2509,17 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def _otp_request(self) -> None:
         """The SMS login's first knock (POST /auth/otp/request): the
-        phone in, the code out. A phone no Account carries is the one
-        honest 404 (ADR-0013 — Accounts stay Admin-issued, the waitlist
-        was retired 2026-10-24): nothing sent, nothing charged. A known
-        phone sends the six-digit code down فراز اسمس's pattern wire
-        (ui/otp.py owns the cooldown, the daily cap, and the code's
-        five-minute life). The two configuration failures never wear a
-        user's clothing: the unconfigured panel is the same honest 503
-        the برنامک's unconfigured bot answers, and a refused send
-        answers 502 having charged nothing against the cooldown
-        (ui/otp.py records only after the send succeeds)."""
+        phone in, the code out — to EVERY Iranian phone, Account or
+        not. The whitelist retires (the PM's open door, 2026-10-25):
+        ADR-0017's self-signup posture, finally wired — a phone that
+        owns its SIM owns its login, and the account-existence oracle
+        leaves with the whitelist, every valid phone answered by the
+        identical send. ui/otp.py owns the cooldown, the daily cap, and
+        the code's five-minute life. The two configuration failures
+        never wear a user's clothing: the unconfigured panel is the
+        same honest 503 the برنامک's unconfigured bot answers, and a
+        refused send answers 502 having charged nothing against the
+        cooldown (ui/otp.py records only after the send succeeds)."""
         length = int(self.headers.get("Content-Length", "0") or "0")
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
@@ -2523,14 +2534,11 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
             return
         # The request door's per-IP budget (F-003): every knock spends —
-        # the no-Account 404 and the code send alike — so number-mining
-        # this endpoint's oracle costs the attacker its own window,
-        # beside the per-phone cooldown and daily cap.
+        # each send costs the panel money, so number-farming this
+        # endpoint costs the attacker its own window, beside the
+        # per-phone cooldown and daily cap.
         if not throttle.allow(throttle.OTP_REQUESTS, throttle.client_ip(self)):
             self._send_json(429, {"detail": THROTTLE_429_DETAIL})
-            return
-        if account_by_phone(phone) is None:
-            self._send_json(404, {"detail": OTP_UNKNOWN_PHONE_404_DETAIL})
             return
         if not otp.configured():
             self._send_json(503, {"detail": OTP_UNCONFIGURED_503_DETAIL})
@@ -2547,12 +2555,15 @@ class SessionHandler(SimpleHTTPRequestHandler):
     def _otp_verify(self) -> None:
         """The SMS login's second knock (POST /auth/otp/verify): the
         code against the record — the SAME 401 for a wrong code, an
-        expired one, and a phone whose Account vanished between the two
-        knocks (the ADR-0013 law: refusals an attacker cannot tell
-        apart). Success answers /auth/login's body exactly — email,
-        role, the native clients' token (ADR-0020), the HttpOnly cookie
-        — because as far as every later endpoint cares, this IS the
-        email login, arrived by phone."""
+        expired one, and every other refusal (the guesser learns
+        nothing from the difference). The verified code proves the
+        phone, and the door stays open either way (the PM's law,
+        2026-10-25): a phone no Account carries signs itself in — the
+        Account issues itself through signup_phone_account. Success
+        answers /auth/login's body exactly — email, role, the native
+        clients' token (ADR-0020), the HttpOnly cookie — because as far
+        as every later endpoint cares, this IS the email login, arrived
+        by phone."""
         length = int(self.headers.get("Content-Length", "0") or "0")
         try:
             payload = json.loads(self.rfile.read(length) or b"{}")
@@ -2573,8 +2584,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if not throttle.allow(throttle.OTP_VERIFIES, throttle.client_ip(self)):
             self._send_json(429, {"detail": THROTTLE_429_DETAIL})
             return
-        account = account_by_phone(phone)
-        if account is None or not otp.verify_otp(phone, str(code).strip()):
+        # The code first, the Account second: a wrong code refuses
+        # identically for a known and an unknown phone, and a verified
+        # unknown phone walks straight into its self-issued Account.
+        if otp.verify_otp(phone, str(code).strip()):
+            account = account_by_phone(phone) or signup_phone_account(phone)
+        else:
+            account = None
+        if account is None:
             self._send_json(401, {"detail": OTP_BAD_CODE_401_DETAIL})
             return
         token = issue_token(account["email"], account["role"])
