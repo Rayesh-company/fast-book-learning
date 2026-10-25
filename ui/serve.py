@@ -535,9 +535,11 @@ NEXT_TIER_SEARCH_TYPE = "GRAPH_COMPLETION_COT"
 # The cookie the sheet's browser carries; HttpOnly so the sheet's own
 # JS can never read the token, Path=/ so every endpoint sees it.
 AUTH_COOKIE = "cwb_auth"
-# Twelve hours: a working day plus margin — the Session operator logs
-# in once per sitting, not once per ask. Pinned in source, never env.
-AUTH_TOKEN_TTL = 12 * 3600
+# Thirty days: the PM's monthly-Session law (2026-10-25) — a login
+# lasts one month, then the honest 401 walks the caller back to the
+# door and the client's honest boot shows the login page again.
+# Pinned in source, never env.
+AUTH_TOKEN_TTL = 30 * 24 * 3600
 AUTH_LOGIN_401_DETAIL = "برای ادامه وارد شوید."
 AUTH_NOT_ADMIN_403_DETAIL = "ساختن حساب فقط از دست مدیر برمی‌آید."
 # The console's own refusal (T25): the mirror is the Admin's surface —

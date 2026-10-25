@@ -464,3 +464,31 @@ body.dark .primary-action {
     background: var(--surface) !important;
   }
 }
+
+/* 16. The OTP's six boxes (2026-10-25): one digit each, left-to-right,
+   auto-advancing — the hidden `code` input they sync rides beside them
+   inside the same auth form. */
+.otp-inputs {
+  display: flex;
+  gap: 8px;
+  direction: ltr;
+  justify-content: center;
+  margin: 6px 0 2px;
+}
+
+.auth-page .otp-inputs input {
+  width: 46px;
+  min-width: 0;
+  flex: 1;
+  max-width: 54px;
+  min-height: 54px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.auth-page .otp-inputs input:focus {
+  border-color: var(--accent);
+  outline: none;
+}

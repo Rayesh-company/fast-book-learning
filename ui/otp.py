@@ -6,11 +6,11 @@ the server half that was never wired.
 Two pieces:
 
 - The one-time codes: a six-digit secret per phone, five minutes of
-  life, at most five wrong tries, one (re)send a minute and ten a day
-  per phone — every bound the sheet's own flows hold the client to,
-  enforced where the client cannot be trusted. The codes live in
-  memory only: a restart drops pending logins (the user asks for a new
-  code), and no code ever touches disk.
+  life, at most five wrong tries, one (re)send every two minutes and
+  ten a day per phone — every bound the sheet's own flows hold the
+  client to, enforced where the client cannot be trusted. The codes
+  live in memory only: a restart drops pending logins (the user asks
+  for a new code), and no code ever touches disk.
 - The فراز اسمس sender: the panel's own webservice
   (api.iranpayamak.com — the API farazsms.com documents as its own),
   one POST with the API key in the Api-Key header, the code inside a
@@ -55,7 +55,10 @@ FARAZ_FROM_NUMBER = os.environ.get("FARAZSMS_FROM_NUMBER", "")
 FARAZ_PATTERN_PARAM = os.environ.get("FARAZSMS_PATTERN_PARAM", "codeotp")
 
 OTP_TTL_SECONDS = 300
-OTP_RESEND_SECONDS = 60
+# The PM's two-minute law (2026-10-25): one code, then a two-minute
+# wait before the next — the sheet counts it down and holds the same
+# line here for a caller that skips the client.
+OTP_RESEND_SECONDS = 120
 OTP_MAX_ATTEMPTS = 5
 OTP_DAILY_PER_PHONE = 10
 
