@@ -185,7 +185,7 @@ export function createApi({ fetchImpl = fetch } = {}) {
 
   return {
     demo: false,
-    loginRequired: false,
+    loginRequired: true,
     pageFiltering: false,
     // The honest boot: an anonymous caller is null and the app shows
     // the login door (ADR-0013). A fabricated dev session here would

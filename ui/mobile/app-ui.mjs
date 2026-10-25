@@ -326,6 +326,9 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function keyboard(){if(viewport)doc.documentElement.style.setProperty('--app-height',`${viewport.height}px`);}
  viewport?.addEventListener('resize',keyboard,{signal:lifecycle.signal});keyboard();
  render();
- const ready=(async()=>{try{s.account=await api.me();if(disposed)return;if(!s.account&&!s.loginRequired){s.account={email:'dev@local',phone:'09123456789',role:'admin',profile_completed:true};}if(s.account)await initialize();else navigate('login');}catch(e){if(!s.loginRequired){s.account={email:'dev@local',phone:'09123456789',role:'admin',profile_completed:true};await initialize();}else{s.error=e.message;navigate('login');}}})();
+ // The honest boot in every mode: an anonymous or failed /auth/me lands
+ // on the login door — the client never fabricates an Account to walk
+ // past it (ADR-0013; F-001's client half, the 2026-10-25 gap).
+ const ready=(async()=>{try{s.account=await api.me();if(disposed)return;if(s.account)await initialize();else navigate('login');}catch(e){if(disposed)return;navigate('login');s.error=e.message;render();}})();
  return{state:s,ready,settled:async()=>{while(pending.size)await Promise.allSettled([...pending]);},dispose(){capture();persist();disposePicker();closeSessionMenu({restore:false});disposed=true;abortJob();lifecycle.abort();panelFocus.dispose();motion.dispose();clearTimeout(toastTimer);clearTimeout(otpTimer);stopRecording();}};
 }
