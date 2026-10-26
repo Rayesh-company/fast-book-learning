@@ -12,6 +12,19 @@ test('paragraph geometry splits indented lines without modifying canonical offse
  const items=[{str:'one line',height:12,width:80,transform:[1,0,0,1,10,100]},{str:'wrapped line',height:12,width:80,transform:[1,0,0,1,10,80]},{str:'next paragraph',height:12,width:80,transform:[1,0,0,1,24,60]}];
  const paragraphs=pdfParagraphs(index,items,7);assert.equal(paragraphs.length,2);assert.equal(paragraphs[0].text,'one line\nwrapped line');assert.equal(paragraphs[1].start,22);for(const p of paragraphs)assert.equal(p.text,text.slice(p.start,p.end));
 });
+
+test('a short final line ends a paragraph even when the next one is not indented, but a full line never does',()=>{
+ // Justified right-to-left text: every body line reaches the same left edge, and a paragraph's last line stops short.
+ const text='aa\nbb\ncc\ndd\nee\nff';
+ const index={text,items:[0,3,6,9,12,15].map((start,i)=>({textItemIndex:i,start,end:start+2}))};
+ const line=(str,y,x,width)=>({str,dir:'rtl',height:12,width,transform:[1,0,0,1,x,y]});
+ const items=[line('aa',500,34,343),line('bb',480,34,343),line('cc',460,200,177),line('dd',440,34,343),line('ee',420,34,343),line('ff',400,34,343)];
+ const paragraphs=pdfParagraphs(index,items,7);
+ assert.deepEqual(paragraphs.map(p=>p.text),['aa\nbb\ncc','dd\nee\nff']);
+ for(const p of paragraphs)assert.equal(p.text,text.slice(p.start,p.end));
+ const full=items.map(item=>({...item,transform:[1,0,0,1,34,item.transform[5]],width:343}));
+ assert.equal(pdfParagraphs(index,full,7).length,1,'justified lines that all reach the margin stay one paragraph');
+});
 function audioFixture(fetchImpl){
  const dom=new JSDOM('<main><button data-audio-play></button><button data-audio-previous></button><button data-audio-next></button><p data-reader-audio-status></p></main>');const element=dom.window.document.querySelector('main');
  let page=1,players=[],pages=[],calls=[];

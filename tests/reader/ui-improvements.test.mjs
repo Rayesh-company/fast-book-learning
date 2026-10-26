@@ -25,7 +25,9 @@ test('two wheels edit a draft, restrict pages to a session including its cover, 
  const dom=new JSDOM(pageSessionPickerMarkup({page:42})),root=dom.window.document.querySelector('[data-page-session-picker]');
  const changed=[],picker=installPageSessionPicker({root,page:42,count:70,sessions,onChange:value=>changed.push(value)});
  assert.deepEqual(picker.value,{page:42,session:1});
- assert.deepEqual([...root.querySelector('[data-page-wheel]').children].map(n=>Number(n.dataset.value)),[41,42,43]);
+ assert.deepEqual([...root.querySelector('[data-page-wheel]').children].map(n=>n.dataset.value),['all','41','42','43']);
+ assert.equal(root.querySelector('[data-page-wheel] [data-value="all"]').textContent,'تمام جلسه');
+ assert.deepEqual([...root.querySelector('[data-session-wheel]').children].map(n=>n.dataset.value),['none','eshareh','preface','1','2']);
  root.querySelector('[data-session-wheel] [data-value="2"]').click();
  assert.deepEqual(picker.value,{page:62,session:2});
  assert.equal(root.querySelector('input').value,'۶۲');
@@ -33,7 +35,9 @@ test('two wheels edit a draft, restrict pages to a session including its cover, 
  assert.deepEqual(picker.value,{page:64,session:2});
  root.querySelector('[data-session-wheel] [data-value="none"]').click();
  assert.deepEqual(picker.value,{page:1,session:null});
- assert.ok(!pagesForSession(sessions,null,70).includes(42));
+ assert.equal(pagesForSession(sessions,null,70).length,70);
+ assert.equal(pagesForSession(sessions,'eshareh',70).length,28);
+ assert.equal(pagesForSession(sessions,'preface',70).length,6);
  const input=root.querySelector('input');input.value='۶۳';input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));
  assert.deepEqual(picker.value,{page:63,session:2});
  assert.ok(changed.length>=3);
@@ -142,7 +146,7 @@ test('chat header restores reading position; choosing page/session edits only ch
  f.root.querySelector('[data-session-wheel] [data-value="2"]').click();click(f,'close-sheet');assert.deepEqual(f.app.state.pages,[42]);
  click(f,'pages');await f.app.settled();f.root.querySelector('[data-session-wheel] [data-value="2"]').click();
  f.root.querySelector('[data-pages-form]').dispatchEvent(new f.dom.window.Event('submit',{bubbles:true,cancelable:true}));
- assert.deepEqual(f.app.state.pages,[62]);assert.deepEqual(f.app.state.positions['tarhe-kolli'],{page:42,zoom:1.5,scroll:120});
+ assert.deepEqual(f.app.state.pages,[62,63,64]);assert.equal(f.app.state.sessionContext,2);assert.match(f.root.querySelector('.pages-button').textContent,/جلسه [2۲]/);assert.deepEqual(f.app.state.positions['tarhe-kolli'],{page:42,zoom:1.5,scroll:120});
  const pill=f.root.querySelector('.pages-button'),classes=pill.className;click(f,'toggle-scope');assert.equal(f.root.querySelector('.pages-button').className,classes);
  click(f,'open-reader');assert.equal(f.root.querySelector('.phone').dataset.pdfPage,'42');assert.equal(f.root.querySelector('.phone').dataset.pdfScroll,'120');f.close();
 });
@@ -175,6 +179,40 @@ test('pausing during paragraph preparation invalidates a pending play intent',as
  assert.equal(f.plays,0);assert.equal(f.audio.paused,true);f.close();
 });
 
+test('paragraph skipping follows the audio position, not the page on screen, and never lands in the middle of a paragraph',async()=>{
+  const f=playerFixture();await f.player.ready;
+  f.element.querySelector('[data-audio-play]').click();await settle();assert.equal(f.audio.currentTime,2);
+  // The audio is inside the paragraph that began at 10, but the reader has flipped on to page 43.
+  f.audio.currentTime=12;f.page=43;
+  await f.player.skipParagraph(-1);assert.equal(f.audio.currentTime,5,'previous is the paragraph before the one being heard');assert.deepEqual(f.shown,[42]);
+  f.audio.currentTime=12;f.page=42;
+  await f.player.skipParagraph(1);assert.equal(f.audio.currentTime,20,'next is the first paragraph that begins after the audio');
+  f.close();
+});
+
+test('the tail of a paragraph running on from the previous page is not a paragraph start',async()=>{
+  const crossing={id:2,text:'gamma delta',page:42,start:10,end:18,boxes:[[42,10,500,100,510],[43,10,10,100,20]],words:[
+    {text:'gamma',start:10,end:11,boxes:[[42,10,500,100,510]]},{text:'delta',start:12,end:13,boxes:[[43,10,10,100,20]]}]};
+  const run={...session,sentences:[session.sentences[0],session.sentences[1],crossing]};
+  const f=playerFixture(async url=>({ok:true,json:async()=>url.endsWith('/lectures')?{sessions}:run}));await f.player.ready;
+  f.element.querySelector('[data-audio-play]').click();await settle();
+  await f.player.skipParagraph(1);assert.equal(f.audio.currentTime,5);
+  await f.player.skipParagraph(1);assert.equal(f.audio.currentTime,10);
+  await f.player.skipParagraph(1);assert.equal(f.audio.currentTime,10,'time 12 is mid-sentence on page 43; there is no later paragraph to start from');
+  assert.match(f.element.querySelector('[data-lecture-status]').textContent,/آخرین/);
+  const anchors=lectureParagraphAnchors({sentences:[crossing]},43,dataFor(43));
+  assert.deepEqual(anchors.map(a=>[a.time,a.continued]),[[12,true]]);
+  f.close();
+});
+
+test('a page whose timings failed to load is retried on the next paragraph press',async()=>{
+  let failures=1;
+  const f=playerFixture(undefined,async page=>{if(page===42&&failures-->0)throw new Error('offline');return dataFor(page);});await f.player.ready;
+  await f.player.skipParagraph(1);assert.match(f.element.querySelector('[data-lecture-status]').textContent,/بارگذاری نشد/);
+  await f.player.skipParagraph(1);assert.equal(f.audio.currentTime,5);
+  f.close();
+});
+
 test('a sentence spanning pages seeks to the first timed word on the requested page, never its earlier onset',()=>{
  const cue={start:2,end:30,speech_start:2,boxes:[[41,10,10,100,20]],sentence_focus:{boxes:[[41,10,10,100,20],[42,10,10,100,20]]},words:[
   {start:2,end:3,boxes:[[41,10,10,100,20]]},{start:12,end:13,boxes:[[42,10,10,100,20]]},
@@ -193,4 +231,160 @@ test('keyboard expansion moves focus to the session control and collapsing resto
  f.win.document.dispatchEvent(new f.win.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
  assert.equal(f.player.expanded,false);assert.equal(f.win.document.activeElement,handle);
  f.close();
+});
+
+test('clicking the speed button opens popover panel and selecting rate updates playback rate and text',async()=>{
+  const dom=new JSDOM('<main><button data-player-expand></button><div data-lecture-bar hidden><select data-lecture-session></select><button data-player-collapse></button><button data-lecture-back></button><button data-lecture-forward></button><div class="lecture-rate-wrap" data-lecture-rate-wrap><button type="button" class="lecture-rate-chip" data-lecture-rate data-rate="1" aria-expanded="false" aria-controls="lecture-rate-panel"><span class="rate-label">سرعت</span><span class="rate-value" data-rate-value>۱×</span></button><div id="lecture-rate-panel" class="lecture-rate-popover" data-lecture-rate-panel role="group" hidden><button type="button" data-rate-option="0.75" aria-pressed="false"><span class="rate-option-text">۰.۷۵×</span></button><button type="button" data-rate-option="1" aria-pressed="true"><span class="rate-option-text">۱×</span></button><button type="button" data-rate-option="1.25" aria-pressed="false"><span class="rate-option-text">۱.۲۵×</span></button><button type="button" data-rate-option="1.5" aria-pressed="false"><span class="rate-option-text">۱.۵×</span></button><button type="button" data-rate-option="2" aria-pressed="false"><span class="rate-option-text">۲×</span></button></div></div><input data-lecture-skip-intro type="checkbox" checked><input data-lecture-seek type="range"><span data-lecture-time></span><span data-lecture-duration></span><p data-lecture-caption></p></div><button data-audio-previous></button><button data-audio-play></button><button data-audio-next></button><p data-lecture-status></p></main>');
+  const element=dom.window.document.querySelector('main');
+  class FakeAudio extends dom.window.EventTarget{constructor(){super();this.currentTime=0;this.playbackRate=1;this.paused=true;this.attrs={};}
+   set src(v){this.attrs.src=v;}get src(){return this.attrs.src;}getAttribute(k){return this.attrs[k]??null;}removeAttribute(k){delete this.attrs[k];}
+   async play(){this.paused=false;this.dispatchEvent(new dom.window.Event('play'));}pause(){this.paused=true;this.dispatchEvent(new dom.window.Event('pause'));}}
+  const audio=new FakeAudio();
+  const player=installLecturePlayer({element,book:'b',createAudio:()=>audio,getPage:()=>42,fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/lectures')?{sessions}:session})});
+  await player.ready;
+  const rateBtn=element.querySelector('[data-lecture-rate]');
+  const ratePanel=element.querySelector('#lecture-rate-panel');
+  assert.equal(audio.playbackRate,1);
+  assert.equal(rateBtn.querySelector('[data-rate-value]').textContent,'۱×');
+  assert.equal(ratePanel.hidden,true);
+  assert.equal(rateBtn.getAttribute('aria-expanded'),'false');
+
+  // Clicking rateBtn opens the popover panel
+  rateBtn.click();
+  assert.equal(ratePanel.hidden,false);
+  assert.equal(rateBtn.getAttribute('aria-expanded'),'true');
+
+  // Selecting 1.25x option updates playbackRate and closes panel
+  const opt125=ratePanel.querySelector('[data-rate-option="1.25"]');
+  opt125.click();
+  assert.equal(audio.playbackRate,1.25);
+  assert.equal(rateBtn.getAttribute('data-rate'),'1.25');
+  assert.equal(rateBtn.querySelector('[data-rate-value]').textContent,'۱.۲۵×');
+  assert.equal(ratePanel.hidden,true);
+  assert.equal(rateBtn.getAttribute('aria-expanded'),'false');
+
+  // Re-open and select 2x option
+  rateBtn.click();
+  assert.equal(ratePanel.hidden,false);
+  const opt2=ratePanel.querySelector('[data-rate-option="2"]');
+  opt2.click();
+  assert.equal(audio.playbackRate,2);
+  assert.equal(rateBtn.getAttribute('data-rate'),'2');
+  assert.equal(rateBtn.querySelector('[data-rate-value]').textContent,'۲×');
+  assert.equal(ratePanel.hidden,true);
+
+  // Escape key closes rate panel when open
+  rateBtn.click();
+  assert.equal(ratePanel.hidden,false);
+  dom.window.document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  assert.equal(ratePanel.hidden,true);
+  assert.equal(rateBtn.getAttribute('aria-expanded'),'false');
+
+  // Calling setRate directly also updates playbackRate and button label
+  player.setRate(1.5);
+  assert.equal(audio.playbackRate,1.5);
+  assert.equal(rateBtn.getAttribute('data-rate'),'1.5');
+  assert.equal(rateBtn.querySelector('[data-rate-value]').textContent,'۱.۵×');
+
+  player.dispose();
+  dom.window.close();
+});
+
+test('adjust mode player markup renders swapped paragraph/10s buttons and combined footer row',async()=>{
+  const {mainView}=await import('../../ui/mobile/views.mjs');
+  const html=mainView({view:'reader',book:'tarhe-kolli',positions:{},readerQuestion:null});
+  const dom=new JSDOM(html);
+  const doc=dom.window.document;
+
+  const transport=doc.querySelector('.audio-transport');
+  assert.ok(transport,'audio transport exists');
+  const parNext=transport.querySelector('.transport-paragraph[data-audio-next]');
+  const parPrev=transport.querySelector('.transport-paragraph[data-audio-previous]');
+  const secFwd=transport.querySelector('.transport-seconds[data-lecture-forward]');
+  const secBack=transport.querySelector('.transport-seconds[data-lecture-back]');
+  assert.ok(parNext,'paragraph next button exists in transport');
+  assert.ok(parPrev,'paragraph previous button exists in transport');
+  assert.ok(secFwd,'10s forward button exists in transport');
+  assert.ok(secBack,'10s back button exists in transport');
+
+  const sheet=doc.querySelector('#lecture-details');
+  assert.ok(sheet,'lecture-details sheet exists');
+  // Paragraph buttons must NOT exist inside the expanded sheet
+  const sheetParPrev=sheet.querySelector('[data-audio-previous]');
+  const sheetParNext=sheet.querySelector('[data-audio-next]');
+  assert.equal(sheetParPrev,null,'paragraph previous button is removed from sheet');
+  assert.equal(sheetParNext,null,'paragraph next button is removed from sheet');
+
+  // Combined controls row
+  const footerRow=sheet.querySelector('.lecture-controls-row.lecture-footer-row');
+  assert.ok(footerRow,'lecture footer row exists');
+  const sessionSelect=footerRow.querySelector('select[data-lecture-session]');
+  assert.ok(sessionSelect,'session picker is inside controls row');
+  const skipToggle=footerRow.querySelector('.lecture-skip-toggle [data-lecture-skip-intro]');
+  assert.ok(skipToggle,'skip intro toggle is inside footer row');
+  const toggleLabel=footerRow.querySelector('.lecture-skip-toggle .toggle-label');
+  assert.equal(toggleLabel.textContent.trim(),'بدون مقدمه','label is simplified to without preamble');
+
+  const rateWrap=footerRow.querySelector('[data-lecture-rate-wrap]');
+  assert.ok(rateWrap,'rate wrap exists inside footer row');
+  const rateBtn=rateWrap.querySelector('.lecture-rate-chip[data-lecture-rate]');
+  assert.ok(rateBtn,'rate button is inside rate wrap');
+  assert.equal(rateBtn.tagName,'BUTTON','rate control is an interactive button');
+  assert.equal(rateBtn.getAttribute('data-rate'),'1');
+  assert.match(rateBtn.textContent,/سرعت/);
+  assert.match(rateBtn.textContent,/۱×/);
+
+  const ratePanel=rateWrap.querySelector('#lecture-rate-panel');
+  assert.ok(ratePanel,'rate popover panel exists inside rate wrap');
+  assert.equal(ratePanel.hidden,true,'rate popover panel is initially hidden');
+  const options=ratePanel.querySelectorAll('[data-rate-option]');
+  assert.equal(options.length,5,'popover offers 5 playback rate options');
+
+  dom.window.close();
+});
+
+test('multi-button interaction: 10s seek buttons in transport and paragraph step in collapsed mode trigger player actions',async()=>{
+  const {mainView}=await import('../../ui/mobile/views.mjs');
+  const html=`<main>${mainView({view:'reader',book:'tarhe-kolli',positions:{},readerQuestion:null})}</main>`;
+  const dom=new JSDOM(html);
+  const win=dom.window,element=win.document.querySelector('main');
+  class FakeAudio extends win.EventTarget{constructor(){super();this.currentTime=0;this.playbackRate=1;this.paused=true;this.attrs={};}
+   set src(v){this.attrs.src=v;}get src(){return this.attrs.src;}getAttribute(k){return this.attrs[k]??null;}removeAttribute(k){delete this.attrs[k];}
+   async play(){this.paused=false;this.dispatchEvent(new win.Event('play'));}pause(){this.paused=true;this.dispatchEvent(new win.Event('pause'));}}
+  const audio=new FakeAudio();
+  const player=installLecturePlayer({element,book:'b',createAudio:()=>audio,getPage:()=>42,getPageData:async()=>dataFor(42),reader:{highlight(){},pointAt:(p,x,y)=>({x,y})},showPage:async()=>{},fetchImpl:async url=>({ok:true,json:async()=>url.endsWith('/lectures')?{sessions}:session})});
+  await player.ready;
+  await player.open();
+  assert.equal(player.expanded,true);
+
+  element.querySelector('[data-audio-play]').click();
+  await settle();
+  assert.equal(audio.currentTime,2);
+
+  const fwdBtn=element.querySelector('.audio-transport [data-lecture-forward]');
+  fwdBtn.click();
+  await settle();
+  assert.equal(audio.currentTime,12);
+
+  const backBtn=element.querySelector('.audio-transport [data-lecture-back]');
+  backBtn.click();
+  await settle();
+  assert.equal(audio.currentTime,2);
+
+  // In collapsed mode, paragraph buttons in transport trigger paragraph navigation
+  player.collapse();
+  assert.equal(player.expanded,false);
+
+  const parNext=element.querySelector('.audio-transport [data-audio-next]');
+  parNext.click();
+  await settle();
+  assert.equal(audio.currentTime,5);
+
+  const parPrev=element.querySelector('.audio-transport [data-audio-previous]');
+  parPrev.click();
+  await settle();
+  assert.equal(audio.currentTime,2);
+
+  player.dispose();
+  win.close();
 });
