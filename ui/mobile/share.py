@@ -57,10 +57,10 @@ def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR,
                 suffix = ".pages.json" if book[2] == ".pages.json" else ".pdf"
                 target = books_dir / (book[1] + suffix)
                 content_type = "application/json; charset=utf-8" if suffix != ".pdf" else "application/pdf"
-            elif path.startswith(("/mobile/", "/book-reader/", "/vendor/")):
+            elif path.startswith(("/mobile/", "/book-reader/", "/vendor/", "/assets/")):
                 target = (ui_dir / path.lstrip("/")).resolve()
                 if (not target.is_relative_to(ui_dir)
-                        or target.relative_to(ui_dir).parts[0] not in {"mobile", "book-reader", "vendor"}
+                        or target.relative_to(ui_dir).parts[0] not in {"mobile", "book-reader", "vendor", "assets"}
                         or target.suffix not in STATIC_TYPES):
                     self.send_error(404)
                     return

@@ -123,3 +123,258 @@ body.dark{--bg:#202524;--surface:#272d2b;--soft:#333a37;--ink:#f3f4ed;--muted:#b
   font-weight: 700;
 }
 
+
+
+/* ==========================================================================
+   Voice Wave Bars Component (Image-Proportional Voice Audio Capsule)
+   ========================================================================== */
+
+.voice-wave-bars {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  direction: ltr;
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  background: #1f2122;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  animation: voiceWavePop 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+body:not(.dark) .voice-wave-bars {
+  background: #fbfbfa;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+body.dark .voice-wave-bars {
+  background: #1f2122;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes voiceWavePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Cancel Button */
+.voice-wave-cancel-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-radius: 50%;
+  background: #2a2c2e;
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 150ms ease,
+              color 150ms ease;
+  will-change: transform;
+}
+
+.voice-wave-cancel-button:hover {
+  color: #ff6b6b;
+  background: #36383b;
+  transform: scale(1.06);
+}
+
+.voice-wave-cancel-button:active {
+  transform: scale(0.92);
+}
+
+body:not(.dark) .voice-wave-cancel-button {
+  background: #f0eee8;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #555c58;
+}
+
+body:not(.dark) .voice-wave-cancel-button:hover {
+  background: #e5e3dc;
+  color: #a03831;
+}
+
+body.dark .voice-wave-cancel-button {
+  background: #2a2c2e;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+body.dark .voice-wave-cancel-button:hover {
+  color: #f3aaa1;
+  background: #36383b;
+}
+
+/* Sound Wave Bars Visualizer (Spans entire width edge-to-edge) */
+.voice-wave-visualizer {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  height: 32px;
+  padding: 0 10px;
+  overflow: hidden;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Each Bar / Dot in the continuous waveform */
+.voice-wave-bar {
+  display: block;
+  width: 2px;
+  min-width: 2px;
+  height: 24px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.22);
+  transform-origin: center center;
+  transform: scaleY(var(--scale-y, 0.09));
+  will-change: transform;
+  transition: transform 45ms linear, opacity 100ms ease, background-color 100ms ease;
+}
+
+/* Active speech dynamic coloring */
+.voice-wave-bar.active {
+  background: #1a1a1a;
+  opacity: 1;
+}
+
+body.dark .voice-wave-bar {
+  background: rgba(255, 255, 255, 0.28);
+  opacity: 0.85;
+}
+
+body.dark .voice-wave-bar.active {
+  background: #ffffff;
+  opacity: 1;
+}
+
+/* Timer Display */
+.voice-wave-timer {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 0 8px 0 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+body:not(.dark) .voice-wave-timer {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+body.dark .voice-wave-timer {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Finish Button (Clean circular action button matching Image 1) */
+.voice-wave-finish-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #1a1a1a;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+              filter 150ms ease;
+  will-change: transform;
+}
+
+.voice-wave-finish-button:hover {
+  filter: brightness(0.92);
+  transform: scale(1.06);
+}
+
+.voice-wave-finish-button:active {
+  transform: scale(0.92);
+}
+
+body:not(.dark) .voice-wave-finish-button {
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+body.dark .voice-wave-finish-button {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.voice-wave-icon {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+/* Remove outer double-border when recording so pill is seamless */
+.chat-composer:has(.voice-wave-bars),
+.chat-composer.is-recording {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.floating-bar:has(.voice-wave-bars),
+.floating-bar.is-recording {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  min-height: 48px !important;
+}
+
+/* Dedicated Mic button */
+.mic-button {
+  position: relative;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 160ms ease,
+              color 160ms ease;
+}
+
+.mic-button:hover {
+  color: var(--accent, #16786e);
+  background-color: var(--accent-soft, #e5f1ed);
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .voice-wave-bars {
+    animation: none;
+  }
+  .voice-wave-bar {
+    transition: none;
+    transform: scaleY(0.4) !important;
+  }
+  .voice-wave-cancel-button,
+  .voice-wave-finish-button {
+    transition: none;
+  }
+}

@@ -971,16 +971,17 @@
         background: var(--raised);
         border: 1px solid var(--rule);
         border-radius: 12px;
-        padding: 1.1rem 1.1rem 1rem;
+        padding: 1.15rem 1.15rem 1.05rem;
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.85rem;
         /* the manuscript's gold inner frame */
         outline: 1px solid var(--gold-soft);
         outline-offset: -6px;
+        transition: outline-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       }
 
-      .book-card:hover {
+      .book-card:hover:not([data-available="false"]) {
         outline-color: var(--gold);
       }
 
@@ -989,11 +990,110 @@
         box-shadow: 0 0 0 1px var(--clay);
       }
 
+      .book-card[data-available="false"] {
+        opacity: 0.72;
+        outline-color: transparent !important;
+        cursor: not-allowed;
+      }
+
+      .book-card-header {
+        display: flex;
+        gap: 0.95rem;
+        align-items: flex-start;
+      }
+
+      .book-cover-container {
+        position: relative;
+        flex-shrink: 0;
+        width: 82px;
+        height: 120px;
+        border-radius: 4px 6px 6px 4px;
+        overflow: hidden;
+        box-shadow: 0 4px 10px var(--shadow), -2px 0 5px rgba(0, 0, 0, 0.08);
+      }
+
+      .book-cover-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        border: 1px solid var(--rule);
+        border-radius: 4px 6px 6px 4px;
+      }
+
+      .cover-soon-badge {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(28, 20, 10, 0.88);
+        color: #faf4e6;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-align: center;
+        padding: 4px 0;
+        backdrop-filter: blur(2px);
+      }
+
+      .book-card-meta {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .book-card-title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
       .book-card-title {
         margin: 0;
-        font-size: 1.02rem;
+        font-size: 1.05rem;
         font-weight: 700;
-        line-height: 1.8;
+        line-height: 1.7;
+      }
+
+      .badge-soon {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.15rem 0.55rem;
+        border-radius: 4px;
+        background: var(--gold-soft);
+        color: var(--gold);
+        border: 1px solid var(--gold);
+        line-height: 1.5;
+      }
+
+      .book-card-author {
+        margin: 0;
+        font-size: 0.82rem;
+        color: var(--mute);
+        line-height: 1.6;
+      }
+
+      .book-status-badge {
+        display: inline-flex;
+        align-self: flex-start;
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        margin-top: 0.15rem;
+      }
+
+      .book-status-badge.available {
+        background: var(--clay-soft);
+        color: var(--clay);
+      }
+
+      .book-status-badge.unavailable {
+        background: var(--bad-soft);
+        color: var(--mute);
       }
 
       .starter-chips {
@@ -1011,6 +1111,7 @@
         color: var(--ink);
         border: 1px solid var(--rule);
         padding: 0.42rem 0.75rem;
+        transition: border-color 0.15s ease, color 0.15s ease;
       }
 
       .starter-chip:hover:not(:disabled) {
@@ -1019,8 +1120,26 @@
         border-color: var(--clay);
       }
 
+      .starter-chip:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
       .book-select {
         align-self: flex-start;
+        transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+      }
+
+      .book-select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        background: var(--rule);
+        color: var(--mute);
+      }
+
+      .reader-book:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
 
       /* ===== The composer dock: one input, one send, one honest stop. */
@@ -2650,7 +2769,23 @@
             </p>
             <div class="book-cards">
               <article class="book-card" data-doc="tarhe-kolli">
-                <h3 class="book-card-title">طرح کلی اندیشۀ اسلامی در قرآن</h3>
+                <div class="book-card-header">
+                  <div class="book-cover-container">
+                    <img
+                      class="book-cover-image"
+                      src="/assets/books/tarhe-kolli.png"
+                      alt="طرح کلی اندیشۀ اسلامی در قرآن"
+                      width="82"
+                      height="120"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div class="book-card-meta">
+                    <h3 class="book-card-title">طرح کلی اندیشۀ اسلامی در قرآن</h3>
+                    <p class="book-card-author">سیدعلی خامنه‌ای · ۸۶۲ صفحه</p>
+                    <span class="book-status-badge available">آمادهٔ مطالعه و گفتگو</span>
+                  </div>
+                </div>
                 <div class="starter-chips" role="group" aria-label="پرسش‌های آغازین">
                   <button type="button" class="starter-chip">جهان‌بینی توحیدی در قرآن چه ویژگی‌هایی دارد؟</button>
                   <button type="button" class="starter-chip">قرآن آزادی انسان را چگونه تبیین می‌کند؟</button>
@@ -2659,15 +2794,35 @@
                 </div>
                 <button type="button" class="book-select">انتخاب کتاب</button>
               </article>
-              <article class="book-card" data-doc="70143-336">
-                <h3 class="book-card-title">انسان ۲۵۰ ساله</h3>
-                <div class="starter-chips" role="group" aria-label="پرسش‌های آغازین">
-                  <button type="button" class="starter-chip">انسان ۲۵۰ ساله حرکت آزادی‌خواهی در ایران را چگونه توصیف می‌کند؟</button>
-                  <button type="button" class="starter-chip">نقش مشروطه در سرگذشت ۲۵۰ سالۀ ایران چه بود؟</button>
-                  <button type="button" class="starter-chip">چرا حرکت‌های آزادی‌خواهانۀ ایران یک‌به‌یک از مسیر بازماند؟</button>
-                  <button type="button" class="starter-chip">جنگ‌های ایران و روسیه چه نقشی در بیداری ایران داشت؟</button>
+              <article class="book-card" data-doc="70143-336" aria-disabled="true" data-available="false">
+                <div class="book-card-header">
+                  <div class="book-cover-container">
+                    <img
+                      class="book-cover-image"
+                      src="/assets/books/ensan-250-saleh.png"
+                      alt="انسان ۲۵۰ ساله"
+                      width="82"
+                      height="120"
+                      loading="lazy"
+                    />
+                    <span class="cover-soon-badge">به زودی...</span>
+                  </div>
+                  <div class="book-card-meta">
+                    <div class="book-card-title-row">
+                      <h3 class="book-card-title">انسان ۲۵۰ ساله</h3>
+                      <span class="badge-soon">به زودی...</span>
+                    </div>
+                    <p class="book-card-author">سیدعلی خامنه‌ای · ۳۹۰ صفحه</p>
+                    <span class="book-status-badge unavailable">به زودی در دسترس قرار می‌گیرد</span>
+                  </div>
                 </div>
-                <button type="button" class="book-select">انتخاب کتاب</button>
+                <div class="starter-chips" role="group" aria-label="پرسش‌های آغازین">
+                  <button type="button" class="starter-chip" disabled tabindex="-1">انسان ۲۵۰ ساله حرکت آزادی‌خواهی در ایران را چگونه توصیف می‌کند؟</button>
+                  <button type="button" class="starter-chip" disabled tabindex="-1">نقش مشروطه در سرگذشت ۲۵۰ سالۀ ایران چه بود؟</button>
+                  <button type="button" class="starter-chip" disabled tabindex="-1">چرا حرکت‌های آزادی‌خواهانۀ ایران یک‌به‌یک از مسیر بازماند؟</button>
+                  <button type="button" class="starter-chip" disabled tabindex="-1">جنگ‌های ایران و روسیه چه نقشی در بیداری ایران داشت؟</button>
+                </div>
+                <button type="button" class="book-select" disabled aria-disabled="true" title="به زودی...">به زودی...</button>
               </article>
             </div>
           </section>
@@ -2769,8 +2924,8 @@
           <button type="button" class="reader-book" data-doc="tarhe-kolli" aria-pressed="false">
             طرح کلی اندیشۀ اسلامی در قرآن
           </button>
-          <button type="button" class="reader-book" data-doc="70143-336" aria-pressed="false">
-            انسان ۲۵۰ ساله
+          <button type="button" class="reader-book" data-doc="70143-336" aria-pressed="false" disabled title="به زودی...">
+            انسان ۲۵۰ ساله (به زودی...)
           </button>
         </div>
         <button type="button" class="reader-close" id="reader-close" aria-label="بستن کتاب‌خوان">✕</button>
@@ -3365,7 +3520,7 @@
 
       function markPickedCard(doc) {
         document.querySelectorAll(".book-card").forEach((card) => {
-          card.classList.toggle("picked", card.dataset.doc === doc);
+          card.classList.toggle("picked", card.dataset.doc === doc && card.dataset.available !== "false");
         });
       }
       try {
@@ -3373,6 +3528,9 @@
       } catch {}
 
       function startSession(bookDoc, seedQuestion) {
+        if (bookDoc === "70143-336") {
+          return;
+        }
         // A new sitting begins in the ask mode (ADR-0015): the toggle's
         // arm belongs to the sitting that armed it.
         setResearchMode(false);
@@ -6014,6 +6172,7 @@
       });
       document.querySelectorAll(".reader-book").forEach((button) => {
         button.addEventListener("click", () => {
+          if (button.disabled || button.dataset.doc === "70143-336") return;
           openBook(button.dataset.doc, 1);
         });
       });
@@ -7810,13 +7969,19 @@
 
       // ===== The empty state's wiring: Book cards + starter chips. =====
       document.querySelectorAll(".book-card").forEach((card) => {
-        card
-          .querySelector(".book-select")
-          .addEventListener("click", () => startSession(card.dataset.doc));
+        const selectBtn = card.querySelector(".book-select");
+        if (selectBtn) {
+          selectBtn.addEventListener("click", () => {
+            if (card.dataset.available === "false" || selectBtn.disabled) return;
+            startSession(card.dataset.doc);
+          });
+        }
       });
       document.querySelectorAll(".starter-chip").forEach((chip) => {
         chip.addEventListener("click", () => {
+          if (chip.disabled) return;
           const card = chip.closest(".book-card");
+          if (card && card.dataset.available === "false") return;
           startSession(card.dataset.doc, chip.textContent.trim());
         });
       });
@@ -8019,5 +8184,15 @@
           .catch(() => {});
       })();
     </script>
+    <!-- reticle:connect (dev only, written by reticle init) -->
+    <script type="module">
+      if (['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
+        Promise.all([
+          import('https://cdn.jsdelivr.net/npm/@reticlehq/browser@3.8.0/+esm'),
+          import('./reticle.local.js').catch(() => ({})),
+        ]).then(([{ reticle }, local]) => reticle.connect({ ...{ projectId: 'ui-a344e01c' }, token: local.token }));
+      }
+    </script>
+    <!-- /reticle:connect -->
   </body>
 </html>

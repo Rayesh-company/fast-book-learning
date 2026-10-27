@@ -4,8 +4,9 @@ import {icon} from './icons.mjs';
 import {createInterfaceMotion} from './motion.mjs';
 import {createPanelFocus} from './panel-focus.mjs';
 import {installPageSessionPicker,fetchLectureSessions} from './page-session-picker.mjs';
+import {resolveBookToc,renderTocBodyMarkup,activeTocLocation} from './book-toc.mjs';
 const normalPhone=v=>String(v).replace(/[۰-۹]/g,c=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/[\s()-]/g,'').replace(/^\+98|^0098/,'0');
-const normalText=v=>String(v).normalize('NFKC').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/[\u064b-\u065f\u0670\u0640\u200c\s]/g,'').toLowerCase();
+const normalText=v=>String(v).normalize('NFKC').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/[\u064b-\u065f\u0670\u0640\u200c\u200b\u200d\ufeff\u00a0\x00-\x1f\s]/g,'').toLowerCase();
 
 /** The product host owns UI, drafts and notebook behavior. PDF/audio remain independent. */
 export function createMobileApp({root,api,storage=root.ownerDocument.defaultView.localStorage,fetchImpl=root.ownerDocument.defaultView.fetch?.bind(root.ownerDocument.defaultView)}={}){
@@ -19,11 +20,11 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function disposePicker(){pagePicker?.dispose();pagePicker=null;pickerRequest?.abort();pickerRequest=null;}
  function syncHighlights(){phone()?.bookReader?.setHighlights?.(s.notes.filter(n=>(n.doc||n.source?.book)===s.book&&n.source?.capture==='highlight').flatMap(n=>n.source?.selection?.pages||[]));}
  const s={view:'boot',demo:api.demo,loginRequired:api.loginRequired!==false,pageFiltering:api.demo||api.pageFiltering===true,book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},account:null,
-  messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',theme:'system',profile:null,
-  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false};
- let storageKey,disposed=false,job=null,sequence=0,accountRevision=0,recordRevision=0,recordPending=false,otpTimer,pending=new Set(),toastTimer,recorder,timer,media,recordingStarted,recordingPlace,recordDraft;
+  messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',sessionContext:null,theme:'system',profile:null,
+  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,tocSearch:'',tocExpanded:null,drawerSections:{highlights:true,bookmarks:true,notes:true}};
+ let storageKey,disposed=false,job=null,sequence=0,accountRevision=0,recordRevision=0,recordPending=false,otpTimer,pending=new Set(),toastTimer,recorder,timer,media,recordingStarted,recordingPlace,recordDraft,audioCtx,analyser,waveAnimId;
  const safeRead=key=>{try{return JSON.parse(storage?.getItem(key));}catch{return null;}};
- const persist=()=>{if(!storageKey||disposed)return;try{storage?.setItem(storageKey,JSON.stringify({view:['reader','chat'].includes(s.view)?s.view:s.stack.find(v=>['reader','chat'].includes(v))||'reader',book:s.book,positions:s.positions,drafts:s.drafts,pages:s.pages,scope:s.scope,sessionId:s.sessionId,chatScroll:s.chatScroll,follow:s.follow,theme:s.theme,readerGuideSeen:s.readerGuideSeen}));}catch{}};
+ const persist=()=>{if(!storageKey||disposed)return;try{storage?.setItem(storageKey,JSON.stringify({view:['reader','chat'].includes(s.view)?s.view:s.stack.find(v=>['reader','chat'].includes(v))||'reader',book:s.book,positions:s.positions,drafts:s.drafts,pages:s.pages,scope:s.scope,sessionContext:s.sessionContext,sessionId:s.sessionId,chatScroll:s.chatScroll,follow:s.follow,theme:s.theme,readerGuideSeen:s.readerGuideSeen}));}catch{}};
  const run=p=>{const promise=Promise.resolve(p).catch(e=>{if(!disposed&&e.name!=='AbortError'){s.error=e.message;renderOverlay();toast(e.message);}}).finally(()=>pending.delete(promise));pending.add(promise);return promise;};
  const phone=()=>root.querySelector('.phone');
  function capture(){
@@ -54,8 +55,12 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(s.menu&&existing){
    // A history refresh must preserve the moving shell and its keyboard focus.
    const template=doc.createElement('template');template.innerHTML=drawer(s);const next=template.content.querySelector('.drawer');
-   existing.querySelector('.history').innerHTML=next.querySelector('.history').innerHTML;
-   existing.querySelector('.account-button').innerHTML=next.querySelector('.account-button').innerHTML;
+   const curNav=existing.querySelector('.drawer-nav'),nextNav=next.querySelector('.drawer-nav');
+   if(curNav&&nextNav)curNav.innerHTML=nextNav.innerHTML;
+   const curHist=existing.querySelector('.history'),nextHist=next.querySelector('.history');
+   if(curHist&&nextHist)curHist.innerHTML=nextHist.innerHTML;
+   const curAcc=existing.querySelector('.account-button'),nextAcc=next.querySelector('.account-button');
+   if(curAcc&&nextAcc)curAcc.innerHTML=nextAcc.innerHTML;
   }else holder.innerHTML=s.menu?drawer(s):'';
   root.querySelector('.overlay-holder').innerHTML=sheet(s);
   if(inDrawer&&s.menu&&!focused.isConnected){const replacement=[...holder.querySelectorAll('.drawer [data-action]')].find(n=>n.dataset.action===focused.dataset.action&&n.dataset.id===focused.dataset.id);(replacement||holder.querySelector('.drawer button'))?.focus({preventScroll:true});}
@@ -67,7 +72,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function setupPagePicker(){
   const pickerRoot=root.querySelector('.app-sheet [data-page-session-picker]');if(!pickerRoot)return;
   const book=s.book,rev=accountRevision;
-  pagePicker=installPageSessionPicker({root:pickerRoot,page:s.pages?.[0]||activePage(s),count:bookInfo(book).pages,sessions:lectureCatalog.get(book)||[],onChange:({page})=>{
+  pagePicker=installPageSessionPicker({root:pickerRoot,page:s.pages?.[0]||activePage(s),session:s.sessionContext,isAll:Boolean(s.sessionContext),allowAll:true,count:bookInfo(book).pages,sessions:lectureCatalog.get(book)||[],onChange:({page,isAll,session})=>{
    const form=pickerRoot.closest('form');if(form?.elements.range.checked){form.elements.from.value=digits(page);if(number(form.elements.to.value)<page)form.elements.to.value=digits(page);}
   }});
   if(lectureCatalog.has(book))return;
@@ -106,7 +111,21 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
    if(event.key==='Tab'){event.preventDefault();closeSessionMenu();}
   },{signal:life.signal});
  }
- function openSheet(type,details={}){if(!doc.activeElement?.closest('.app-sheet,.drawer'))focusReturn=doc.activeElement;s.menu=false;s.error='';s.sheet={type,...details};renderOverlay();root.querySelector('.app-sheet input,.app-sheet button')?.focus({preventScroll:true});}
+ function updateTocMarkup(){
+  const holder=root.querySelector('.app-sheet [data-toc-scroll]');if(!holder)return;
+  const toc=resolveBookToc(s.book,s.outline);if(!toc)return;
+  holder.innerHTML=renderTocBodyMarkup({toc,currentPage:activePage(s),query:s.tocSearch||'',expandedGroups:s.tocExpanded||new Set()});
+ }
+ function openSheet(type,details={}){
+  if(!doc.activeElement?.closest('.app-sheet,.drawer'))focusReturn=doc.activeElement;
+  s.menu=false;s.error='';s.sheet={type,...details};renderOverlay();
+  if(type==='contents'){
+   (root.querySelector('.app-sheet [aria-current="location"]')||root.querySelector('.app-sheet .toc-group-trigger[aria-expanded="true"]')||root.querySelector('.app-sheet button'))?.focus({preventScroll:true});
+   root.querySelector('.app-sheet [aria-current="location"]')?.scrollIntoView({block:'center',inline:'nearest'});
+  }else{
+   root.querySelector('.app-sheet input,.app-sheet button')?.focus({preventScroll:true});
+  }
+ }
  function closeOverlay(){s.menu=false;s.sheet=null;s.error='';renderOverlay();focusReturn?.isConnected&&focusReturn.focus({preventScroll:true});}
  function renderFloating(){const holder=root.querySelector('[data-reader-floating]');if(holder){const previous=motion.beforeFloating();holder.innerHTML=floating(s);phone().readerQuestion=s.readerQuestion;const chrome=root.querySelector('.reader-chrome');if(chrome)chrome.dataset.questionOpen=String(Boolean(s.readerQuestion&&!s.readerQuestion.minimised));holder.querySelectorAll('textarea').forEach(autosize);motion.afterFloating(previous);}}
  function minimiseQuestion(){if(s.view!=='reader'||!s.readerQuestion||s.readerQuestion.minimised)return;capture();stopRecording();s.readerQuestion.minimised=true;renderFloating();root.querySelector('[data-action="restore"]')?.focus({preventScroll:true});}
@@ -119,7 +138,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function navigate(view,{back=false,captured=false}={}){if(!captured)capture();stopRecording();if(!back&&!['reader','chat'].includes(view)&&s.view!==view)s.stack.push(s.view);s.view=view;s.error='';navigationBack=back;render();}
  async function refresh(){const rev=accountRevision;const [sessions,profile,notes]=await Promise.allSettled([api.sessions(),api.profile(),api.notes()]);if(disposed||rev!==accountRevision)return;if(sessions.status==='fulfilled')s.sessions=sessions.value||[];if(profile.status==='fulfilled')s.profile=profile.value;if(notes.status==='fulfilled'){s.notes=notes.value||[];syncHighlights();}}
  async function openSession(id){capture();abortJob();stopRecording();const rev=++sequence;const row=await api.session(Number(id));if(disposed||rev!==sequence)return;capture();s.book=books.some(b=>b.id===row.book)?row.book:s.book;s.sessionId=row.id;s.messages=row.messages||[];restoreUnanswered();s.follow=true;s.chatScroll=0;s.readerQuestion=null;navigate('chat',{captured:true});}
- async function selectBook(id){if(!books.some(b=>b.id===id))return;capture();abortJob();s.readerQuestion=null;s.book=id;s.messages=[];s.sessionId=null;s.scope='all';s.pages=[activePage(s)];await refresh();const latest=s.sessions.find(r=>r.book===id);if(latest){await openSession(latest.id);s.scope='all';}else navigate('chat',{captured:true});}
+ async function selectBook(id){if(!books.some(b=>b.id===id))return;capture();abortJob();s.readerQuestion=null;s.book=id;s.messages=[];s.sessionId=null;s.scope='all';s.sessionContext=null;s.pages=[activePage(s)];await refresh();const latest=s.sessions.find(r=>r.book===id);if(latest){await openSession(latest.id);s.scope='all';}else navigate('chat',{captured:true});}
  function abortJob(){job?.abort();job=null;s.busy=false;if(s.readerQuestion)s.readerQuestion.busy=false;}
  async function send(place='chat',retryIndex=null){
   if(s.busy)return;
@@ -128,7 +147,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(!question?.trim())return;
   const scope=rq?'page':(s.scope||'page');
   const page=(rq?rq.selection.pages[0]?.page:s.pages?.[0])||activePage(s);
-  const context=retryIndex!==null?s.messages[retryIndex].payload:{text:question.trim(),book:s.book,page,scope,pages:[...(rq?rq.selection.pages.map(p=>p.page):s.pages||[])],selection:rq?.selection};
+  const context=retryIndex!==null?s.messages[retryIndex].payload:{text:question.trim(),book:s.book,page,scope,pages:[...(rq?rq.selection.pages.map(p=>p.page):s.pages||[])],sessionContext:s.sessionContext,selection:rq?.selection};
   const book=context.book||s.book;
   const controller=new win.AbortController();job=controller;s.busy=true;s.error='';s.status='در حال جستجو در کتاب';
   const at=retryIndex??s.messages.length;
@@ -164,27 +183,194 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  }
  async function loadNotes(){const rev=accountRevision;s.noteBook=s.book;s.notesLoading=true;navigate('notebook');try{const notes=await api.notes();if(rev===accountRevision&&!disposed)s.notes=notes;}finally{if(rev!==accountRevision)return;s.notesLoading=false;if(s.view==='notebook')render();}}
  async function highlightSelection(selected){if(!selected)return;const rev=accountRevision,book=s.book;const note=await api.saveNote({text:selected.text,doc:book,pages:selected.pages.map(p=>p.page),refs:[],source:{kind:'book',capture:'highlight',book,selection:selected}});if(disposed||rev!==accountRevision)return;s.notes.unshift(note);doc.getSelection()?.removeAllRanges();toast('هایلایت در دفتر ذخیره شد');if(book===s.book)syncHighlights();}
- function sourcePage(book,page,text,selection){capture();abortJob();if(book!==s.book){s.sessionId=null;s.messages=[];}s.readerQuestion=null;s.book=books.some(b=>b.id===book)?book:s.book;s.positions[s.book]={...s.positions[s.book],page:Number(page)||1,scroll:0};s.pendingSource={text,selection};navigate('reader',{captured:true});}
+ function syncBookmarkButton(){
+  const btn=root.querySelector('.reader-bookmark-btn');
+  if(!btn)return;
+  const page=activePage(s);
+  const bookmarked=(s.notes||[]).some(n=>(n.doc===s.book||n.source?.book===s.book)&&n.source?.capture==='bookmark'&&n.pages?.includes(page));
+  btn.classList.toggle('active',bookmarked);
+  btn.setAttribute('aria-pressed',String(bookmarked));
+  btn.setAttribute('aria-label',bookmarked?'حذف نشان این صفحه':'نشان‌کردن این صفحه');
+  btn.setAttribute('title',bookmarked?'حذف نشان این صفحه':'نشان‌کردن این صفحه');
+  btn.innerHTML=icon(bookmarked?'bookmarkFilled':'bookmark');
+ }
+ async function toggleBookmark(page=activePage(s)){
+  const rev=accountRevision,book=s.book;
+  const existing=s.notes.find(n=>(n.doc===book||n.source?.book===book)&&n.source?.capture==='bookmark'&&n.pages?.includes(page));
+  if(existing){
+   await api.deleteNotes([existing.id]);
+   if(disposed||rev!==accountRevision)return;
+   s.notes=s.notes.filter(n=>n.id!==existing.id);
+   toast(`نشان صفحهٔ ${digits(page)} برداشته شد`);
+  }else{
+   const note=await api.saveNote({text:`صفحهٔ ${digits(page)}`,doc:book,pages:[page],refs:[],source:{kind:'book',capture:'bookmark',book,page}});
+   if(disposed||rev!==accountRevision)return;
+   s.notes.unshift(note);
+   toast(`صفحهٔ ${digits(page)} نشان شد`);
+  }
+  syncBookmarkButton();
+  if(s.menu)renderOverlay();
+  else if(s.view==='notebook')render();
+ }
+ function extractSnippet(fullText,query,maxLen=140){
+  if(!fullText)return '';
+  const needle=normalText(query);
+  if(!needle)return fullText.slice(0,maxLen).replace(/[\x00-\x1f]/g,' ');
+  const map=[];let normalized='';
+  for(let i=0;i<fullText.length;i++){
+   for(const c of normalText(fullText[i])){normalized+=c;map.push(i);}
+  }
+  const at=normalized.indexOf(needle);
+  if(at<0)return (fullText.slice(0,maxLen)+(fullText.length>maxLen?'…':'')).replace(/[\x00-\x1f]/g,' ');
+  const matchStart=map[at];const matchEnd=map[at+needle.length-1]+1;
+  const contextBefore=Math.floor((maxLen-(matchEnd-matchStart))/2);
+  let rawStart=Math.max(0,matchStart-Math.max(20,contextBefore));
+  let rawEnd=Math.min(fullText.length,rawStart+maxLen);
+  if(rawStart>0){
+   const spaceAt=fullText.indexOf(' ',rawStart);
+   if(spaceAt!==-1&&spaceAt<matchStart)rawStart=spaceAt+1;
+  }
+  if(rawEnd<fullText.length){
+   const spaceAt=fullText.lastIndexOf(' ',rawEnd);
+   if(spaceAt!==-1&&spaceAt>matchEnd)rawEnd=spaceAt;
+  }
+  const prefix=rawStart>0?'… ':'';
+  const suffix=rawEnd<fullText.length?' …':'';
+  return (prefix+fullText.slice(rawStart,rawEnd).trim()+suffix).replace(/[\x00-\x1f]/g,' ');
+ }
+ function findTextRangeOnPage(index,query,pageNum){
+  const pageText=index?.text||(typeof index==='string'?index:'');
+  if(!pageText||!query)return null;
+  const map=[];let normalized='';
+  for(let i=0;i<pageText.length;i++){
+   for(const c of normalText(pageText[i])){normalized+=c;map.push(i);}
+  }
+  const needle=normalText(query);
+  if(!needle)return null;
+  const at=normalized.indexOf(needle);
+  if(at<0)return null;
+  const start=map[at],end=map[at+needle.length-1]+1;
+  return {page:pageNum,start,end,text:pageText.slice(start,end)};
+ }
+ function scrollToActiveHighlight(){
+  const schedule=win.requestAnimationFrame||win.setTimeout;
+  schedule(()=>{
+   win.setTimeout(()=>{
+    const focusSpan=phone()?.querySelector('.book-reader-playback-focus > span');
+    if(focusSpan)focusSpan.scrollIntoView?.({behavior:'smooth',block:'center'});
+   },60);
+  });
+ }
+ function sourcePage(book,page,text,selection,extra={}){capture();abortJob();if(book!==s.book){s.sessionId=null;s.messages=[];}s.readerQuestion=null;s.book=books.some(b=>b.id===book)?book:s.book;s.positions[s.book]={...s.positions[s.book],page:Number(page)||1,scroll:0};s.pendingSource={text,selection,...extra};navigate('reader',{captured:true});}
+ function applySearchMatch(pageNum,query){
+  if(!pageNum)return;
+  if(s.view==='reader'&&activePage(s)===pageNum){
+   const index=phone()?.bookReader?.getPageIndex?.(pageNum);
+   if(index?.text){
+    const match=findTextRangeOnPage(index,query,pageNum);
+    if(match){
+     phone()?.bookReader?.highlight?.({page:pageNum,...match,tone:'search'});
+     scrollToActiveHighlight();
+     return;
+    }
+   }
+  }
+  sourcePage(s.book,pageNum,query,null,{query,page:pageNum});
+ }
  async function citation(target){let book=target.dataset.book||s.book,page=number(target.dataset.page),text=target.dataset.text||'';const match=target.dataset.reference?.match(CANONICAL_CITATION_REGEX);if(match){book=match[1];page=Number(match[3]);}if(!page){toast('این ارجاع شمارهٔ صفحه ندارد.');return;}
   if(target.classList.contains('agent-cite')){sourcePage(book,page,'');return;}
   if(text&&target.dataset.reference){try{const response=await win.fetch(`/books/${book}.pages.json`);if(response.ok){const data=await response.json(),pages=Array.isArray(data)?data:data.pages||data;const needle=normalText(text);for(let n=page;n<=page+10;n++){const raw=pages[String(n)]??pages[n-1];const value=typeof raw==='string'?raw:raw?.text;if(value&&normalText(value).includes(needle)){page=n;break;}}}}catch{}}
   sourcePage(book,page,text);
  }
- async function searchBook(query){s.bookSearch=query;s.searching=true;s.error='';renderOverlay();try{const response=await win.fetch(`/books/${s.book}.pages.json`);if(!response.ok)throw new Error('جستجو در کتاب در دسترس نیست.');const data=await response.json(),pages=data.pages||data;const entries=Array.isArray(pages)?pages.map((p,i)=>[i+1,p]):Object.entries(pages);const needle=normalText(query);s.searchResults=entries.map(([page,p])=>({page:Number(page),text:typeof p==='string'?p:p?.text||''})).filter(p=>normalText(p.text).includes(needle)).slice(0,40).map(p=>({...p,text:p.text.slice(0,260)}));}catch(e){s.error=e.message;}finally{s.searching=false;renderOverlay();}}
+ async function searchBook(query){
+  const q=String(query||'').trim();
+  if(!q)return;
+  s.bookSearch=q;s.searching=true;s.error='';renderOverlay();
+  try{
+   const response=await win.fetch(`/books/${s.book}.pages.json`);
+   if(!response.ok)throw new Error('جستجو در کتاب در دسترس نیست.');
+   const data=await response.json(),pages=data.pages||data;
+   const entries=Array.isArray(pages)?pages.map((p,i)=>[i+1,p]):Object.entries(pages);
+   const needle=normalText(q);
+   s.searchResults=entries
+    .map(([page,p])=>({page:Number(page),text:typeof p==='string'?p:p?.text||''}))
+    .filter(p=>normalText(p.text).includes(needle))
+    .slice(0,50)
+    .map(p=>({page:p.page,snippet:extractSnippet(p.text,q),matchText:q}));
+  }catch(e){
+   s.error=e.message;
+  }finally{
+   s.searching=false;renderOverlay();
+  }
+ }
  function copy(text){if(!text)return;
   const fallback=()=>{const focused=doc.activeElement;const input=doc.createElement('textarea');input.dataset.clipboardFallback='';input.value=text;input.style.cssText='position:fixed;left:-9999px;top:0';doc.body.append(input);input.focus();input.select();let copied=false;try{copied=doc.execCommand?.('copy')===true;}catch{}finally{input.remove();focused?.isConnected&&focused.focus({preventScroll:true});}toast(copied?'کپی شد':'کپی در این مرورگر در دسترس نیست.');};
   if(win.navigator.clipboard?.writeText)return win.navigator.clipboard.writeText(text).then(()=>toast('کپی شد')).catch(fallback);
   fallback();
  }
- function stopRecording(){recordRevision++;recordPending=false;clearInterval(timer);timer=null;if(recorder?.state==='recording')recorder.stop();media?.getTracks().forEach(t=>t.stop());media=null;recorder=null;}
+ function stopRecording(){recordRevision++;recordPending=false;root.querySelectorAll('.is-recording').forEach(e=>e.classList.remove('is-recording'));clearInterval(timer);timer=null;if(waveAnimId){win.cancelAnimationFrame(waveAnimId);waveAnimId=null;}if(audioCtx&&audioCtx.state!=='closed'){audioCtx.close().catch(()=>{});audioCtx=null;}analyser=null;if(recorder?.state==='recording')recorder.stop();media?.getTracks().forEach(t=>t.stop());media=null;recorder=null;}
  async function startRecording(place){if(timer||recordPending||s.busy)return;const rev=++recordRevision;recordPending=true;recordingPlace=place;recordDraft=place==='reader'?s.readerQuestion?.draft||'':s.drafts[s.book]||'';
-  if(!s.demo){try{const stream=await win.navigator.mediaDevices.getUserMedia({audio:true});if(disposed||rev!==recordRevision){stream.getTracks().forEach(t=>t.stop());return;}media=stream;recorder=new win.MediaRecorder(media);recorder._chunks=[];recorder.ondataavailable=e=>recorder._chunks.push(e.data);recorder.start();}catch(e){if(disposed||rev!==recordRevision)return;recordPending=false;toast('ضبط شروع نشد. اجازهٔ میکروفون را بررسی کنید.');return;}}
+  if(win.navigator.mediaDevices?.getUserMedia){try{let stream;if(s.demo){stream=await Promise.race([win.navigator.mediaDevices.getUserMedia({audio:true}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('demo-skip')),400))]).catch(()=>null);}else{stream=await win.navigator.mediaDevices.getUserMedia({audio:true});}if(stream){if(disposed||rev!==recordRevision){stream.getTracks().forEach(t=>t.stop());return;}media=stream;if(win.MediaRecorder){try{recorder=new win.MediaRecorder(media);recorder._chunks=[];recorder.ondataavailable=e=>{if(e.data?.size>0)recorder._chunks.push(e.data);};recorder.start();}catch{}}try{const AudioCtx=win.AudioContext||win.webkitAudioContext;if(AudioCtx){audioCtx=new AudioCtx();if(audioCtx.state==='suspended'){await audioCtx.resume();}const source=audioCtx.createMediaStreamSource(media);analyser=audioCtx.createAnalyser();analyser.fftSize=128;analyser.smoothingTimeConstant=0.5;source.connect(analyser);}}catch(err){console.warn('AudioContext error',err);}}}catch(e){if(disposed||rev!==recordRevision)return;if(!s.demo){recordPending=false;toast('اجازهٔ دسترسی به میکروفون داده نشد.');return;}}}
   recordPending=false;recordingStarted=Date.now();const el=root.querySelector(place==='reader'?'.floating-bar':'.chat-composer');if(!el){stopRecording();return;}
-  el.innerHTML=`<div class="recording"><span class="record-dot"></span><span>${s.demo?'ضبط نمونه':'در حال ضبط'}</span><span data-recording-time>۰۰:۰۰</span><button type="button" data-action="finish-record">پایان</button><button type="button" data-action="cancel-record">لغو</button></div>`;
-  motion.reveal(el.querySelector('.recording'),0,130);
-  timer=setInterval(()=>{const seconds=Math.floor((Date.now()-recordingStarted)/1000);const t=root.querySelector('[data-recording-time]');if(t)t.textContent=digits(`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`);},1000);
+  el.classList.add('is-recording');
+  const elWidth=el.clientWidth||320;
+  const visualizerWidth=Math.max(160,elWidth-135);
+  const barCount=Math.max(34,Math.min(96,Math.floor(visualizerWidth/5.2)));
+  const barsHtml=Array.from({length:barCount},(_,i)=>`<span class="voice-wave-bar" style="--bar-i:${i}"></span>`).join('');
+  el.innerHTML=`<div class="voice-wave-bars" role="region" aria-label="در حال ضبط صدا"><button type="button" class="voice-wave-cancel-button" data-action="cancel-record" aria-label="لغو ضبط" title="لغو"><svg viewBox="0 0 24 24" aria-hidden="true" class="voice-wave-icon"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="voice-wave-visualizer" aria-hidden="true">${barsHtml}</div><span class="voice-wave-timer" data-recording-time dir="ltr">0:00</span><button type="button" class="voice-wave-finish-button" data-action="finish-record" aria-label="پایان ضبط و ارسال" title="پایان ضبط"><svg viewBox="0 0 24 24" aria-hidden="true" class="voice-wave-icon"><path d="M5 12.5L9.5 17L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`;
+  motion.reveal(el.querySelector('.voice-wave-bars'),0,130);
+  const barElements=el.querySelectorAll('.voice-wave-bar');
+  const freqData=analyser?new Uint8Array(analyser.frequencyBinCount):null;
+  const timeData=analyser?new Uint8Array(analyser.fftSize):null;
+  const history=new Float32Array(barCount).fill(0.09);
+  let lastShift=performance.now();
+  const shiftInterval=55;
+  function animateWave(){
+    if(disposed||rev!==recordRevision||!root.contains(el))return;
+    const now=performance.now();
+    let currentLevel=0.09;
+    let isVoiceActive=false;
+    if(analyser&&freqData&&timeData){
+      analyser.getByteFrequencyData(freqData);
+      analyser.getByteTimeDomainData(timeData);
+      let sumSq=0;
+      for(let j=0;j<timeData.length;j++){const amp=(timeData[j]-128)/128;sumSq+=amp*amp;}
+      const rms=Math.sqrt(sumSq/timeData.length);
+      let vocalEnergy=0;
+      const binCount=Math.min(24,freqData.length);
+      for(let b=1;b<binCount;b++){vocalEnergy+=freqData[b];}
+      const vocalPower=(vocalEnergy/(binCount-1))/255;
+      isVoiceActive=rms>0.015||vocalPower>0.12;
+      if(isVoiceActive){
+        currentLevel=Math.min(1.0,Math.max(0.2,rms*3.6+vocalPower*0.7));
+      }
+    }else{
+      const phraseTime=(now-recordingStarted)%5200;
+      isVoiceActive=(phraseTime<1500)||(phraseTime>2200&&phraseTime<4000);
+      if(isVoiceActive){
+        const w1=Math.sin(now*0.011)+Math.cos(now*0.006)*0.5;
+        currentLevel=Math.min(0.95,Math.max(0.24,0.45+w1*0.35));
+      }
+    }
+    if(now-lastShift>=shiftInterval){
+      const steps=Math.min(4,Math.floor((now-lastShift)/shiftInterval));
+      lastShift=now;
+      for(let s=0;s<steps;s++){
+        for(let k=0;k<barCount-1;k++){history[k]=history[k+1];}
+        history[barCount-1]=currentLevel;
+      }
+    }
+    for(let i=0;i<barElements.length;i++){
+      const val=(i===barCount-1&&isVoiceActive)?Math.max(history[i],currentLevel):history[i];
+      barElements[i].style.setProperty('--scale-y',val.toFixed(3));
+      barElements[i].classList.toggle('active',val>0.15);
+    }
+    waveAnimId=win.requestAnimationFrame(animateWave);
+  }
+  waveAnimId=win.requestAnimationFrame(animateWave);
+  timer=setInterval(()=>{const seconds=Math.floor((Date.now()-recordingStarted)/1000);const t=root.querySelector('[data-recording-time]');if(t)t.textContent=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;},1000);
  }
- async function finishRecording(cancel=false){const rev=recordRevision;clearInterval(timer);timer=null;let blob;
+ async function finishRecording(cancel=false){const rev=recordRevision;clearInterval(timer);timer=null;if(waveAnimId){win.cancelAnimationFrame(waveAnimId);waveAnimId=null;}if(audioCtx&&audioCtx.state!=='closed'){audioCtx.close().catch(()=>{});audioCtx=null;}analyser=null;let blob;
   if(recorder?.state==='recording'){blob=await new Promise(resolve=>{recorder.onstop=()=>resolve(new win.Blob(recorder._chunks,{type:recorder.mimeType}));recorder.stop();});}media?.getTracks().forEach(t=>t.stop());media=null;recorder=null;
   if(disposed||rev!==recordRevision)return;
   if(cancel){if(recordingPlace==='reader'){s.readerQuestion.draft=recordDraft;renderFloating();}else{s.drafts[s.book]=recordDraft;render();}return;}
@@ -196,16 +382,33 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  root.addEventListener('reader-question',e=>{dismissReaderGuide();abortJob();s.sessionId=null;s.messages=[];s.chatScroll=0;s.follow=true;s.readerQuestion={selection:structuredClone(e.detail),draft:''};renderFloating();root.querySelector('[name="reader-question"]')?.focus({preventScroll:true});},listenerOptions);
  root.addEventListener('reader-question-reset',()=>{if(s.readerQuestion){s.readerQuestion.minimised=true;renderFloating();}},listenerOptions);
  root.addEventListener('reader-selection-action',e=>{if(e.detail.action==='highlight')run(highlightSelection(e.detail.selection));else if(e.detail.action==='copy-selection')copy(e.detail.selection.text);},listenerOptions);
- root.addEventListener('book-page-ready',e=>{s.positions[s.book]={...s.positions[s.book],page:e.detail.page};s.outline=e.detail.outline||[];syncHighlights();persist();const pendingSource=s.pendingSource;if(!pendingSource)return;s.pendingSource=null;
-  let range=pendingSource.selection?.pages.find(p=>p.page===e.detail.page);
-  if(!range&&pendingSource.text){const index=phone()?.bookReader?.getPageIndex(e.detail.page);if(index){const text=index.text,map=[];let normalized='';for(let i=0;i<text.length;i++){for(const c of normalText(text[i])){normalized+=c;map.push(i);}}const needle=normalText(pendingSource.text),at=normalized.indexOf(needle);if(needle.length>=8&&at>=0&&normalized.indexOf(needle,at+1)<0){const start=map[at],end=map[at+needle.length-1]+1;range={page:e.detail.page,start,end,text:text.slice(start,end)};}}}
-  if(range)phone().bookReader.highlight(range);else if(pendingSource.text)toast('صفحهٔ منبع باز شد؛ متن دقیق در این صفحه پیدا نشد.');
+ root.addEventListener('book-page-ready',e=>{s.positions[s.book]={...s.positions[s.book],page:e.detail.page};s.outline=e.detail.outline||[];syncHighlights();syncBookmarkButton();persist();const pendingSource=s.pendingSource;if(!pendingSource)return;s.pendingSource=null;
+  let range=pendingSource.selection?.pages?.find(p=>p.page===e.detail.page);
+  if(!range&&(pendingSource.query||pendingSource.text)){const index=phone()?.bookReader?.getPageIndex?.(e.detail.page);if(index?.text){const match=findTextRangeOnPage(index,pendingSource.query||pendingSource.text,e.detail.page);if(match)range={page:e.detail.page,...match,tone:'search'};}}
+  if(range){phone()?.bookReader?.highlight?.(range);scrollToActiveHighlight();}else if(pendingSource.text)toast('صفحهٔ منبع باز شد؛ متن دقیق در این صفحه پیدا نشد.');
  },listenerOptions);
- root.addEventListener('input',e=>{if(e.target.name==='question'){s.drafts[s.book]=e.target.value;if(s.readerQuestion?.inChat)s.readerQuestion.draft=e.target.value;autosize(e.target);syncComposer(e.target);persist();}if(e.target.name==='reader-question'&&s.readerQuestion){s.readerQuestion.draft=e.target.value;autosize(e.target);syncComposer(e.target);}if(e.target.name==='note-search'){s.noteSearch=e.target.value;const pos=e.target.selectionStart;render();const input=root.querySelector('[name="note-search"]');input.focus();input.setSelectionRange(pos,pos);}},listenerOptions);
+ root.addEventListener('input',e=>{
+  if(e.target.name==='question'){s.drafts[s.book]=e.target.value;if(s.readerQuestion?.inChat)s.readerQuestion.draft=e.target.value;autosize(e.target);syncComposer(e.target);persist();}
+  if(e.target.name==='reader-question'&&s.readerQuestion){s.readerQuestion.draft=e.target.value;autosize(e.target);syncComposer(e.target);}
+  if(e.target.name==='note-search'){s.noteSearch=e.target.value;const pos=e.target.selectionStart;render();const input=root.querySelector('[name="note-search"]');input.focus();input.setSelectionRange(pos,pos);}
+  if(e.target.name==='toc-search'){
+   s.tocSearch=e.target.value;
+   const bar=e.target.closest('.toc-search-bar');
+   const clearBtn=bar?.querySelector('.toc-search-clear');
+   if(s.tocSearch){
+    if(!clearBtn&&bar){
+     const btn=doc.createElement('button');btn.type='button';btn.className='icon-button toc-search-clear';
+     btn.dataset.action='clear-toc-search';btn.setAttribute('aria-label','پاک‌کردن جستجو');btn.innerHTML=icon('close');
+     bar.append(btn);
+    }
+   }else clearBtn?.remove();
+   updateTocMarkup();
+  }
+ },listenerOptions);
  root.addEventListener('change',e=>{if(e.target.name==='range')e.target.closest('form').querySelector('.range-inputs').hidden=!e.target.checked;if(e.target.name==='note-book'){s.noteBook=e.target.value;render();}if(e.target.name==='selected-note'){const id=Number(e.target.value);e.target.checked?s.selected.add(id):s.selected.delete(id);render();}},listenerOptions);
  root.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&s.view==='reader'&&s.readerQuestion&&!e.target.closest('.sheet,.drawer'))minimiseQuestion();
-  if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)&&e.target.matches('.note-tabs [role="tab"]')){e.preventDefault();const tabs=['notes','highlights'],at=tabs.indexOf(s.noteTab);s.noteTab=tabs[e.key==='Home'?0:e.key==='End'?1:(at+1)%2];s.selected.clear();render();root.querySelector('.note-tabs [aria-selected="true"]')?.focus();}
+  if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)&&e.target.matches('.note-tabs [role="tab"]')){e.preventDefault();const tabs=['notes','highlights','bookmarks'],at=tabs.indexOf(s.noteTab);const nextAt=e.key==='Home'?0:e.key==='End'?tabs.length-1:e.key==='ArrowLeft'?(at+1)%tabs.length:(at-1+tabs.length)%tabs.length;s.noteTab=tabs[nextAt];s.selected.clear();render();root.querySelector('.note-tabs [aria-selected="true"]')?.focus();}
   if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&['question','reader-question'].includes(e.target.name)){e.preventDefault();run(send(e.target.name==='question'?'chat':'reader'));}
  },listenerOptions);
  root.addEventListener('submit',e=>{
@@ -213,7 +416,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(form.matches('[data-pdf-page-form]'))return;
   e.preventDefault();
   if(form.matches('[data-chat-form],[data-reader-form]'))return run(send(form.hasAttribute('data-reader-form')?'reader':'chat'));
-  if(form.matches('[data-pages-form]')){const range=form.elements.range.checked,start=number(form.elements[range?'from':'single'].value),end=range?number(form.elements.to.value):start;const count=number(phone()?.querySelector('[data-pdf-page-count]')?.textContent?.replace(/[^۰-۹0-9]/g,''))||bookInfo(s.book).pages;if(!Number.isInteger(start)||!Number.isInteger(end)||start<1||end<start||end>count){s.error='شمارهٔ صفحه و ترتیب بازه را بررسی کنید.';renderOverlay();return;}s.scope='page';s.pages=Array.from({length:end-start+1},(_,i)=>start+i);closeOverlay();render();}
+  if(form.matches('[data-pages-form]')){const range=form.elements.range.checked;const count=number(phone()?.querySelector('[data-pdf-page-count]')?.textContent?.replace(/[^۰-۹0-9]/g,''))||bookInfo(s.book).pages;if(range){const start=number(form.elements.from.value),end=number(form.elements.to.value);if(!Number.isInteger(start)||!Number.isInteger(end)||start<1||end<start||end>count){s.error='شمارهٔ صفحه و ترتیب بازه را بررسی کنید.';renderOverlay();return;}s.scope='page';s.sessionContext=null;s.pages=Array.from({length:end-start+1},(_,i)=>start+i);}else{const pickerVal=pagePicker?.value;if(pickerVal?.isAll&&pickerVal.session!==null){s.scope='page';s.sessionContext=pickerVal.session;s.pages=pickerVal.pages;}else{const start=number(form.elements.single.value);if(!Number.isInteger(start)||start<1||start>count){s.error='شمارهٔ صفحه را بررسی کنید.';renderOverlay();return;}s.scope='page';s.sessionContext=null;s.pages=[start];}}closeOverlay();render();}
   if(form.matches('[data-rename-form]'))run((async()=>{const title=form.elements.title.value.trim();if(!title)return;await api.renameSession(s.sheet.id,title);await refresh();closeOverlay();})());
   if(form.matches('[data-book-search]'))run(searchBook(form.elements.search.value));
   if(form.matches('[data-onboarding-form],[data-profile-form]'))run((async()=>{
@@ -255,7 +458,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='open-reader'){capture();if(s.readerQuestion?.inChat){s.drafts[s.book]=s.readerQuestion.chatDraft||'';s.readerQuestion.inChat=false;}navigate('reader',{captured:true});}
   if(a==='expand-question')expandQuestion();
   if(a==='dismiss-reader-guide'){dismissReaderGuide();root.querySelector('.reader-page')?.focus({preventScroll:true});}
-  if(a==='new-chat'){abortJob();s.sessionId=null;s.messages=[];s.readerQuestion=null;s.scope='all';s.chatScroll=0;s.follow=true;navigate('chat');}
+  if(a==='new-chat'){abortJob();s.sessionId=null;s.messages=[];s.readerQuestion=null;s.scope='all';s.sessionContext=null;s.chatScroll=0;s.follow=true;navigate('chat');}
   if(a==='suggest-question'||a==='suggest-plan'){if(a==='suggest-question'){s.scope='page';if(!s.pages||!s.pages.length)s.pages=[activePage(s)];}s.drafts[s.book]=a==='suggest-question'?'این بخش از کتاب را توضیح بده.':'برای مطالعهٔ این کتاب یک برنامه پیشنهاد بده.';render();root.querySelector('[name="question"]').focus();}
   if(a==='back'){const view=s.stack.pop()||'reader';navigate(view,{back:true});}
   if(a==='account')navigate('account');
@@ -269,8 +472,8 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='rename-session'){const row=s.sessions.find(r=>r.id===(sessionMenu?.id??s.sheet?.id));openSheet('rename',{id:row.id,title:row.title});}
   if(a==='confirm-delete-session'){const row=s.sessions.find(r=>r.id===(sessionMenu?.id??s.sheet?.id));openSheet('delete-session',{id:row.id,title:row.title});}
   if(a==='delete-session')run((async()=>{const id=s.sheet.id;await api.deleteSession(id);await refresh();closeOverlay();if(s.sessionId===id){s.sessionId=null;s.messages=[];navigate('chat');}})());
-  if(a==='clear-pages'){s.scope='all';s.pages=[];closeOverlay();render();}
-  if(a==='toggle-scope'){s.scope=s.scope==='page'?'all':'page';if(s.scope==='page'&&(!s.pages||!s.pages.length))s.pages=[activePage(s)];render();}
+  if(a==='clear-pages'){s.scope='all';s.pages=[];s.sessionContext=null;closeOverlay();render();}
+  if(a==='toggle-scope'){s.scope=(s.scope==='page'||s.scope==='session')?'all':'page';if(s.scope==='page'&&(!s.pages||!s.pages.length))s.pages=[activePage(s)];render();}
   if(a==='send-chat')run(send());
   if(a==='send-reader')run(send('reader'));
   if(a==='retry')run(send('chat',Number(t.dataset.index)));
@@ -287,6 +490,32 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='citation')run(citation(t));
   if(a==='study')sourcePage(t.dataset.book,t.dataset.page);
   if(a==='notebook')run(loadNotes());
+  if(a==='toggle-bookmark')run(toggleBookmark());
+  if(a==='toggle-drawer-section'){
+   const sec=t.dataset.section;
+   s.drawerSections=s.drawerSections||{highlights:true,bookmarks:true,notes:true};
+   s.drawerSections[sec]=!s.drawerSections[sec];
+   renderOverlay();
+   root.querySelector(`.drawer [data-action="toggle-drawer-section"][data-section="${sec}"]`)?.focus({preventScroll:true});
+  }
+  if(a==='drawer-highlight'){
+   const id=Number(t.dataset.id);
+   const n=s.notes.find(x=>x.id===id);
+   closeOverlay();
+   if(n&&n.doc&&n.pages?.length)sourcePage(n.doc,n.pages[0],n.text,n.source?.selection);
+  }
+  if(a==='drawer-bookmark'){
+   const pg=number(t.dataset.page);
+   closeOverlay();
+   if(pg)sourcePage(s.book,pg,'');
+  }
+  if(a==='drawer-note'){
+   const id=Number(t.dataset.id);
+   closeOverlay();
+   s.noteId=id;
+   s.editOpinion=false;
+   navigate('note');
+  }
   if(a==='note-tab'){s.noteTab=t.dataset.tab;s.selected.clear();render();root.querySelector('.note-tabs [aria-selected="true"]')?.focus();}
   if(a==='clear-note-search'){s.noteSearch='';render();root.querySelector('[name="note-search"]')?.focus();}
   if(a==='note-open'){s.noteId=Number(t.dataset.id);s.editOpinion=false;navigate('note');}
@@ -302,9 +531,51 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='delete-note')openSheet('delete-notes',{ids:[s.noteId]});
   if(a==='confirm-delete-notes')run((async()=>{const ids=s.sheet.ids;await api.deleteNotes(ids);s.notes=s.notes.filter(n=>!ids.includes(n.id));s.selected.clear();closeOverlay();if(s.view==='note')s.stack.pop();s.view='notebook';render();})());
   if(a==='export-notes'){const notes=visibleNotes(s);if(!notes.length){toast('یادداشتی برای خروجی وجود ندارد.');return;}const print=doc.createElement('section');print.className='note-print';print.innerHTML=`<h1>دفتر یادداشت</h1>${notes.map(n=>`<article><h2>${esc(n.doc?bookInfo(n.doc).title:'یادداشت گفتگو')}</h2><p>${esc(n.text)}</p>${n.opinion?`<h3>نظر من</h3><p>${esc(n.opinion)}</p>`:''}</article>`).join('')}`;doc.body.append(print);win.print();print.remove();}
-  if(a==='contents')run((async()=>{const state=phone()?.bookReader;if(!state){toast('ابتدا صبر کنید کتاب باز شود.');return;}openSheet('contents');})());
-  if(a==='outline-page'){const page=s.outline[Number(t.dataset.index)]?.page;if(page)sourcePage(s.book,page);else toast('مقصد این عنوان مشخص نیست.');}
-  if(a==='search-page')sourcePage(s.book,t.dataset.page,t.dataset.text);
+  if(a==='contents')run((async()=>{
+   const toc=resolveBookToc(s.book,s.outline);
+   if(!toc&&!phone()?.bookReader){toast('ابتدا صبر کنید کتاب باز شود.');return;}
+   s.tocSearch='';
+   const active=activeTocLocation(toc,activePage(s));
+   s.tocExpanded=new Set(active.groupId?[active.groupId]:[toc?.groups?.[0]?.id].filter(Boolean));
+   openSheet('contents');
+  })());
+  if(a==='clear-toc-search'){
+   s.tocSearch='';
+   const bar=root.querySelector('.toc-search-bar');
+   const input=bar?.querySelector('input[name="toc-search"]');
+   if(input)input.value='';
+   bar?.querySelector('.toc-search-clear')?.remove();
+   updateTocMarkup();
+   input?.focus({preventScroll:true});
+  }
+  if(a==='toc-group'){
+   const gId=t.dataset.group;
+   if(gId){
+    if(!s.tocExpanded)s.tocExpanded=new Set();
+    if(s.tocExpanded.has(gId))s.tocExpanded.delete(gId);
+    else s.tocExpanded.add(gId);
+    updateTocMarkup();
+    root.querySelector(`.app-sheet [data-action="toc-group"][data-group="${gId}"]`)?.focus({preventScroll:true});
+   }
+  }
+  if(a==='outline-page'){
+   const page=number(t.dataset.page)||s.outline?.[Number(t.dataset.index)]?.page;
+   if(page){closeOverlay();sourcePage(s.book,page);}
+   else toast('مقصد این عنوان مشخص نیست.');
+  }
+  if(a==='toc-search-in-book'){
+   const q=s.tocSearch?.trim();
+   closeOverlay();
+   openSheet('book-search');
+   if(q)run(searchBook(q));
+  }
+  if(a==='clear-book-search'){s.bookSearch='';s.searchResults=null;renderOverlay();root.querySelector('.book-search-input')?.focus();}
+  if(a==='search-page'){
+   const pageNum=Number(t.dataset.page);
+   const query=t.dataset.query||t.dataset.text||s.bookSearch;
+   closeOverlay();
+   applySearchMatch(pageNum,query);
+  }
   if(['pdf-pages','pdf-audio','pdf-zoom','open-audio-sheet'].includes(a)){const trigger=s.menu||s.sheet?focusReturn:t;closeOverlay();phone()?.dispatchEvent(new win.CustomEvent('reader-tools-open',{bubbles:true,detail:{type:a==='open-audio-sheet'?'pdf-audio':a,trigger}}));}
   if(a==='buy')run((async()=>{s.payment=await api.purchase();navigate('payment');})());
   if(a==='verify-payment')run((async()=>{const result=await api.verifyPayment(s.payment?.authority,s.paymentOutcome||'success');s.payment={...s.payment,...result};if(result.subscription)s.profile.subscription=result.subscription;render();})());
@@ -319,9 +590,9 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='resend-otp')run((async()=>{await api.requestOtp(s.phone);startOtpCooldown();render();toast('کد ورود دوباره درخواست شد.');})());
  },listenerOptions);
  function restoreUnanswered(){const turn=s.messages.at(-1);if(turn?.role==='user'){turn.payload.failed=true;turn.payload.failure='پاسخ این پرسش کامل نشده است. می‌توانید دوباره تلاش کنید.';}}
- function resetAccountState(){disposePicker();closeSessionMenu({restore:false});lectureCatalog.clear();accountRevision++;sequence++;clearTimeout(otpTimer);Object.assign(s,{book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',profile:null,readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,pendingSource:null,outline:[],payment:null,phone:'',waitlisted:false});}
+ function resetAccountState(){disposePicker();closeSessionMenu({restore:false});lectureCatalog.clear();accountRevision++;sequence++;clearTimeout(otpTimer);Object.assign(s,{book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',sessionContext:null,profile:null,readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,pendingSource:null,outline:[],payment:null,phone:'',waitlisted:false,tocSearch:'',tocExpanded:null,drawerSections:{highlights:true,bookmarks:true,notes:true}});}
  function startOtpCooldown(){s.resendAt=Date.now()+60000;clearTimeout(otpTimer);otpTimer=setTimeout(()=>{if(!disposed&&s.view==='otp'){const button=root.querySelector('[data-action="resend-otp"]');if(button)button.disabled=false;}},60010);}
- async function initialize(){if(disposed)return;resetAccountState();storageKey=`book-ui:${s.demo?'demo:':''}${s.account.email||normalPhone(s.account.phone)}`;const saved=safeRead(storageKey);if(saved){for(const key of ['book','positions','drafts','pages','scope','sessionId','chatScroll','follow','theme','readerGuideSeen'])if(saved[key]!=null)s[key]=saved[key];s.view=['reader','chat'].includes(saved.view)?saved.view:'reader';}else s.view='reader';await refresh();if(s.sessionId){try{const row=await api.session(s.sessionId);s.messages=row.messages||[];restoreUnanswered();}catch{s.sessionId=null;s.messages=[];}}if(s.account&&!s.account.profile_completed&&!s.demo){navigate('onboarding');return;}render();}
+ async function initialize(){if(disposed)return;resetAccountState();storageKey=`book-ui:${s.demo?'demo:':''}${s.account.email||normalPhone(s.account.phone)}`;const saved=safeRead(storageKey);if(saved){for(const key of ['book','positions','drafts','pages','scope','sessionContext','sessionId','chatScroll','follow','theme','readerGuideSeen'])if(saved[key]!=null)s[key]=saved[key];s.view=['reader','chat'].includes(saved.view)?saved.view:'reader';}else s.view='reader';await refresh();if(s.sessionId){try{const row=await api.session(s.sessionId);s.messages=row.messages||[];restoreUnanswered();}catch{s.sessionId=null;s.messages=[];}}if(s.account&&!s.account.profile_completed&&!s.demo){navigate('onboarding');return;}render();}
  const mediaQuery=win.matchMedia?.('(prefers-color-scheme: dark)');mediaQuery?.addEventListener('change',applyTheme,{signal:lifecycle.signal});
  const viewport=win.visualViewport;
  function keyboard(){if(viewport)doc.documentElement.style.setProperty('--app-height',`${viewport.height}px`);}

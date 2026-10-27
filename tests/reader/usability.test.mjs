@@ -71,3 +71,47 @@ test('a native partial selection survives PDF zoom and suppresses accidental pag
  const point=(x,y)=>({clientX:x,clientY:y});touch(f,'touchstart',[point(30,200)]);touch(f,'touchend',[],[point(120,200)]);assert.equal(f.root.querySelector('.phone').dataset.pdfPage,'100');touch(f,'touchstart',[point(30,200),point(130,200)]);touch(f,'touchmove',[point(30,200),point(155,200)]);touch(f,'touchend',[]);await f.runtime.ready();
  assert.equal(f.doc.getSelection().toString(),'lph');assert.equal(f.root.querySelector('.phone').bookReader.captureSelection().text,'lph');click(f,'ask-agent');assert.equal(f.app.state.readerQuestion.selection.pages[0].start,1);assert.equal(f.app.state.readerQuestion.selection.pages[0].end,4);f.close();
 });
+
+test('invisible edge tap zones turn page left-to-next and right-to-prev respecting zoom and selection',async()=>{
+  const f=await fixture();
+  const nextBtn=f.root.querySelector('[data-action="reader-next-page"]');
+  const prevBtn=f.root.querySelector('[data-action="reader-prev-page"]');
+  assert.ok(nextBtn,'left edge next-page button must exist');
+  assert.ok(prevBtn,'right edge prev-page button must exist');
+  assert.equal(nextBtn.getAttribute('aria-label'),'صفحهٔ بعد');
+  assert.equal(prevBtn.getAttribute('aria-label'),'صفحهٔ قبل');
+
+  assert.equal(f.root.querySelector('.phone').dataset.pdfPage,'100');
+
+  nextBtn.click();
+  await f.runtime.ready();
+  assert.equal(f.root.querySelector('.phone').dataset.pdfPage,'101');
+  assert.equal(f.root.querySelector('[data-page-number]').textContent,'۱۰۱');
+
+  prevBtn.click();
+  await f.runtime.ready();
+  assert.equal(f.root.querySelector('.phone').dataset.pdfPage,'100');
+  assert.equal(f.root.querySelector('[data-page-number]').textContent,'۱۰۰');
+
+  const node=f.root.querySelector('[data-pdf-text]').firstChild;
+  const range=f.doc.createRange();range.setStart(node,1);range.setEnd(node,4);
+  f.doc.getSelection().addRange(range);
+  f.doc.dispatchEvent(new f.dom.window.Event('selectionchange'));
+
+  nextBtn.click();
+  await f.runtime.ready();
+  assert.equal(f.root.querySelector('.phone').dataset.pdfPage,'100','should not turn page while text is selected');
+
+  f.doc.getSelection().removeAllRanges();
+  f.doc.dispatchEvent(new f.dom.window.Event('selectionchange'));
+
+  const statePhone=f.root.querySelector('.phone');
+  statePhone.dataset.pdfZoom='1.5';
+  for(const state of f.runtime.records.values())state.zoom=1.5;
+
+  nextBtn.click();
+  await f.runtime.ready();
+  assert.equal(f.root.querySelector('.phone').dataset.pdfPage,'100','should not turn page while zoomed');
+
+  f.close();
+});

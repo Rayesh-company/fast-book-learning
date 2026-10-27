@@ -274,7 +274,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
     state.toolTrigger=returnTrigger;
     if(state.product&&type==='pdf-pages'){
       const pickerRoot=panel.querySelector('[data-page-session-picker]');
-      state.picker=installPageSessionPicker({root:pickerRoot,page:state.page,count:state.pdf.numPages,sessions:state.lecture?.sessions||[]});
+      state.picker=installPageSessionPicker({root:pickerRoot,page:state.page,count:state.pdf.numPages,sessions:state.lecture?.sessions||[],allowAll:false});
       const picker=state.picker;
       pickerRoot.querySelector('[data-picker-status]').textContent='در حال دریافت جلسات…';
       Promise.resolve(state.lecture?.ready).then(()=>{
@@ -308,6 +308,15 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
       state.selection = null; state.actionSelection = null;
       doc.getSelection()?.removeAllRanges();
       phone.querySelector('.reader-selection-actions').hidden = true;
+    }
+    if (['reader-next-page', 'reader-prev-page'].includes(target.dataset.action) && state.pdf) {
+      if (state.reader?.captureSelection() || !doc.getSelection()?.isCollapsed) return;
+      if (state.zoom > 1) return;
+      const direction = target.dataset.action === 'reader-next-page' ? 1 : -1;
+      const targetPage = Math.max(1, Math.min(state.pdf.numPages, state.page + direction));
+      if (targetPage !== state.page) {
+        state.ready = render(state, targetPage).catch(error => fail(state, error));
+      }
     }
     if (target.matches('[data-pdf-dismiss]')) closeSheets(phone);
     if (['pdf-pages','pdf-audio','pdf-zoom'].includes(target.dataset.action)&&!phone.classList.contains('product-shell'))openTools(phone,target.dataset.action,target);
