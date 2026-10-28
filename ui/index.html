@@ -2636,29 +2636,99 @@
           color: var(--bad);
           font-size: 0.85rem;
         }
+        #auth-gate .auth-tabs {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.4rem;
+          margin-bottom: 0.2rem;
+        }
+        #auth-gate .auth-tab {
+          font: inherit;
+          font-size: 0.9rem;
+          padding: 0.4rem 0.5rem;
+          border-radius: 8px;
+          border: 1px solid var(--rule);
+          background: transparent;
+          color: var(--muted);
+          cursor: pointer;
+        }
+        #auth-gate .auth-tab[aria-selected="true"] {
+          background: var(--raised);
+          color: var(--ink);
+          border-color: var(--ink);
+        }
+        #auth-gate small.otp-hint {
+          color: var(--muted);
+          font-size: 0.8rem;
+        }
+        #auth-gate .otp-sent {
+          margin: 0;
+          color: #1a7f4b;
+          font-size: 0.85rem;
+        }
       </style>
       <form id="auth-form">
         <h2>ورود</h2>
-        <label for="auth-email">ایمیل</label>
-        <input
-          type="email"
-          id="auth-email"
-          name="email"
-          autocomplete="email"
-          dir="ltr"
-          required
-        />
-        <label for="auth-password">گذرواژه</label>
-        <input
-          type="password"
-          id="auth-password"
-          name="password"
-          autocomplete="current-password"
-          dir="ltr"
-          required
-        />
+        <!-- The SMS door's tab row (ADR-0017's open door, finally wired
+             beside ADR-0013's credential door): the same form, two ways
+             in — the password fields below, or the phone + code flow.
+             The ids stay off the retired "phone" noun
+             (test_sheet_retires_the_phone_gate pins its absence). -->
+        <div class="auth-tabs" role="tablist" aria-label="روش ورود">
+          <button type="button" id="auth-tab-password" class="auth-tab" role="tab" aria-selected="true">ورود با گذرواژه</button>
+          <button type="button" id="auth-tab-otp" class="auth-tab" role="tab" aria-selected="false">ورود با پیامک</button>
+        </div>
+        <div id="auth-password-fields">
+          <label for="auth-email">ایمیل</label>
+          <input
+            type="email"
+            id="auth-email"
+            name="email"
+            autocomplete="email"
+            dir="ltr"
+            required
+          />
+          <label for="auth-password">گذرواژه</label>
+          <input
+            type="password"
+            id="auth-password"
+            name="password"
+            autocomplete="current-password"
+            dir="ltr"
+            required
+          />
+        </div>
+        <div id="auth-otp-fields" hidden>
+          <label for="otp-phone-input">شمارهٔ موبایل</label>
+          <input
+            type="tel"
+            id="otp-phone-input"
+            name="otp-phone"
+            autocomplete="tel"
+            inputmode="numeric"
+            placeholder="09123456789"
+            pattern="09[0-9]{9}"
+            maxlength="11"
+            dir="ltr"
+            required
+          />
+          <label for="otp-code-input" id="otp-code-label" hidden>کد پیامک‌شده</label>
+          <input
+            type="text"
+            id="otp-code-input"
+            name="otp-code"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            pattern="[0-9]{6}"
+            maxlength="6"
+            dir="ltr"
+            hidden
+          />
+          <p class="otp-sent" id="otp-sent-note" hidden>کد ارسال شد.</p>
+          <small class="otp-hint" id="otp-hint" hidden>کد ۶ رقمی را وارد کنید؛ تا ۵ دقیقه اعتبار دارد.</small>
+        </div>
         <p id="auth-error" hidden></p>
-        <button type="submit">ورود</button>
+        <button type="submit" id="auth-submit">ورود</button>
       </form>
       <script>
         (function () {
@@ -2674,7 +2744,55 @@
           var errorEl = document.getElementById("auth-error");
           var emailEl = document.getElementById("auth-email");
           var passwordEl = document.getElementById("auth-password");
+          var submitEl = document.getElementById("auth-submit");
+          var tabPasswordEl = document.getElementById("auth-tab-password");
+          var tabOtpEl = document.getElementById("auth-tab-otp");
+          var passwordFieldsEl = document.getElementById("auth-password-fields");
+          var otpFieldsEl = document.getElementById("auth-otp-fields");
+          var otpPhoneEl = document.getElementById("otp-phone-input");
+          var otpCodeEl = document.getElementById("otp-code-input");
+          var otpCodeLabelEl = document.getElementById("otp-code-label");
+          var otpSentNoteEl = document.getElementById("otp-sent-note");
+          var otpHintEl = document.getElementById("otp-hint");
+          var otpStep = "phone"; // "phone" → request the code, "code" → verify it
           var originalFetch = window.fetch.bind(window);
+
+          function setOtpStep(step) {
+            otpStep = step;
+            var codePhase = step === "code";
+            otpCodeEl.hidden = !codePhase;
+            otpCodeLabelEl.hidden = !codePhase;
+            otpHintEl.hidden = !codePhase;
+            otpSentNoteEl.hidden = !codePhase;
+            otpPhoneEl.disabled = codePhase;
+            submitEl.textContent = codePhase ? "تأیید و ورود" : "دریافت کد";
+            if (codePhase) {
+              otpCodeEl.focus();
+            }
+          }
+
+          function setAuthMode(mode) {
+            var otp = mode === "otp";
+            tabPasswordEl.setAttribute("aria-selected", otp ? "false" : "true");
+            tabOtpEl.setAttribute("aria-selected", otp ? "true" : "false");
+            passwordFieldsEl.hidden = otp;
+            otpFieldsEl.hidden = !otp;
+            errorEl.hidden = true;
+            submitEl.textContent = otp ? "دریافت کد" : "ورود";
+            if (otp) {
+              setOtpStep("phone");
+              otpPhoneEl.focus();
+            } else {
+              emailEl.focus();
+            }
+          }
+
+          tabPasswordEl.addEventListener("click", function () {
+            setAuthMode("password");
+          });
+          tabOtpEl.addEventListener("click", function () {
+            setAuthMode("otp");
+          });
 
           function showAuthGate(message) {
             if (message) {
@@ -2682,7 +2800,17 @@
               errorEl.hidden = false;
             }
             gate.hidden = false;
-            if (emailEl.value) {
+            if (
+              !otpFieldsEl.hidden &&
+              otpFieldsEl.checkVisibility &&
+              otpFieldsEl.checkVisibility()
+            ) {
+              if (otpStep === "code") {
+                otpCodeEl.focus();
+              } else {
+                otpPhoneEl.focus();
+              }
+            } else if (emailEl.value) {
               passwordEl.focus();
             } else {
               emailEl.focus();
@@ -2698,11 +2826,61 @@
             });
           };
 
+          function otpSubmit() {
+            errorEl.hidden = true;
+            if (otpStep === "phone") {
+              originalFetch("/auth/otp/request", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ phone: otpPhoneEl.value.trim() }),
+              })
+                .then(function (response) {
+                  if (response.ok) {
+                    setOtpStep("code");
+                    return;
+                  }
+                  return response.json().then(function (payload) {
+                    showAuthGate(payload.detail || "ارسال کد انجام نشد.");
+                  });
+                })
+                .catch(function () {
+                  showAuthGate("ارسال کد انجام نشد.");
+                });
+              return;
+            }
+            originalFetch("/auth/otp/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                phone: otpPhoneEl.value.trim(),
+                code: otpCodeEl.value.trim(),
+              }),
+            })
+              .then(function (response) {
+                if (response.ok) {
+                  gate.hidden = true;
+                  otpCodeEl.value = "";
+                  window.location.reload();
+                  return;
+                }
+                return response.json().then(function (payload) {
+                  showAuthGate(payload.detail || "کد واردشده درست نیست.");
+                });
+              })
+              .catch(function () {
+                showAuthGate("ورود با پیامک انجام نشد.");
+              });
+          }
+
           document
             .getElementById("auth-form")
             .addEventListener("submit", function (event) {
               event.preventDefault();
               errorEl.hidden = true;
+              if (!otpFieldsEl.hidden) {
+                otpSubmit();
+                return;
+              }
               originalFetch("/auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
