@@ -281,10 +281,126 @@ function onboardingView(s){
  return `<div class="auth-page onboarding-page"><div class="auth-brand">${icon('book')}<span>شخصی‌سازی همراه مطالعه</span></div><h1>سبک یادگیری و علایق شما</h1><p>پاسخ‌های شما لحن، سطح تحلیل و شیوهٔ پاسخ‌دهی همراه هوشمند را هماهنگ می‌کند. اولین پرسش اجباری است و باقی موارد اختیاری هستند.</p>${profileForm(s,{isEdit:false})}</div>`;
 }
 
+
+export function adminDashboard(s) {
+  const accounts = s.adminAccounts || [];
+  const query = (s.adminSearch || '').trim().toLowerCase();
+  const filtered = query
+    ? accounts.filter(a => (a.email || '').toLowerCase().includes(query) || (a.phone || '').includes(query))
+    : accounts;
+  const tab = s.adminTab || 'accounts';
+
+  const totalCredit = accounts.reduce((sum, a) => sum + (Number(a.balance_toman) || 0), 0);
+  const operatorCount = accounts.filter(a => a.role === 'operator').length;
+  const adminCount = accounts.filter(a => a.role === 'admin').length;
+
+  return `${backbar('میز مدیریت')}
+<div class="panel-body admin-dashboard">
+  <div class="admin-summary-grid">
+    <div class="admin-metric-card">
+      <small>کل حساب‌ها</small>
+      <strong>${digits(accounts.length)}</strong>
+    </div>
+    <div class="admin-metric-card">
+      <small>اپراتورها</small>
+      <strong>${digits(operatorCount)}</strong>
+    </div>
+    <div class="admin-metric-card">
+      <small>مدیران</small>
+      <strong>${digits(adminCount)}</strong>
+    </div>
+    <div class="admin-metric-card full-width">
+      <small>مجموع اعتبار اختصاص‌یافته</small>
+      <strong>${digits(totalCredit.toLocaleString('fa-IR'))} <span class="currency">تومان</span></strong>
+    </div>
+  </div>
+
+  <div class="admin-tab-bar" role="tablist" aria-label="بخش‌های میز مدیریت">
+    <button type="button" role="tab" aria-selected="${tab === 'accounts'}" class="admin-tab-btn ${tab === 'accounts' ? 'active' : ''}" data-action="admin-tab" data-tab="accounts">
+      حساب‌ها و اعتبار
+    </button>
+    <button type="button" role="tab" aria-selected="${tab === 'create'}" class="admin-tab-btn ${tab === 'create' ? 'active' : ''}" data-action="admin-tab" data-tab="create">
+      ساخت حساب جدید
+    </button>
+  </div>
+
+  ${tab === 'accounts' ? `
+    <div class="admin-accounts-section">
+      <label class="admin-search-bar">
+        ${icon('search')}
+        <input name="admin-search" value="${esc(s.adminSearch || '')}" placeholder="جستجو در ایمیل یا شماره موبایل..." aria-label="جستجو در حساب‌ها">
+        ${s.adminSearch ? ib('close', 'پاک‌کردن جستجو', 'clear-admin-search') : ''}
+      </label>
+
+      ${s.adminLoading ? '<p class="skeleton" role="status">در حال دریافت فهرست حساب‌ها…</p>' : ''}
+
+      <div class="admin-account-list">
+        ${filtered.length ? filtered.map(a => `
+          <article class="admin-account-card">
+            <div class="admin-card-head">
+              <span class="admin-card-email">${esc(a.email)}</span>
+              <span class="role-badge role-badge-${esc(a.role)}">${a.role === 'admin' ? 'مدیر' : 'اپراتور'}</span>
+            </div>
+            <div class="admin-card-body">
+              <span class="admin-card-phone">${a.phone ? digits(a.phone) : 'بدون شمارهٔ موبایل'}</span>
+              <span class="admin-card-spend">مصرف امروز: ${digits((a.today_spend_toman || 0).toLocaleString('fa-IR'))} تومان</span>
+            </div>
+            <div class="admin-card-foot">
+              <div class="admin-card-balance">
+                <small>اعتبار فعلی:</small>
+                <strong>${digits((a.balance_toman || 0).toLocaleString('fa-IR'))} <span class="currency">تومان</span></strong>
+              </div>
+              <button type="button" class="admin-topup-action" data-action="open-admin-topup" data-email="${esc(a.email)}" data-balance="${a.balance_toman || 0}">
+                ${icon('plus')}
+                <span>شارژ اعتبار</span>
+              </button>
+            </div>
+          </article>
+        `).join('') : empty('حسابی پیدا نشد', s.adminSearch ? 'با عبارت دیگری جستجو کنید.' : 'هنوز حسابی در سامانه ثبت نشده است.')}
+      </div>
+    </div>
+  ` : `
+    <div class="admin-create-section">
+      <form data-admin-create-form class="admin-form">
+        <h3>مشخصات کاربر جدید</h3>
+        <label>ایمیل حساب
+          <input type="email" name="email" required placeholder="user@example.com" dir="ltr" autocomplete="off">
+        </label>
+        <label>گذرواژه
+          <input type="password" name="password" required placeholder="حداقل ۶ نویسه" dir="ltr" autocomplete="new-password">
+        </label>
+        <label>شمارهٔ همراه (اختیاری)
+          <input type="tel" name="phone" placeholder="0912 345 6789" dir="ltr">
+        </label>
+        <div class="form-group">
+          <span class="field-label">نقش کاربر در سامانه</span>
+          <div class="role-selector" role="radiogroup">
+            <label class="role-radio-label">
+              <input type="radio" name="role" value="operator" checked>
+              <span>اپراتور نشست (کاربر عادی)</span>
+            </label>
+            <label class="role-radio-label">
+              <input type="radio" name="role" value="admin">
+              <span>مدیر سامانه (Admin)</span>
+            </label>
+          </div>
+        </div>
+        <label>شارژ اولیهٔ اعتبار (تومان، اختیاری)
+          <input type="number" name="initial_credit" min="0" step="10000" placeholder="مثال: ۵۰٬۰۰۰" dir="ltr">
+        </label>
+        ${formError(s)}
+        <button type="submit" data-action="admin-create-submit" class="primary-action">ایجاد و ذخیرهٔ حساب</button>
+      </form>
+    </div>
+  `}
+</div>`;
+}
+
 export function mainView(s){
  if(s.view==='reader')return reader(s);
  if(s.view==='chat')return `${topbar(s)}<div class="conversation" tabindex="0" aria-label="گفتگو">${s.messages.length?`<p class="date-label">${date(s.messages[0].ts||s.messages[0].created_at||new Date().toISOString())}</p>${s.messages.map(message).join('')}`:empty('از کجای کتاب شروع کنیم؟','اینجا دربارهٔ کتاب بپرسید، برای مطالعه برنامه بگیرید، یا به خواندن ادامه بدهید.',action('پرسیدن از کتاب','suggest-question','','starter')+action('برنامهٔ مطالعه','suggest-plan','','starter')+action('بازگشت به مطالعه','open-reader','','starter'))}${s.busy?`<div class="operation-status" role="status"><span class="loading-dot"></span><span>${esc(s.status)}</span>${action('توقف','stop')}</div>`:''}</div>${action('رفتن به آخر گفتگو '+icon('chevron'),'latest','','jump-latest')}<div data-composer>${composer(s)}</div>`;
- if(s.view==='account')return `${backbar('حساب من')}<div class="panel-body">${s.loginRequired?`<section class="account-section"><h2>حساب</h2><p class="field-label">شمارهٔ موبایل</p><p class="account-phone">${esc(s.account?.phone||'شمارهٔ موبایل ثبت نشده است')}</p>${s.account?.email?`<p class="account-email">${esc(s.account.email)}</p>`:''}${action('خروج از حساب','logout','','text-action')}</section>`:''}<section class="account-section"><h2>مشخصات و سبک یادگیری</h2>${profileSummary(s)}${action('ویرایش مشخصات و نحوهٔ پاسخ‌دهی','edit-profile','','text-action')}</section><section class="account-section"><h2>اشتراک</h2>${subscription(s)}${action('جزئیات اشتراک','subscription','','text-action')}</section><section class="account-section"><h2>تنظیمات</h2><p>نمای برنامه</p><div class="theme-options" role="group" aria-label="نمای برنامه">${['system','light','dark'].map((v,i)=>action(['مطابق دستگاه','روشن','تیره'][i],'theme',`data-theme="${v}" aria-pressed="${s.theme===v}"`)).join('')}</div></section></div>`;
+ if(s.view==='admin')return adminDashboard(s);
+ if(s.view==='account')return `${backbar('حساب من')}<div class="panel-body">${s.loginRequired?`${s.account?.role==='admin'?`<section class="account-section admin-quick-link"><h2>میز مدیریت</h2><p class="field-label">مدیریت کاربران، صدور حساب‌ها و شارژ اعتبار</p>${action(icon('shield')+' ورود به میز مدیریت','open-admin','','primary-action')}</section>`:''}<section class="account-section"><h2>حساب</h2><p class="field-label">شمارهٔ موبایل</p><p class="account-phone">${esc(s.account?.phone||'شمارهٔ موبایل ثبت نشده است')}</p>${s.account?.email?`<p class="account-email">${esc(s.account.email)}</p>`:''}${action('خروج از حساب','logout','','text-action')}</section>`:''}<section class="account-section"><h2>مشخصات و سبک یادگیری</h2>${profileSummary(s)}${action('ویرایش مشخصات و نحوهٔ پاسخ‌دهی','edit-profile','','text-action')}</section><section class="account-section"><h2>اشتراک</h2>${subscription(s)}${action('جزئیات اشتراک','subscription','','text-action')}</section><section class="account-section"><h2>تنظیمات</h2><p>نمای برنامه</p><div class="theme-options" role="group" aria-label="نمای برنامه">${['system','light','dark'].map((v,i)=>action(['مطابق دستگاه','روشن','تیره'][i],'theme',`data-theme="${v}" aria-pressed="${s.theme===v}"`)).join('')}</div></section></div>`;
  if(s.view==='profile')return `${backbar('مشخصات و سبک یادگیری')}<div class="panel-body">${profileForm(s,{isEdit:true})}</div>`;
  if(s.view==='onboarding')return onboardingView(s);
  if(s.view==='subscription')return `${backbar('اشتراک')}<div class="panel-body">${subscription(s)}<div class="subscription-offer"><h2>یک ماه، همراه کتاب</h2><p>مطالعهٔ کتاب، یادداشت‌ها و شنیدن صوت؛ همراه با ۳۰ پرسش در هر ۵ ساعت.</p><p class="price">۴۹۰٬۰۰۰ <small>تومان / ماه</small></p>${primary('خرید اشتراک','buy')}<p class="field-label">پرداخت امن از طریق زرین‌پال</p></div>${formError(s)}</div>`;
@@ -301,11 +417,33 @@ function auth(s){return `<div class="auth-page">${s.view!=='login'?ib('chevron',
 export function visibleNotes(s){return s.notes.filter(n=>(s.noteBook==='all'||n.doc===s.noteBook||(n.source?.book===s.noteBook))&&(s.noteTab==='highlights'?n.source?.capture==='highlight':n.source?.capture!=='highlight')&&(!s.noteSearch||`${n.text} ${n.opinion}`.includes(s.noteSearch))).sort((a,b)=>s.noteTab==='highlights'?(a.pages?.[0]||0)-(b.pages?.[0]||0):String(b.created_at).localeCompare(String(a.created_at)));}
 function notebook(s){const notes=visibleNotes(s);return `${backbar('دفتر یادداشت',ib('more','بیشتر در دفتر','notebook-more'))}<div class="notebook-toolbar"><div class="note-tabs" role="tablist" aria-label="بخش دفتر">${['notes','highlights'].map((x,i)=>`<button role="tab" id="note-tab-${x}" aria-controls="note-panel" tabindex="${s.noteTab===x?0:-1}" aria-selected="${s.noteTab===x}" data-action="note-tab" data-tab="${x}">${['یادداشت‌ها','هایلایت‌ها'][i]}</button>`).join('')}</div><div class="notebook-filters"><label class="sr-only" for="note-book">کتاب یادداشت</label><select id="note-book" name="note-book"><option value="all" ${s.noteBook==='all'?'selected':''}>همهٔ کتاب‌ها</option>${books.map(b=>`<option value="${b.id}" ${s.noteBook===b.id?'selected':''}>${b.title}</option>`).join('')}</select>${action(s.selecting?'انصراف':'انتخاب','select-notes','','text-action')}</div><label class="note-search">${icon('search')}<input name="note-search" value="${esc(s.noteSearch)}" aria-label="جستجو در یادداشت‌ها" placeholder="جستجو در متن و نظر من">${s.noteSearch?ib('close','پاک‌کردن جستجوی یادداشت‌ها','clear-note-search'):''}</label></div><div class="note-list" id="note-panel" role="tabpanel" aria-labelledby="note-tab-${s.noteTab}" tabindex="0">${s.notesLoading?'<p class="skeleton" role="status">در حال دریافت یادداشت‌ها…</p>':notes.length?notes.map(n=>`<div class="note-row">${s.selecting?`<input type="checkbox" name="selected-note" value="${n.id}" ${s.selected.has(n.id)?'checked':''} aria-label="انتخاب یادداشت">`:''}<button data-action="note-open" data-id="${n.id}"><p>${esc(n.text)}</p><small>${n.doc?esc(bookInfo(n.doc).title):'از گفتگوی همراه'}${n.pages?.length?' · '+pageLabel(n.pages):''}</small></button></div>`).join(''):empty(s.noteSearch?'موردی پیدا نشد':'هنوز یادداشتی برای این کتاب ذخیره نکرده‌اید',s.noteSearch?'عبارت کوتاه‌تری را جستجو کنید.':'از پاسخ همراه یک یادداشت ذخیره کنید یا متن کتاب را هایلایت کنید.',s.noteSearch?'':action(s.stack.at(-1)==='chat'?'بازگشت به گفتگو':'بازگشت به کتاب','back','','starter'))}</div>${s.selecting?`<div class="bulk-bar"><span>${digits(s.selected.size)} انتخاب</span>${action('کپی','copy-notes',s.selected.size?'':'disabled')}${action('حذف','delete-notes',s.selected.size?'':'disabled','danger-action')}</div>`:''}${formError(s)}`;}
 function noteDetail(s){const n=s.notes.find(n=>n.id===s.noteId);if(!n)return backbar('یادداشت')+empty('یادداشت پیدا نشد','ممکن است از دستگاه دیگری حذف شده باشد.');return `${backbar('یادداشت',ib('more','اقدام‌های یادداشت','note-more'))}<div class="panel-body note-detail"><p class="note-source">${n.doc?esc(bookInfo(n.doc).title):'از گفتگوی همراه'}${n.pages?.length?' · '+pageLabel(n.pages):''}</p><div class="saved-text">${esc(n.text)}</div><section class="opinion"><h2>نظر من</h2>${s.editOpinion?`<label class="sr-only" for="opinion">نظر من</label><textarea id="opinion" name="opinion" maxlength="2000">${esc(n.opinion)}</textarea>${primary('ذخیرهٔ نظر','save-opinion')}${action('انصراف','cancel-opinion','','text-action')}`:`<p>${esc(n.opinion||'می‌توانید برداشت خودتان را اینجا بنویسید.')}</p>${action('ویرایش','edit-opinion','','text-action')}`}</section>${n.doc&&n.pages?.length||n.source?.session_id?action('رفتن به منبع '+icon('book'),'note-source','','source-action'):''}${formError(s)}</div>`;}
-export function drawer(s){const nav=(n,text,a)=>`<button class="nav-item" data-action="${a}">${icon(n)}<span>${text}</span></button>`;const groups=[['امروز',0,1],['۷ روز گذشته',1,7],['قدیمی‌تر',7,Infinity]];const today=new Date();today.setHours(0,0,0,0);return `<button class="drawer-scrim" data-action="close-menu" aria-label="بستن منو"></button><aside class="drawer" role="dialog" aria-modal="true" aria-label="${s.view==='reader'?'منوی کتاب‌خوان':'منوی چت'}"><div class="drawer-title"><span>${s.view==='reader'?'کتاب‌خوان':'گفتگوهای شما'}</span>${ib('close','بستن منو','close-menu')}</div><nav class="drawer-nav">${s.view==='reader'?`<div class="reader-nav-group" role="group" aria-label="در کتاب"><p class="reader-nav-label">در کتاب</p>${nav('list','فهرست کتاب','contents')}${nav('search','جستجو در کتاب','book-search')}</div><div class="reader-nav-group" role="group" aria-label="گفتگو و یادداشت">${nav('notes','دفتر یادداشت','notebook')}${nav('chat','رفتن به چت','open-chat')}</div>`:nav('new','گفتگوی تازه','new-chat')+nav('book','کتاب‌خوان','open-reader')+nav('library','انتخاب کتاب','books')+nav('notes','دفتر یادداشت','notebook')}</nav><div class="history">${s.view==='chat'?s.sessions.length?groups.map(([label,min,max])=>{const rows=s.sessions.filter(r=>{const age=Math.max(0,Math.floor((today-new Date(r.updated_at))/86400000)+1);return age>=min&&age<max;});return rows.length?`<p class="history-label">${label}</p>${rows.map(r=>`<div class="history-item ${s.sessionId===r.id?'current':''}"><button class="history-name" data-action="open-session" data-id="${r.id}">${esc(r.title||'گفتگوی تازه')}<small>${esc(bookInfo(r.book).title)}</small></button>${ib('more','اقدام‌های گفتگو: '+esc(r.title),'session-more',`data-id="${r.id}" aria-haspopup="menu" aria-expanded="false"`)}</div>`).join('')}`:'';}).join(''):'<p class="history-empty">گفتگوهای شما پس از اولین پرسش اینجا می‌آیند.</p>':''}</div><button class="account-button" data-action="account"><span class="account-icon">${icon('user')}</span><span>${s.loginRequired?'حساب من':'اشتراک و تنظیمات'}<small>${s.profile?.subscription?.active?'اشتراک فعال':s.loginRequired?'مشاهدهٔ اشتراک و تنظیمات':'نمای روشن، تیره یا دستگاه'}</small></span></button></aside>`;}
+export function drawer(s){const nav=(n,text,a)=>`<button class="nav-item" data-action="${a}">${icon(n)}<span>${text}</span></button>`;const groups=[['امروز',0,1],['۷ روز گذشته',1,7],['قدیمی‌تر',7,Infinity]];const today=new Date();today.setHours(0,0,0,0);return `<button class="drawer-scrim" data-action="close-menu" aria-label="بستن منو"></button><aside class="drawer" role="dialog" aria-modal="true" aria-label="${s.view==='reader'?'منوی کتاب‌خوان':'منوی چت'}"><div class="drawer-title"><span>${s.view==='reader'?'کتاب‌خوان':'گفتگوهای شما'}</span>${ib('close','بستن منو','close-menu')}</div><nav class="drawer-nav">${s.view==='reader'?`<div class="reader-nav-group" role="group" aria-label="در کتاب"><p class="reader-nav-label">در کتاب</p>${nav('list','فهرست کتاب','contents')}${nav('search','جستجو در کتاب','book-search')}</div><div class="reader-nav-group" role="group" aria-label="گفتگو و یادداشت">${nav('notes','دفتر یادداشت','notebook')}${nav('chat','رفتن به چت','open-chat')}${(s.account?.role==='admin'?nav('shield','میز مدیریت','open-admin'):'')}</div>`:nav('new','گفتگوی تازه','new-chat')+nav('book','کتاب‌خوان','open-reader')+nav('library','انتخاب کتاب','books')+nav('notes','دفتر یادداشت','notebook')+(s.account?.role==='admin'?nav('shield','میز مدیریت','open-admin'):'')}</nav><div class="history">${s.view==='chat'?s.sessions.length?groups.map(([label,min,max])=>{const rows=s.sessions.filter(r=>{const age=Math.max(0,Math.floor((today-new Date(r.updated_at))/86400000)+1);return age>=min&&age<max;});return rows.length?`<p class="history-label">${label}</p>${rows.map(r=>`<div class="history-item ${s.sessionId===r.id?'current':''}"><button class="history-name" data-action="open-session" data-id="${r.id}">${esc(r.title||'گفتگوی تازه')}<small>${esc(bookInfo(r.book).title)}</small></button>${ib('more','اقدام‌های گفتگو: '+esc(r.title),'session-more',`data-id="${r.id}" aria-haspopup="menu" aria-expanded="false"`)}</div>`).join('')}`:'';}).join(''):'<p class="history-empty">گفتگوهای شما پس از اولین پرسش اینجا می‌آیند.</p>':''}</div><button class="account-button" data-action="account"><span class="account-icon">${icon('user')}</span><span>${s.loginRequired?'حساب من':'اشتراک و تنظیمات'}<small>${s.profile?.subscription?.active?'اشتراک فعال':s.loginRequired?'مشاهدهٔ اشتراک و تنظیمات':'نمای روشن، تیره یا دستگاه'}</small></span></button></aside>`;}
 export function sheet(s){const sh=s.sheet;if(!sh)return '';let body='',title='';
  if(sh.type==='books'){title='انتخاب کتاب';body=books.map(b=>`<button class="book-choice" data-action="select-book" data-book="${b.id}"><span class="book-cover cover-${b.id}">${esc(b.cover)}</span><span><strong>${esc(b.title)}</strong><small>${b.author}</small></span>${s.book===b.id?icon('check'):''}</button>`).join('');}
   if(sh.type==='pages'){title='صفحه و جلسهٔ پرسش';body=`<form data-pages-form><p>${esc(bookInfo(s.book).title)}</p>${!s.pageFiltering?'<p class="field-label">صفحات برای مشخص‌کردن بخش مطالعه ثبت می‌شوند؛ جستجوی پاسخ فعلاً در کل کتاب است.</p>':''}${pageSessionPickerMarkup({inputName:'single',page:s.pages?.[0]||activePage(s)})}<label class="range-check"><input type="checkbox" name="range" ${s.pages?.length>1?'checked':''}>انتخاب بازه</label><div class="range-inputs" ${s.pages?.length>1?'':'hidden'}><label>از صفحه<input name="from" inputmode="numeric" value="${digits(s.pages?.[0]||activePage(s))}"></label><label>تا صفحه<input name="to" inputmode="numeric" value="${digits(s.pages?.at(-1)||activePage(s))}"></label></div>${formError(s)}<button class="primary-action" type="submit">تأیید</button>${action('حذف انتخاب صفحات','clear-pages','','clear-pages')}</form>`;}
 
+ if(sh.type==='admin-topup'){
+  title='شارژ اعتبار حساب';
+  body=`<form data-admin-topup-form class="admin-topup-sheet">
+    <p class="admin-topup-target">${esc(sh.email)}</p>
+    <p class="admin-topup-balance">اعتبار فعلی: <strong>${digits(Number(sh.balance||0).toLocaleString('fa-IR'))} تومان</strong></p>
+    <span class="field-label">انتخاب سریع مبلغ شارژ (تومان):</span>
+    <div class="topup-quick-chips">
+      ${[50000,100000,200000,500000,1000000].map(amt=>`
+        <button type="button" class="chip-btn" data-action="pick-topup-amount" data-amount="${amt}">
+          +${digits(amt.toLocaleString('fa-IR'))}
+        </button>
+      `).join('')}
+    </div>
+    <input type="hidden" name="email" value="${esc(sh.email)}">
+    <label class="amount-input-label">مبلغ شارژ (تومان)
+      <input type="number" name="amount" min="1000" step="1000" value="100000" required dir="ltr">
+    </label>
+    ${formError(s)}
+    <button type="submit" class="primary-action">تأیید شارژ اعتبار</button>
+    ${action('انصراف','close-sheet','','clear-pages')}
+  </form>`;
+ }
  if(sh.type==='rename'){title='تغییر نام گفتگو';body=`<form data-rename-form><label>عنوان گفتگو<input name="title" maxlength="120" value="${esc(sh.title)}" required></label>${formError(s)}<button class="primary-action" type="submit">ذخیره</button></form>`;}
  if(sh.type==='delete-session'){title='حذف گفتگو؟';body=`<p>«${esc(sh.title)}» حذف می‌شود. یادداشت‌های ذخیره‌شده باقی می‌مانند.</p>${primary('حذف','delete-session')}${action('انصراف','close-sheet','','clear-pages')}`;}
  if(sh.type==='delete-notes'){title='حذف یادداشت‌ها؟';body=`<p>${digits(sh.ids.length)} یادداشت حذف می‌شود.</p>${primary('حذف','confirm-delete-notes')}${action('انصراف','close-sheet','','clear-pages')}`;}

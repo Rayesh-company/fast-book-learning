@@ -219,6 +219,7 @@ try:
         with_references,
     )
     from ui import lectures
+    from ui import raster
     from ui import telemetry
     abort_phone_research = abort_account_research
 except ImportError:  # the container runs this file as a script beside the modules
@@ -391,6 +392,7 @@ except ImportError:  # the container runs this file as a script beside the modul
         with_references,
     )
     import lectures
+    import raster
     import telemetry
     abort_phone_research = abort_account_research
 
@@ -485,14 +487,14 @@ RENDER_CACHE_CAP = int(os.environ.get("SESSION_RENDER_CACHE_CAP", str(3 << 30)))
 OTA_DIR = Path(os.environ.get("SESSION_OTA_DIR", str(UI_DIR / "ota")))
 # PDFium is not provably thread-safe across documents; renders are
 # serialized (one page takes a fraction of a second).
-RENDER_LOCK = threading.Lock()
+RENDER_LOCK = raster.RENDER_LOCK
 # The open-document reuse (ADR-0017): a raster cache miss used to pay a
 # full PdfDocument parse of the whole file on EVERY page — under the
 # global lock, so every waiting client waited too. The parsed document
 # handles live here, newest-used wins, closed on eviction; reuse stays
 # inside RENDER_LOCK so the thread-safety argument above holds unchanged.
-PDF_DOCS_CACHE: dict[str, object] = {}
-PDF_DOCS_CACHE_CAP = 2
+PDF_DOCS_CACHE = raster.PDF_DOCS_CACHE
+PDF_DOCS_CACHE_CAP = raster.PDF_DOCS_CACHE_CAP
 COGNEE_URL = os.environ.get("COGNEE_URL", "http://127.0.0.1:8000").rstrip("/")
 HOST = os.environ.get("SESSION_UI_HOST", "0.0.0.0")
 PORT = int(os.environ.get("SESSION_UI_PORT", "8765"))
@@ -1373,6 +1375,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # mirror of the system — a read, never a mutation.
             self._admin_console()
             return
+        if path == "/api/admin/accounts":
+            self._api_admin_accounts()
+            return
         if path == "/admin/requests":
             self._admin_requests_list()
             return
@@ -1709,7 +1714,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             return
 
-    _PAGE_WIDTH_RE = re.compile(r"/books/([A-Za-z0-9_-]+)/page/(\d{1,4})\.png$")
+    _PAGE_WIDTH_RE = re.compile(
+        r"/books/([A-Za-z0-9_-]+)/page/(\d{1,4})(?:\.(png|webp))?$"
+    )
 
     def _lecture_audio(self, path: str) -> None:
         """One lecture session's MP3 (the کتاب‌خوان's lecture player).
@@ -1795,15 +1802,14 @@ class SessionHandler(SimpleHTTPRequestHandler):
             pass
 
     def _book_page_image(self, path: str) -> None:
-        """One Book page as a PDFium raster — ``/books/<d>/page/<n>.png?w=``.
+        """One Book page as a raster — ``/books/<d>/page/<n>.(png|webp)?w=``.
 
         The visual pipeline (ADR-0007 rendering addendum): these Persian
         Books' subset fonts defeat pdf.js's canvas, so the pixel truth is
         produced server-side by a real PDF engine and the browser only
         overlays transparent text geometry for selection and highlights.
-        Renders are cached on disk keyed by dataset, page, and width
-        bucket; the w parameter is clamped and bucketed to bound the
-        cache. Account-gated (F-001): the rasters are the Book's own
+        Renders are cached on disk keyed by dataset, page, width
+        bucket, and format. Account-gated (F-001): the rasters are the Book's own
         pixels."""
         if resolve_identity(self) is None:
             return
@@ -1818,146 +1824,77 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self._drain_request_body()
             self.send_error(404, "Not found")
             return
+
+        requested_ext = match.group(3)
+        if requested_ext:
+            fmt = requested_ext
+        else:
+            accept = self.headers.get("Accept", "")
+            fmt = "webp" if "image/webp" in accept else "png"
+
         try:
             width = int((query.get("w") or ["1200"])[0])
         except ValueError:
             width = 1200
-        width = min(2400, max(480, round(width / 160) * 160))
-        if _pdfium is None:
-            self._send_json(
-                503,
-                {
-                    "detail": "موتور رندر PDF روی سرور نصب نیست؛ "
-                    "ظرف session را با pip install pypdfium2 بازسازی کنید."
-                },
-            )
-            return
-        cache_key = f"{dataset}-p{page_number}-w{width}.png"
-        cache_file = RENDER_CACHE_DIR / cache_key
-        started = time.monotonic()
-        try:
-            body = cache_file.read_bytes()
-        except OSError:
-            body = None
-        if body is not None:
-            # The fast path's own witness (ADR-0017): a warm cache hit
-            # answers here, before the lock, and is logged like a miss.
-            sys.stderr.write(
-                f"render {dataset} p{page_number} w{width}"
-                f" hit {time.monotonic() - started:.3f}s\n"
-            )
-        else:
-            body = self._render_book_page(dataset, page_number, width, cache_file)
-            if body is None:
-                self._drain_request_body()
-                self.send_error(404, "Not found")
+
+        res = raster.get_page_raster(
+            dataset=dataset,
+            page_number=page_number,
+            width=width,
+            fmt=fmt,
+            books_dir=BOOKS_DIR,
+            cache_dir=RENDER_CACHE_DIR,
+            cache_cap=RENDER_CACHE_CAP,
+            pdf_cache=PDF_DOCS_CACHE,
+            pdf_cap=PDF_DOCS_CACHE_CAP,
+        )
+        if res is None:
+            if raster._pdfium is None:
+                self._send_json(
+                    503,
+                    {
+                        "detail": "موتور رندر PDF روی سرور نصب نیست؛ "
+                        "ظرف session را با pip install pypdfium2 بازسازی کنید."
+                    },
+                )
                 return
+            self._drain_request_body()
+            self.send_error(404, "Not found")
+            return
+
+        body, content_type = res
         self._cache_policy = "private, max-age=604800, immutable"
         self.send_response(200)
-        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     @staticmethod
     def _pdf_doc_handle(source: Path):
-        """The reused parsed document (ADR-0017): an LRU of open
-        PdfDocuments, closed on eviction. A raster cache miss used to
-        pay a full parse of the whole file on EVERY page — under the
-        global lock, so every waiting client waited with it. Callers
-        hold RENDER_LOCK, so the reuse never widens PDFium's thread
-        exposure; the books are read-only mounts, the handle cannot go
-        stale under a live file."""
-        key = str(source)
-        pdf = PDF_DOCS_CACHE.get(key)
-        if pdf is not None:
-            PDF_DOCS_CACHE[key] = PDF_DOCS_CACHE.pop(key)
-            return pdf
-        while len(PDF_DOCS_CACHE) >= PDF_DOCS_CACHE_CAP:
-            oldest = next(iter(PDF_DOCS_CACHE))
-            try:
-                PDF_DOCS_CACHE.pop(oldest).close()
-            except Exception:
-                pass
-        pdf = _pdfium.PdfDocument(str(source))
-        PDF_DOCS_CACHE[key] = pdf
-        return pdf
+        return raster._pdf_doc_handle(
+            source, cache=PDF_DOCS_CACHE, cap=PDF_DOCS_CACHE_CAP
+        )
 
     @staticmethod
     def _prune_render_cache():
-        """The cache's ceiling (ADR-0017): once the rasters outgrow the
-        cap the oldest go first. The sweep runs only on the write path
-        and only when the cap is crossed — the hit path never pays for
-        it."""
-        try:
-            entries = list(RENDER_CACHE_DIR.glob("*.png"))
-            total = sum(e.stat().st_size for e in entries)
-            if total <= RENDER_CACHE_CAP:
-                return
-            entries.sort(key=lambda e: e.stat().st_mtime)
-            for entry in entries:
-                if total <= RENDER_CACHE_CAP:
-                    break
-                try:
-                    total -= entry.stat().st_size
-                except OSError:
-                    continue
-                entry.unlink(missing_ok=True)
-        except OSError:
-            pass
+        return raster.prune_render_cache(RENDER_CACHE_DIR, RENDER_CACHE_CAP)
 
     @staticmethod
     def _render_book_page(dataset, page_number, width, cache_file):
-        """One page raster, cached atomically; None when the page does
-        not exist or the PDF is unreadable. Every answer logs its cost —
-        hit/miss and milliseconds — so a slow page has a witness, and a
-        miss reuses the open-document cache instead of re-parsing the
-        whole file (ADR-0017)."""
-        source = BOOKS_DIR / f"{dataset}.pdf"
-        if not source.exists():
-            return None
-        RENDER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        started = time.monotonic()
-        try:
-            body = cache_file.read_bytes()
-        except OSError:
-            body = None
-        with RENDER_LOCK:
-            if body is None:
-                # The double-check: another thread may have rendered
-                # this exact page while this one waited on the lock.
-                try:
-                    body = cache_file.read_bytes()
-                except OSError:
-                    body = None
-            if body is not None:
-                sys.stderr.write(
-                    f"render {dataset} p{page_number} w{width}"
-                    f" hit {time.monotonic() - started:.3f}s\n"
-                )
-                return body
-            try:
-                pdf = SessionHandler._pdf_doc_handle(source)
-                if page_number > len(pdf):
-                    return None
-                page = pdf[page_number - 1]
-                bitmap = page.render(scale=width / page.get_width())
-                image = bitmap.to_pil()
-                tmp = cache_file.with_suffix(f".tmp{threading.get_ident()}")
-                image.save(tmp, format="PNG")
-                os.replace(tmp, cache_file)
-                body = cache_file.read_bytes()
-            except Exception:
-                sys.stderr.write(
-                    f"render failed: {dataset} p{page_number}\n"
-                )
-                return None
-        sys.stderr.write(
-            f"render {dataset} p{page_number} w{width}"
-            f" miss {time.monotonic() - started:.3f}s\n"
+        fmt = cache_file.suffix.lstrip(".") or "png"
+        res = raster.get_page_raster(
+            dataset=dataset,
+            page_number=page_number,
+            width=width,
+            fmt=fmt,
+            books_dir=BOOKS_DIR,
+            cache_dir=cache_file.parent,
+            cache_cap=RENDER_CACHE_CAP,
+            pdf_cache=PDF_DOCS_CACHE,
+            pdf_cap=PDF_DOCS_CACHE_CAP,
         )
-        SessionHandler._prune_render_cache()
-        return body
+        return res[0] if res else None
 
     def _drain_request_body(self) -> None:
         """Read the body Content-Length promised before answering and
@@ -2753,10 +2690,16 @@ class SessionHandler(SimpleHTTPRequestHandler):
             # act as /auth/accounts, wearing the page's shape.
             self._admin_create_account()
             return
+        if path == "/api/admin/accounts":
+            self._api_admin_create_account()
+            return
         if path == "/admin/topup":
             # The console's top-up form (T26, GitLab #28): Toman lands
             # on a Balance, audited, from the browser.
             self._admin_topup()
+            return
+        if path == "/api/admin/topup":
+            self._api_admin_topup()
             return
         if path == "/admin/attach":
             # The console's attach form (T21, GitLab #23): the legacy
@@ -2771,9 +2714,15 @@ class SessionHandler(SimpleHTTPRequestHandler):
             account = resolve_identity(self)
             if account is None:
                 return
-            if not self._balance_gate(account):
-                return
             acc = account_by_email(account)
+            is_exempt = (acc and acc.get("role") == "admin") or is_unlimited(account)
+            if not is_exempt:
+                if chats_today(account) >= DAILY_CHAT_LIMIT and get_balance(account) <= 0:
+                    self._json_error(
+                        429,
+                        "شمار گفتگوهای امروز این حساب پر شده است؛ فردا بیایید.",
+                    )
+                    return
             phone = (acc.get("phone") if acc and acc.get("phone") else account)
             # The Question window (ADR-0017/0018): a Learner message
             # that RECEIVES an agent answer is one Question, inside 30
@@ -3191,6 +3140,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
         # The answer COMPLETED: this message is one Question (ADR-0018)
         # — metered here, once, only on completion.
         record_question(phone)
+        target_account = account or phone
+        if target_account:
+            record_chat(target_account)
         # The persisted exchange carries the guaranteed-marked form
         # (#24, ADR-0018): the answer text plus the web-sourced flag and
         # sources the seam derived from the streamed tool-result frames
@@ -3858,6 +3810,123 @@ class SessionHandler(SimpleHTTPRequestHandler):
             detail={"email": email, "phone": phone, "rekeyed": report},
         )
         self._send_redirect("/admin")
+
+    def _api_admin_accounts(self) -> None:
+        """JSON endpoint for mobile and client dashboards: returns all
+        accounts with their balance, role, phone, and today's spend."""
+        admin = self._admin_gate()
+        if admin is None:
+            return
+        accounts_list = []
+        for row in list_accounts():
+            email = row["email"]
+            accounts_list.append(
+                {
+                    "email": email,
+                    "role": row["role"],
+                    "phone": normalize_phone(row.get("phone") or ""),
+                    "balance_toman": int(row["balance_toman"]),
+                    "created_at": row["created_at"],
+                    "today_spend_toman": int(today_total(email)),
+                    "chats_today": int(chats_today(email)),
+                }
+            )
+        self._send_json(200, {"accounts": accounts_list})
+
+    def _api_admin_create_account(self) -> None:
+        """JSON endpoint to create an operator or admin account."""
+        admin = self._admin_gate()
+        if admin is None:
+            return
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            email = str(payload.get("email") or "").strip().lower()
+            password = str(payload.get("password") or "")
+            phone = payload.get("phone")
+            role = str(payload.get("role") or "operator").strip().lower()
+            initial_credit = int(payload.get("initial_credit") or 0)
+            if not email or "@" not in email:
+                raise ValueError("valid email is required")
+            if not password:
+                raise ValueError("password is required")
+            if role not in ("operator", "admin"):
+                raise ValueError("role must be 'operator' or 'admin'")
+            if phone is not None and not isinstance(phone, str):
+                raise ValueError("phone must be string")
+        except (ValueError, KeyError, TypeError) as exc:
+            self._send_json(400, {"detail": str(exc) or AUTH_BAD_ACCOUNT_BODY_DETAIL})
+            return
+        if phone:
+            phone = normalize_phone(phone)
+            if not phone:
+                self._send_json(400, {"detail": "شمارهٔ تلفن همراه نامعتبر است."})
+                return
+        else:
+            phone = None
+        created = create_account(email, password, phone=phone, role=role)
+        if created is None:
+            self._send_json(409, {"detail": AUTH_EMAIL_TAKEN_DETAIL})
+            return
+        audit_quiet(
+            audit.ACCOUNT_CREATED,
+            actor_email=admin["email"],
+            detail={"email": created["email"], "role": created["role"], "phone": created["phone"]},
+        )
+        current_balance = 0
+        if initial_credit > 0:
+            credited = credit_balance(email, initial_credit)
+            if credited is not None:
+                current_balance = credited
+                audit_quiet(
+                    audit.BALANCE_TOPPED,
+                    actor_email=admin["email"],
+                    detail={"email": email, "amount_toman": initial_credit, "new_balance_toman": current_balance},
+                )
+        self._send_json(
+            200,
+            {
+                "email": created["email"],
+                "role": created["role"],
+                "phone": created["phone"],
+                "balance_toman": current_balance,
+            },
+        )
+
+    def _api_admin_topup(self) -> None:
+        """JSON endpoint to top up credit balance in Toman."""
+        admin = self._admin_gate()
+        if admin is None:
+            return
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            email = str(payload.get("email") or "").strip().lower()
+            amount = int(payload.get("amount") or 0)
+            if not email:
+                raise ValueError("email is required")
+            if amount <= 0:
+                raise ValueError("amount must be positive")
+        except (ValueError, KeyError, TypeError) as exc:
+            self._send_json(400, {"detail": str(exc)})
+            return
+        new_balance = credit_balance(email, amount)
+        if new_balance is None:
+            self._send_json(404, {"detail": "حسابی با این ایمیل یافت نشد."})
+            return
+        audit_quiet(
+            audit.BALANCE_TOPPED,
+            actor_email=admin["email"],
+            detail={"email": email, "amount_toman": amount, "new_balance_toman": new_balance},
+        )
+        self._send_json(
+            200,
+            {
+                "email": email,
+                "amount_toman": amount,
+                "new_balance_toman": new_balance,
+            },
+        )
 
     def _profile_data(self) -> None:
         """The profile read (T24, GitLab #27): the Account's own Balance

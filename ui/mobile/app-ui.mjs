@@ -21,7 +21,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function syncHighlights(){phone()?.bookReader?.setHighlights?.(s.notes.filter(n=>(n.doc||n.source?.book)===s.book&&n.source?.capture==='highlight').flatMap(n=>n.source?.selection?.pages||[]));}
  const s={view:'boot',demo:api.demo,loginRequired:api.loginRequired!==false,pageFiltering:api.demo||api.pageFiltering===true,book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},account:null,
   messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',theme:'system',profile:null,
-  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,otpDraft:''};
+  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,otpDraft:'',adminTab:'accounts',adminSearch:'',adminAccounts:[],adminLoading:false};
  let storageKey,disposed=false,job=null,sequence=0,accountRevision=0,recordRevision=0,recordPending=false,otpTimer,otpInFlight=false,webOtpAbort=null,pending=new Set(),toastTimer,recorder,timer,media,recordingStarted,recordingPlace,recordDraft;
  const safeRead=key=>{try{return JSON.parse(storage?.getItem(key));}catch{return null;}};
  const persist=()=>{if(!storageKey||disposed)return;try{storage?.setItem(storageKey,JSON.stringify({view:['reader','chat'].includes(s.view)?s.view:s.stack.find(v=>['reader','chat'].includes(v))||'reader',book:s.book,positions:s.positions,drafts:s.drafts,pages:s.pages,scope:s.scope,sessionId:s.sessionId,chatScroll:s.chatScroll,follow:s.follow,theme:s.theme,readerGuideSeen:s.readerGuideSeen}));}catch{}};
@@ -202,7 +202,8 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(!range&&pendingSource.text){const index=phone()?.bookReader?.getPageIndex(e.detail.page);if(index){const text=index.text,map=[];let normalized='';for(let i=0;i<text.length;i++){for(const c of normalText(text[i])){normalized+=c;map.push(i);}}const needle=normalText(pendingSource.text),at=normalized.indexOf(needle);if(needle.length>=8&&at>=0&&normalized.indexOf(needle,at+1)<0){const start=map[at],end=map[at+needle.length-1]+1;range={page:e.detail.page,start,end,text:text.slice(start,end)};}}}
   if(range)phone().bookReader.highlight(range);else if(pendingSource.text)toast('صفحهٔ منبع باز شد؛ متن دقیق در این صفحه پیدا نشد.');
  },listenerOptions);
- root.addEventListener('input',e=>{if(e.target.dataset?.otpBox!==undefined){const boxes=otpBoxes(),idx=boxes.indexOf(e.target);let v=e.target.value?normalDigits(e.target.value):'';if(v.length>1)v=v.slice(-1);e.target.value=v;if(v&&boxes[idx+1])boxes[idx+1].focus({preventScroll:true});if(syncOtp().length===6)submitOtp();return;}if(e.target.name==='question'){s.drafts[s.book]=e.target.value;if(s.readerQuestion?.inChat)s.readerQuestion.draft=e.target.value;autosize(e.target);syncComposer(e.target);persist();}if(e.target.name==='reader-question'&&s.readerQuestion){s.readerQuestion.draft=e.target.value;autosize(e.target);syncComposer(e.target);}if(e.target.name==='note-search'){s.noteSearch=e.target.value;const pos=e.target.selectionStart;render();const input=root.querySelector('[name="note-search"]');input.focus();input.setSelectionRange(pos,pos);}},listenerOptions);
+ root.addEventListener('input',e=>{if(e.target.dataset?.otpBox!==undefined){const boxes=otpBoxes(),idx=boxes.indexOf(e.target);let v=e.target.value?normalDigits(e.target.value):'';if(v.length>1)v=v.slice(-1);e.target.value=v;if(v&&boxes[idx+1])boxes[idx+1].focus({preventScroll:true});if(syncOtp().length===6)submitOtp();return;}if(e.target.name==='question'){s.drafts[s.book]=e.target.value;if(s.readerQuestion?.inChat)s.readerQuestion.draft=e.target.value;autosize(e.target);syncComposer(e.target);persist();}if(e.target.name==='reader-question'&&s.readerQuestion){s.readerQuestion.draft=e.target.value;autosize(e.target);syncComposer(e.target);}if(e.target.name==='admin-search'){s.adminSearch=e.target.value;render();const input=root.querySelector('[name="admin-search"]');if(input){input.focus();const pos=input.value.length;input.setSelectionRange(pos,pos);}}
+   if(e.target.name==='note-search'){s.noteSearch=e.target.value;const pos=e.target.selectionStart;render();const input=root.querySelector('[name="note-search"]');input.focus();input.setSelectionRange(pos,pos);}},listenerOptions);
  root.addEventListener('paste',e=>{if(!e.target.closest?.('[data-otp-inputs]'))return;const text=normalDigits(e.clipboardData?.getData('text')||'').slice(0,6);if(!text)return;e.preventDefault();const boxes=otpBoxes();text.split('').forEach((c,i)=>{if(boxes[i])boxes[i].value=c;});(boxes[text.length-1]||boxes[0])?.focus({preventScroll:true});if(syncOtp().length===6)submitOtp();},listenerOptions);
  root.addEventListener('change',e=>{if(e.target.name==='range')e.target.closest('form').querySelector('.range-inputs').hidden=!e.target.checked;if(e.target.name==='note-book'){s.noteBook=e.target.value;render();}if(e.target.name==='selected-note'){const id=Number(e.target.value);e.target.checked?s.selected.add(id):s.selected.delete(id);render();}},listenerOptions);
  root.addEventListener('keydown',e=>{
@@ -246,7 +247,36 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
     else{render();}
    }catch(err){s.error=err.message||'خطا در ذخیره مشخصات';render();}
   })());
-  if(form.matches('[data-auth-form]'))run((async()=>{s.error='';if(s.view==='otp')otpInFlight=true;try{if(s.view==='email-login'){s.account=await api.login({email:form.elements.email.value,password:form.elements.password.value});await initialize();}else if(s.view==='otp'){const code=String(number(form.elements.code.value)).padStart(6,'0');s.account=await api.verifyOtp(s.phone,code);s.otpDraft='';await initialize();}else{const phone=normalPhone(form.elements.phone.value);if(!/^09\d{9}$/.test(phone))throw new Error('شمارهٔ موبایل ایرانی را با ۱۱ رقم وارد کنید.');s.phone=phone;await api.requestOtp(phone);s.otpDraft='';startOtpCooldown();navigate('otp');startWebOtp();}}catch(e){s.error=e.message;render();if(s.view==='otp')root.querySelector('[data-otp-box]')?.focus({preventScroll:true});}finally{otpInFlight=false;}})());
+  if(form.matches('[data-admin-topup-form]'))run((async()=>{
+    s.error='';
+    const email=form.elements.email.value;
+    const amount=Number(form.elements.amount.value);
+    if(!amount||amount<=0){s.error='مبلغ شارژ باید بیشتر از صفر باشد.';renderOverlay();return;}
+    try{
+     const res=await api.adminTopup({email,amount});
+     const target=(s.adminAccounts||[]).find(a=>a.email===email);
+     if(target)target.balance_toman=res.new_balance_toman;
+     closeOverlay();
+     render();
+     toast('اعتبار حساب با موفقیت شارژ شد.');
+    }catch(e){s.error=e.message;renderOverlay();}
+   })());
+   if(form.matches('[data-admin-create-form]'))run((async()=>{
+    s.error='';
+    const email=form.elements.email.value.trim();
+    const password=form.elements.password.value;
+    const phone=form.elements.phone?.value?.trim()||null;
+    const role=form.elements.role?.value||'operator';
+    const initial_credit=Number(form.elements.initial_credit?.value||0);
+    try{
+     const res=await api.adminCreateAccount({email,password,phone,role,initial_credit});
+     (s.adminAccounts||[]).unshift(res);
+     s.adminTab='accounts';
+     render();
+     toast('حساب با موفقیت ایجاد شد.');
+    }catch(e){s.error=e.message;render();}
+   })());
+   if(form.matches('[data-auth-form]'))run((async()=>{s.error='';if(s.view==='otp')otpInFlight=true;try{if(s.view==='email-login'){s.account=await api.login({email:form.elements.email.value,password:form.elements.password.value});await initialize();}else if(s.view==='otp'){const code=String(number(form.elements.code.value)).padStart(6,'0');s.account=await api.verifyOtp(s.phone,code);s.otpDraft='';await initialize();}else{const phone=normalPhone(form.elements.phone.value);if(!/^09\d{9}$/.test(phone))throw new Error('شمارهٔ موبایل ایرانی را با ۱۱ رقم وارد کنید.');s.phone=phone;await api.requestOtp(phone);s.otpDraft='';startOtpCooldown();navigate('otp');startWebOtp();}}catch(e){s.error=e.message;render();if(s.view==='otp')root.querySelector('[data-otp-box]')?.focus({preventScroll:true});}finally{otpInFlight=false;}})());
  },listenerOptions);
  root.addEventListener('pointerdown',e=>{if(sessionMenu&&!sessionMenu.node.contains(e.target)&&!sessionMenu.trigger.contains(e.target))closeSessionMenu();},{...listenerOptions,capture:true});
  root.addEventListener('click',e=>{if(sessionMenu&&!sessionMenu.node.contains(e.target)&&!sessionMenu.trigger.contains(e.target))closeSessionMenu();},{...listenerOptions,capture:true});
@@ -261,7 +291,29 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='new-chat'){abortJob();s.sessionId=null;s.messages=[];s.readerQuestion=null;s.scope='all';s.chatScroll=0;s.follow=true;navigate('chat');}
   if(a==='suggest-question'||a==='suggest-plan'){if(a==='suggest-question'){s.scope='page';if(!s.pages||!s.pages.length)s.pages=[activePage(s)];}s.drafts[s.book]=a==='suggest-question'?'این بخش از کتاب را توضیح بده.':'برای مطالعهٔ این کتاب یک برنامه پیشنهاد بده.';render();root.querySelector('[name="question"]').focus();}
   if(a==='back'){const view=s.stack.pop()||'reader';navigate(view,{back:true});}
-  if(a==='account')navigate('account');
+  if(a==='open-admin'){
+    s.adminLoading=true;s.adminTab='accounts';s.adminSearch='';navigate('admin');
+    run((async()=>{
+     try{s.adminAccounts=await api.adminAccounts();}
+     catch(e){s.error=e.message;}
+     finally{s.adminLoading=false;if(s.view==='admin')render();}
+    })());
+   }
+   if(a==='admin-tab'){s.adminTab=t.dataset.tab;render();}
+   if(a==='clear-admin-search'){s.adminSearch='';render();root.querySelector('[name="admin-search"]')?.focus();}
+   if(a==='open-admin-topup')openSheet('admin-topup',{email:t.dataset.email,balance:t.dataset.balance});
+   if(a==='pick-topup-amount'){
+    const input=root.querySelector('[data-admin-topup-form] [name="amount"]');
+    if(input)input.value=t.dataset.amount;
+   }
+   if(a==='admin-create-submit'){
+    const f=root.querySelector('[data-admin-create-form]');
+    if(f){
+      if(typeof f.requestSubmit==='function')f.requestSubmit();
+      else f.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+    }
+   }
+   if(a==='account')navigate('account');
   if(a==='edit-profile')navigate('profile');
   if(a==='subscription')navigate('subscription');
   if(a==='theme'){s.theme=t.dataset.theme;render();}
@@ -321,7 +373,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='resend-otp'){if(s.resendAt>Date.now())return;run((async()=>{await api.requestOtp(s.phone);s.otpDraft='';startOtpCooldown();render();startWebOtp();root.querySelector('[data-otp-box]')?.focus({preventScroll:true});toast('کد ورود دوباره درخواست شد.');})());}
  },listenerOptions);
  function restoreUnanswered(){const turn=s.messages.at(-1);if(turn?.role==='user'){turn.payload.failed=true;turn.payload.failure='پاسخ این پرسش کامل نشده است. می‌توانید دوباره تلاش کنید.';}}
- function resetAccountState(){disposePicker();closeSessionMenu({restore:false});lectureCatalog.clear();accountRevision++;sequence++;clearTimeout(otpTimer);webOtpAbort?.abort();Object.assign(s,{book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',profile:null,readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,pendingSource:null,outline:[],payment:null,phone:'',otpDraft:''});}
+ function resetAccountState(){disposePicker();closeSessionMenu({restore:false});lectureCatalog.clear();accountRevision++;sequence++;clearTimeout(otpTimer);webOtpAbort?.abort();Object.assign(s,{book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',profile:null,readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,pendingSource:null,outline:[],payment:null,phone:'',otpDraft:'',adminTab:'accounts',adminSearch:'',adminAccounts:[],adminLoading:false});}
  // The OTP entry (2026-10-25): a two-minute hold between sends — the
  // sheet counts it down on the resend button and the server holds the
  // same 120s line for a caller that skips the client (otp.py). The six

@@ -223,6 +223,29 @@ def test_book_page_route_renders_and_caches(tmp_path):
         status3, _, body3 = _get_raw(base, "/books/tarhe-kolli/page/14.png?w=650", _reader_cookie(base))
         assert status3 == 200
         assert body3 == body
+
+        # WebP explicit extension endpoint
+        status_w, headers_w, body_w = _get_raw(
+            base, "/books/tarhe-kolli/page/14.webp?w=640", _reader_cookie(base)
+        )
+        assert status_w == 200
+        assert headers_w["Content-Type"] == "image/webp"
+        assert body_w[:4] == b"RIFF" and body_w[8:12] == b"WEBP"
+        assert (cache / "tarhe-kolli-p14-w640.webp").exists()
+        assert len(body_w) < len(body)  # WebP is smaller than PNG
+
+        # Content negotiation on extension-less /page/14
+        status_neg_w, headers_neg_w, _ = _conditional_raw(
+            base, "/books/tarhe-kolli/page/14?w=640", {"Accept": "image/webp,image/*"}, _reader_cookie(base)
+        )
+        assert status_neg_w == 200
+        assert headers_neg_w["Content-Type"] == "image/webp"
+
+        status_neg_p, headers_neg_p, _ = _conditional_raw(
+            base, "/books/tarhe-kolli/page/14?w=640", {"Accept": "image/png"}, _reader_cookie(base)
+        )
+        assert status_neg_p == 200
+        assert headers_neg_p["Content-Type"] == "image/png"
     finally:
         stop_gate(server, originals)
         serve.BOOKS_DIR = original_dir

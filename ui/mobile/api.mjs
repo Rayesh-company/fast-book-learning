@@ -308,6 +308,17 @@ export function createApi({ fetchImpl = fetch } = {}) {
     verifyPayment: () => unavailable('وضعیت پرداخت هنوز تأیید نشده است. دوباره بررسی کنید.'),
     transcribe: () =>
       unavailable('تبدیل گفتار به متن هنوز فعال نشده است. می‌توانید پرسش را بنویسید.'),
+    adminAccounts: async () => (await request('/api/admin/accounts')).accounts,
+    adminCreateAccount: ({ email, password, phone, role = 'operator', initial_credit = 0 }) =>
+      request('/api/admin/accounts', {
+        method: 'POST',
+        body: { email, password, phone, role, initial_credit },
+      }),
+    adminTopup: ({ email, amount }) =>
+      request('/api/admin/topup', {
+        method: 'POST',
+        body: { email, amount },
+      }),
   };
 }
 

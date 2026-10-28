@@ -6280,7 +6280,7 @@
           img.className = "reader-img";
           img.alt = `صفحهٔ ${toPersianDigits(n)}`;
           img.decoding = "async";
-          const fullSrc = `/books/${encodeURIComponent(reader.doc)}/page/${n}.png?w=${Math.round(
+          const fullSrc = `/books/${encodeURIComponent(reader.doc)}/page/${n}.webp?w=${Math.round(
             widthPx * dpr
           )}`;
           if (reader.fastPaint === n) {
@@ -6291,7 +6291,7 @@
             // buckets are `immutable`-cached; the pre-warm only ever
             // costs its bytes once.
             reader.fastPaint = null;
-            img.src = `/books/${encodeURIComponent(reader.doc)}/page/${n}.png?w=480`;
+            img.src = `/books/${encodeURIComponent(reader.doc)}/page/${n}.webp?w=480`;
             img.addEventListener(
               "load",
               () => {
@@ -6305,15 +6305,18 @@
           }
           // A failed raster must not read as a silently blank page (the
           // 09-28 outage: the server 404'd every cold render and the
-          // panel just stayed white). One cache-busted retry, then the
-          // reader says so — and the page stays un-rendered so a later
+          // panel just stayed white). One cache-busted retry with PNG fallback,
+          // then the reader says so — and the page stays un-rendered so a later
           // ensureRendered/observer pass can try it again.
           let imgRetried = false;
           img.addEventListener("error", () => {
             if (gen !== reader.gen) return;
             if (!imgRetried) {
               imgRetried = true;
-              img.src = `${fullSrc}&retry=1`;
+              // Fall back to PNG on retry if WebP fails
+              img.src = `/books/${encodeURIComponent(reader.doc)}/page/${n}.png?w=${Math.round(
+                widthPx * dpr
+              )}&retry=1`;
               return;
             }
             rec.rendered = false;

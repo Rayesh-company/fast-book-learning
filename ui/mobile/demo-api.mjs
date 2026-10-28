@@ -1,12 +1,21 @@
 /** Explicitly marked, browser-local fixtures. Never calls login, payment, or AI providers. */
 export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequired=false}={}) {
  const key='book-ui-demo-v1';
+ const stamp=()=>new Date().toISOString();
+ const clone=x=>structuredClone(x);
  let data;
  try {data=JSON.parse(storage?.getItem(key));}catch{}
- data??={account:guest?null:{phone:'۰۹۱۲۳۴۵۶۷۸۹',email:'',role:'user'},quota,subscription:null,sessions:[],notes:[],sequence:1};
+ data??={account:guest?null:{phone:'۰۹۱۲۳۴۵۶۷۸۹',email:'',role:'user'},quota,subscription:null,sessions:[],notes:[],sequence:1,accounts:[
+  {email:'admin@rayesh.ir',role:'admin',phone:'09121112233',balance_toman:1500000,today_spend_toman:0,created_at:stamp()},
+  {email:'operator1@example.com',role:'operator',phone:'09123456789',balance_toman:450000,today_spend_toman:12000,created_at:stamp()},
+  {email:'student@example.com',role:'operator',phone:'09998887766',balance_toman:50000,today_spend_toman:6000,created_at:stamp()}
+]};
+if(!data.accounts)data.accounts=[
+  {email:'admin@rayesh.ir',role:'admin',phone:'09121112233',balance_toman:1500000,today_spend_toman:0,created_at:stamp()},
+  {email:'operator1@example.com',role:'operator',phone:'09123456789',balance_toman:450000,today_spend_toman:12000,created_at:stamp()},
+  {email:'student@example.com',role:'operator',phone:'09998887766',balance_toman:50000,today_spend_toman:6000,created_at:stamp()}
+];
  const save=()=>{try{storage?.setItem(key,JSON.stringify(data));}catch{}};
- const clone=x=>structuredClone(x);
- const stamp=()=>new Date().toISOString();
  const wait=signal=>new Promise((resolve,reject)=>{
   if(signal?.aborted)return reject(new DOMException('Aborted','AbortError'));
   const done=()=>{signal?.removeEventListener('abort',abort);resolve();};
@@ -57,5 +66,22 @@ export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequi
   purchase:async()=>{await wait();return {pending:true,authority:'preview-payment'};},
   verifyPayment:async(authority,outcome='success')=>{await wait();if(outcome==='unknown')return{status:'unknown'};if(outcome!=='success')return{status:outcome};data.subscription={active:true,ends_at:new Date(Date.now()+30*86400000).toISOString()};save();return{status:'success',subscription:clone(data.subscription)};},
   transcribe:async()=>{await wait();return {text:'این قسمت را با یک مثال توضیح بده.'};},
+  adminAccounts:async()=>clone(data.accounts),
+  adminCreateAccount:async({email,password,phone,role='operator',initial_credit=0})=>{
+    await wait();
+    if(data.accounts.some(a=>a.email===email))throw new Error('این ایمیل پیش‌تر حساب گرفته است.');
+    const account={email,role,phone:phone||null,balance_toman:Number(initial_credit)||0,today_spend_toman:0,created_at:stamp()};
+    data.accounts.unshift(account);
+    save();
+    return clone(account);
+  },
+  adminTopup:async({email,amount})=>{
+    await wait();
+    const target=data.accounts.find(a=>a.email===email);
+    if(!target)throw new Error('حسابی با این ایمیل یافت نشد.');
+    target.balance_toman+=Number(amount);
+    save();
+    return {email,amount_toman:Number(amount),new_balance_toman:target.balance_toman};
+  },
  };
 }

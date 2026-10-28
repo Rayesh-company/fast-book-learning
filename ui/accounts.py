@@ -573,3 +573,9 @@ def ensure_admin(email, password) -> bool:
         return False
     created = create_account(email, password, phone=None, role="admin")
     return created is not None
+
+
+def create_admin(email, password, phone=None) -> dict | None:
+    """Create an Admin Account directly (e.g. CLI management or Admin API).
+    Returns the account dict, or None if the email is already taken."""
+    return create_account(email, password, phone=phone, role="admin")

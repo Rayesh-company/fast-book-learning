@@ -1118,3 +1118,62 @@ def test_coerce_turn_context_and_agent_stream_initialization():
     assert stream.selection_text is None
 
 
+
+
+def test_new_user_with_zero_balance_can_chat_five_times_a_day(tmp_path):
+    from tests.helpers import TEST_PASSWORD
+    from ui import accounts, quotas
+    from ui.quotas import DAILY_CHAT_LIMIT, chats_today
+
+    replies = [agent_stream_ok(f"پاسخ {i}") for i in range(DAILY_CHAT_LIMIT + 2)]
+    upstream, base, server, original = with_agent(tmp_path, replies)
+    try:
+        new_phone = "09199990001"
+        new_email = f"{new_phone}@phone.local"
+        acc = accounts.create_account(new_email, TEST_PASSWORD, phone=new_phone, role="operator")
+        assert acc is not None
+        assert accounts.get_balance(new_email) == 0
+
+        cookie = cookie_for(base, new_email)
+
+        # 5 daily free chats should succeed
+        for i in range(DAILY_CHAT_LIMIT):
+            req = urllib.request.Request(
+                base + "/agent/chat",
+                data=json.dumps({"query": f"پرسش شماره {i}"}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Cookie": cookie},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as res:
+                assert res.status == 200
+                assert "text/event-stream" in res.headers.get("Content-Type", "")
+                body = res.read()
+                assert b"chat-answer-finalized" in body
+
+        assert chats_today(new_email) == DAILY_CHAT_LIMIT
+
+        # 6th chat with 0 balance should be refused with 429
+        req6 = urllib.request.Request(
+            base + "/agent/chat",
+            data=json.dumps({"query": "پرسش ششم"}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Cookie": cookie},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req6, timeout=15) as res:
+                assert False, "should have been refused with 429"
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 429
+            payload = json.load(exc)
+            assert "پر شده است" in payload["detail"] or "پایان" in payload["detail"]
+
+        # If admin tops up credit, the user can chat beyond 5
+        accounts.credit_balance(new_email, 50000)
+        assert accounts.get_balance(new_email) == 50000
+
+        with urllib.request.urlopen(req6, timeout=15) as res:
+            assert res.status == 200
+            assert "text/event-stream" in res.headers.get("Content-Type", "")
+
+    finally:
+        stop_gate(server, original)
