@@ -24,6 +24,7 @@ COPY serve.py raster.py guard.py quotas.py composer.py picker.py dive.py ask.py 
 # The PWA's icon set (ADR-0019) — generated from source by
 # tools/make_pwa_icons.py, committed beside the manifest that serves it.
 COPY icons /app/icons
+COPY assets /app/assets
 # The OTA payload (rule 001): the mobile app's over-the-air updates —
 # ui/ota/.gitkeep keeps the dir in git; the publish script + the deploy
 # tree fill it (manifest.json + current/), never git itself.
