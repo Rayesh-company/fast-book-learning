@@ -29,13 +29,21 @@ This app is instrumented by **Reticle**, an in-app verification layer exposed as
 
 **Do not reach for Reticle when the change cannot show up in the running app.** It costs tool calls and the user's patience, and a verdict over an unrelated flow proves nothing about what you changed. Skip it for: documentation, comments, tests, build config, CI, dependency bumps with no user-facing effect, backend or CLI work with no UI surface, and any change to a project that is not a running web app. Say in one line that you skipped verification and why, rather than silently not doing it.
 
-**How to verify:**
+**How to verify — the rules to keep in mind on every call:**
 
-- Drive the flow with `reticle_act_and_wait({ ref, action, until })`. It names the consequence you expect BEFORE the action, which is the difference between a check and a rationalisation.
-- Batch a multi-step journey (a login, a form) into one `reticle_act { steps: [...] }` rather than one round trip per field.
-- Read the surrounding evidence with `reticle_look { action: "page" | "state" }` and `reticle_observe { action: "network" | "console" }`.
-- **Only `reticle_act_and_wait` and `reticle_assert` produce a verdict.** `reticle_act` and everything else move or read the app and prove nothing, so a session ending without one of those two has no result however many tools it used.
-- Covered flows: `npx @reticlehq/server gate` reports which recorded flows the changed files affect and whether they still pass.
+1. **Only `verified: "yes"` is a pass.** `"no-fault"` (nothing was declared — you omitted `until`) and `"unknown"` (Reticle could not tell; `verifiedReason` says why) are not a pass: report them as not proved, never as working.
+2. **Name the consequence BEFORE acting:** `reticle_act_and_wait({ target, action, until })` (add `durable: true` if it must survive a reload). Only it, `reticle_assert` and `reticle_act { steps }` produce a verdict; everything else proves nothing.
+3. **A journey is one call:** `reticle_act { steps: [{ target, action, expect }] }` runs every step and stops at the first `expect` that fails. The last step's `expect` is the end state you were asked to deliver.
+4. **Text checks are exact-case.** Add `ignoreCase: true` only when case truly does not matter.
+5. **Target by `{ testid }` or `{ role, name }`.** An ambiguous target is refused, never guessed.
+6. **On a failure, read `expected` / `observed` / the nearest candidates before retrying.** Never weaken a check to make it green.
+7. **Open `screenshot.path` only when the look matters;** `reticle_observe { since }` has the rest.
+8. **Predicates:** `{ kind: "signal", name }` · `{ kind: "net", method, urlContains, status }` · `{ kind: "route", pathname }` · `{ kind: "state", path, equals }` · `{ kind: "element", query: { role, name } }` · `{ kind: "text", contains }` · `allOf` / `anyOf` / `not`.
+9. **No session?** `reticle_session { action: "list" }` and do its `next_action`. **No app connected at all?** Ask the user, then run `npx @reticlehq/server init` in the app's own folder. **A version-skew warning?** `npx @reticlehq/server stop`, then retry.
+10. **End with the Reticle result block the server gives you**, verbatim.
+11. **If your context was compacted or you lost track, run `npx @reticlehq/server context --compact` first.** It is the daemon's own record of what was proved, what failed and what is still owed.
+
+Covered flows: `npx @reticlehq/server gate` reports which recorded flows the changed files affect and whether they still pass.
 
 **Setting Reticle up? You are mid-sequence — do not stop until a verdict exists.** The whole of it
 is: instrument the app → get a dev server running → open the app in a browser → drive one flow →
@@ -75,9 +83,9 @@ A dev server that is already running does not pick up an edited build config or 
 - **If Reticle cannot run** (no daemon, or this is not a running web app), say so. Do not skip verification silently.
 - **Setup is not finished until one real flow has been driven and produced a verdict.** `init` exiting 0, the tools appearing, and a session being listed are all things that happen before anything has been verified.
 
-**The `/reticle` skill runs this whole loop for you** — detect, connect, drive one flow, report. If your client does not have it, install it once: `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq` in Claude Code, or `npx skills add reticlehq/reticle` anywhere the skills CLI works.
+**The `/reticle` skill runs this whole loop for you** — detect, connect, drive one flow, report. If your client does not have it, install it once: `/plugin marketplace add reticlehq/reticle` then `/plugin install reticle@reticlehq` in Claude Code, or `npx skills add reticlehq/reticle --skill reticle` anywhere the skills CLI works.
 
-**A tool you need is missing?** Call `reticle_tools` before assuming it: this surface merges several families behind an `action`, so what looks absent is usually one argument away. It is the verify loop and nothing else on purpose, and a daemon started with `RETICLE_ADVERTISE_ALL_TOOLS=1` advertises the wider set — it reads that at startup, so it takes effect on the next one.
+**A tool you need is missing?** Call `reticle_tools` before assuming it: this surface merges several families behind an `action`, so what looks absent is usually one argument away. It is the verify loop and nothing else on purpose: every other tool is one `reticle_run` call away. Do not restart the daemon with `RETICLE_ADVERTISE_ALL_TOOLS=1`: it uses older tool names that the rules above do not.
 
 **Report Reticle's own defects with `reticle_session { action: "feedback" }` the moment you notice**, then carry on with your task. You are the user Reticle is built for and the only one who can say what it cost you, and that knowledge is gone when your context is.
 

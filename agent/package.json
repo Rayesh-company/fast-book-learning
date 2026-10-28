@@ -11,6 +11,7 @@
     "test": "vitest run --fileParallelism=false"
   },
   "devDependencies": {
+    "@reticlehq/browser": "^3.8.0",
     "@types/node": "^26.6.4",
     "mastra": "^1.32.1",
     "typescript": "^6.0.3",

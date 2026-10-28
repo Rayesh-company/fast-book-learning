@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "npx -y @reticlehq/server@3.8.0 hook prompt --agent copilot",
+        "timeout": 30
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "npx -y @reticlehq/server@3.8.0 hook prompt --agent copilot",
+        "powershell": "npx -y @reticlehq/server@3.8.0 hook prompt --agent copilot",
+        "timeoutSec": 30
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "npx -y @reticlehq/server@3.8.0 hook tool --agent copilot",
+        "powershell": "npx -y @reticlehq/server@3.8.0 hook tool --agent copilot",
+        "timeoutSec": 30,
+        "matcher": "bash|edit"
+      }
+    ]
+  }
+}

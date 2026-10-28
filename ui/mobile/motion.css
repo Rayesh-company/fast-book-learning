@@ -88,7 +88,11 @@
   .stop-button,
   .mic-button,
   .reader-page-badge span,
-  .reader-chat-badge span
+  .reader-chat-badge span,
+  .topbar-toc-trigger,
+  .toc-group-trigger,
+  .toc-item,
+  .toc-clear-btn
 ) {
   transition: transform 320ms var(--apple-spring-rebound),
               background-color 160ms ease,
@@ -128,7 +132,11 @@
   .stop-button,
   .mic-button,
   .reader-page-badge span,
-  .reader-chat-badge span
+  .reader-chat-badge span,
+  .topbar-toc-trigger,
+  .toc-group-trigger,
+  .toc-item,
+  .toc-clear-btn
 ):active:not(:disabled) {
   transform: scale(0.93) translateY(0.5px) !important;
   filter: brightness(0.95);
@@ -168,10 +176,10 @@
 .motion-enabled .floating-bar textarea {
   border-radius: 12px;
 }
-.motion-enabled :is(.note-search, .floating-bar, .chat-composer) {
+.motion-enabled :is(.note-search, .floating-bar, .chat-composer, .toc-search-bar) {
   transition: border-color 200ms var(--apple-snappy), box-shadow 200ms var(--apple-snappy);
 }
-.motion-enabled :is(.note-search, .floating-bar, .chat-composer):focus-within {
+.motion-enabled :is(.note-search, .floating-bar, .chat-composer, .toc-search-bar):focus-within {
   border-color: var(--accent);
 }
 

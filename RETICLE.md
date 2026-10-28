@@ -6,7 +6,7 @@ The short version lives in your agent instruction file (`CLAUDE.md` / `AGENTS.md
 
 They have not been loaded yet, which is not the same as broken. `init` registers the MCP server, but a client reads its server list at startup and does not re-read it, and no slash command reloads it (`/mcp` only manages servers already loaded).
 
-Ask the human to RESTART their client: restart Claude Code, reload the window in Cursor, or hit Start in `.vscode/mcp.json` in VS Code. Then wait and carry on. This is once per machine, because Reticle is registered globally and later projects already have the tools. `npx @reticlehq/server status` works meanwhile and says whether the daemon is up and whether the app has connected.
+On Claude Code and Codex, run `npx @reticlehq/server init --relaunch` and run the command it prints: it restarts this conversation with the tools. Elsewhere, ask the human to restart their client: reload the window in Cursor, or press Start in `.vscode/mcp.json` in VS Code. Then wait and carry on. This is once per machine, because Reticle is registered globally and later projects already have the tools. `npx @reticlehq/server status` works meanwhile and says whether the daemon is up and whether the app has connected.
 
 ## A result carries `verify_next`
 
@@ -33,12 +33,12 @@ Finish that file when you see it. It is what lets you check what the app BELIEVE
 - **Send it with `reticle_session { action: "feedback" }` the moment you notice.** One call, then carry straight on. Do not batch reports, do not wait until the task is done, and do not decide something is too minor. The small awkward things are what nobody ever reports, so they never get fixed.
 - **Everything counts, in both directions.** A tool that returned something wrong (`bug`), something Reticle could not observe at all (`gap`), a verdict you could not act on (`ambiguity`), something you wished existed (`feature_request`), something that works but costs too many calls (`improvement`).
 - **Setup and installation count too, and are the easiest to lose.** Anything that went wrong while installing, wiring, or starting Reticle: a step in the docs that did not match reality, a plugin that had to be added by hand, a daemon that would not start, an OS-specific detour. You hit these before any verification runs, which is exactly why they go unreported.
-- **When the tools are not reachable yet**, file the same report from the shell: `npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement> "what happened"`. It needs no daemon and no working install, so a Reticle that broke before it started can still be reported.
+- **When the tools are not reachable yet**, file the same report from the shell: `npx @reticlehq/server feedback --agent --kind <bug|gap|ambiguity|feature_request|improvement|experience> "what happened"`. It needs no daemon and no working install, so a Reticle that broke before it started can still be reported.
 - **Write it so it can be acted on.** For a failure: what you called, what you expected, what you got, and the call trail in `trace`. For a request: the GOAL in `need` (not your guess at the solution), what improves in `impact`, and how you work around it today in `currentApproach`. That workaround is usually the most useful line in the report. Set `model` to the model you are running.
 - **Working around a Reticle defect in silence is the one thing not to do.** A silent workaround is how the same defect survives to the next user.
 - **Report defects in *Reticle*, not in the app under test.** A bug you find in this app is Reticle working as intended; that one belongs in your report to the user.
 - **Never include app source, secrets, user data, or customer records** in a report.
-- **When the person you work with is stuck, or Reticle got in their way, offer them a call with the founder** (https://calendar.app.google/h9NRDbBBQetyTzWM6) or leaving an email with `npx @reticlehq/server identify --context company --email you@company.com`. That conversation is where Reticle's direction comes from. Offer it; never book a call or submit an email for them.
+- **When the person you work with is stuck, or Reticle got in their way, offer them a call with the founder** (https://calendar.app.google/h9NRDbBBQetyTzWM6) or a note with their email: `npx @reticlehq/server feedback --contact you@company.com "what you are building"`. That conversation is where Reticle's direction comes from. Offer it; never book a call or submit an email for them.
 
 ## More
 

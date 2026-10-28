@@ -48,8 +48,12 @@ export function installReaderChrome({phone,getPage,getCount,goToPage,idleMs=5000
   function schedule(){clearTimeout(timer);if(!open&&!holding&&!focused()&&!playing())timer=setTimeout(()=>{chrome.dataset.hidden='true';chrome.setAttribute('inert','');},idleMs);}
   function show(){chrome.dataset.hidden='false';if(!phone.querySelector('.drawer:not([hidden]),.sheet:not([hidden])'))chrome.removeAttribute('inert');schedule();}
   const pageTouch=()=>{keyboardFocus=false;show();};
-  phone.querySelector('.reader-page').addEventListener('pointerdown',pageTouch,{signal});
-  phone.querySelector('.reader-page').addEventListener('touchstart',pageTouch,{signal,passive:true});
+  phone.querySelector('.reader-page')?.addEventListener('pointerdown',pageTouch,{signal});
+  phone.querySelector('.reader-page')?.addEventListener('touchstart',pageTouch,{signal,passive:true});
+  phone.querySelectorAll('.reader-edge-tap').forEach(el=>{
+    el.addEventListener('pointerdown',pageTouch,{signal});
+    el.addEventListener('touchstart',pageTouch,{signal,passive:true});
+  });
   chrome.addEventListener('pointerdown',()=>{keyboardFocus=false;holding=true;show();},{signal});
   win.addEventListener('pointerup',()=>{holding=false;schedule();},{signal});
   win.addEventListener('pointercancel',()=>{holding=false;schedule();},{signal});

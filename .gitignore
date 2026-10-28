@@ -21,6 +21,10 @@ ui/wheels/*.whl
 ~$*
 .agents/
 .claude/
+.codex/
+.cursor/
+.factory/
+.gemini/
 .zcode/
 .playwright-mcp/
 tests/reader/node_modules/
@@ -95,3 +99,5 @@ agent-dev.log
 agent/data/
 data/
 node_modules/
+reticle.local.js
+**/reticle.local.js

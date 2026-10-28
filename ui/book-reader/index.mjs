@@ -56,17 +56,36 @@ export function createBookReader({ pdfjs, onSelection = () => {}, onPaintError =
   // Precomputed geometry (lecture read-along): PDF-point rectangles,
   // top-left origin, scaled to the page as currently laid out.
   function paintBoxes(record) {
-    const width = record.surface.getBoundingClientRect().width || record.pointWidth;
-    const scale = width / record.pointWidth;
+    if (!Array.isArray(focus?.boxes) || !focus.boxes.length) return;
+    const unscaledWidth = (record.viewport && record.viewport.width && record.viewport.scale)
+      ? (record.viewport.width / record.viewport.scale)
+      : (record.pointWidth || 411.024);
+    const surfaceWidth = record.surface.clientWidth || parseFloat(record.surface.style.width) || (record.viewport?.width) || record.surface.getBoundingClientRect().width || unscaledWidth;
+    const scale = surfaceWidth / unscaledWidth;
     if (!Number.isFinite(scale) || scale <= 0) return;
-    const round = v => Number(v.toFixed(2));
-    for (const raw of focus.boxes) {
-      const isArr = Array.isArray(raw);
-      const box = isArr ? { x0: raw[1], y0: raw[2], x1: raw[3], y1: raw[4] } : raw;
+    const round2 = n => Math.round(n * 100) / 100;
+    for (const b of focus.boxes) {
+      let left, top, width, height;
+      if (Array.isArray(b)) {
+        if (b.length >= 5 && b[0] !== record.page) continue;
+        const x0 = Math.min(b[1], b[3]); const x1 = Math.max(b[1], b[3]);
+        const y0 = Math.min(b[2], b[4]); const y1 = Math.max(b[2], b[4]);
+        left = `${round2(x0 * scale)}px`;
+        top = `${round2(y0 * scale)}px`;
+        width = `${round2((x1 - x0) * scale)}px`;
+        height = `${round2((y1 - y0) * scale)}px`;
+      } else if (b && typeof b === 'object') {
+        if (b.page != null && b.page !== record.page) continue;
+        left = `${b.x0 * scale - 2}px`;
+        top = `${b.y0 * scale - 1}px`;
+        width = `${(b.x1 - b.x0) * scale + 4}px`;
+        height = `${(b.y1 - b.y0) * scale + 2}px`;
+      } else continue;
       const span = record.surface.ownerDocument.createElement('span');
-      const dx = isArr ? 0 : 2, dy = isArr ? 0 : 1;
-      span.style.left = `${round(box.x0 * scale - dx)}px`; span.style.top = `${round(box.y0 * scale - dy)}px`;
-      span.style.width = `${round((box.x1 - box.x0) * scale + dx * 2)}px`; span.style.height = `${round((box.y1 - box.y0) * scale + dy * 2)}px`;
+      span.style.left = left;
+      span.style.top = top;
+      span.style.width = width;
+      span.style.height = height;
       record.overlay.append(span);
     }
   }

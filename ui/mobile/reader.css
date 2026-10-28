@@ -7,6 +7,9 @@
   touch-action: pan-x pan-y pinch-zoom;
 }
 .pdf-surface { margin: 0 auto 190px; background: white; }
+.reader-edge-tap { position: absolute; top: 72px; bottom: 108px; width: clamp(48px, 18%, 80px); z-index: 2; opacity: 0; background: transparent; border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.reader-edge-next { left: 0; }
+.reader-edge-prev { right: 0; }
 .reader-floating[hidden], .reader-selection-actions[hidden] { display: none; }
 .reader-selection-actions { position: absolute; bottom: 48px; left: 24px; right: 24px; z-index: 2; display: flex; justify-content: center; }
 .reader-selection-actions button { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 20px; border-radius: 24px; background: var(--float); color: var(--accent); border: 1px solid var(--line); box-shadow: 0 5px 22px var(--shadow); }

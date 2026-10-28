@@ -64,6 +64,21 @@ export function sentenceIndexAt(track, time) {
   return { index: found, active };
 }
 
+/** The page the audio is on at `time`: the page of the last sentence to begin at
+ * or before it, even through an unverified gap that shows no focus. null before
+ * the first sentence. */
+export function pageAtTime(track, time) {
+  const { starts, sentences } = track;
+  let lo = 0, hi = starts.length - 1, found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (starts[mid] <= time) { found = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  if (found < 0) return null;
+  const sentence = sentences[found];
+  return pageForTime(sentence.sentence_focus ? { ...sentence, ...sentence.sentence_focus } : sentence, time) ?? null;
+}
+
 /** Highlight style: 'exact' while the sentence is being spoken, 'held' in gaps between sentences. */
 export function toneFor(sentence, active = true) {
   return active ? 'exact' : 'held';

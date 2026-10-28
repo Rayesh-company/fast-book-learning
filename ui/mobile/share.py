@@ -78,10 +78,10 @@ def preview_handler(books_dir: Path, ui_dir: Path = UI_DIR, lecture_dir: Path | 
                     self.send_error(404)
                     return
                 content_type = "audio/mpeg"
-            elif path.startswith(("/mobile/", "/book-reader/", "/vendor/")):
+            elif path.startswith(("/mobile/", "/book-reader/", "/vendor/", "/assets/")):
                 target = (ui_dir / path.lstrip("/")).resolve()
                 if (not target.is_relative_to(ui_dir)
-                        or target.relative_to(ui_dir).parts[0] not in {"mobile", "book-reader", "vendor"}
+                        or target.relative_to(ui_dir).parts[0] not in {"mobile", "book-reader", "vendor", "assets"}
                         or target.suffix not in STATIC_TYPES):
                     self.send_error(404)
                     return
