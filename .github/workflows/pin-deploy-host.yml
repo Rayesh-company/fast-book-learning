@@ -1,10 +1,10 @@
 name: Pin deploy host
 
-# One-shot diagnostic (2026-10-29): the deploy secrets rotated with the
-# server move and the ssh path broke twice — first the host key (fixed
-# by re-pinning DEPLOY_KNOWN_HOSTS to the scanned keys), then whatever
-# this probe now reports. stderr essentials + the outcome leave as a
-# warning annotation; identities stay hex-encoded past the masker.
+# One-shot diagnostic (2026-10-29): classify the ssh path to the rebuilt
+# box. sshd may still be socket-activated on 22 even though the deploy
+# port is 6041 — this tries BOTH ports with the deploy key and annotates
+# each verdict (refused = reached the box, nobody listening; timeout =
+# filtered on the way; SSH_OK = the way in).
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Attempt the deploy ssh and annotate the outcome
+      - name: Probe both ssh ports and annotate
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -29,12 +29,10 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
-          USER_HEX="$(printf '%s' "$DEPLOY_USER" | od -An -tx1 | tr -d ' \n')"
-          OUT="$(ssh -v -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
-            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
-            -o ConnectTimeout=10 "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            'echo SSH_OK; curl -s --max-time 5 http://127.0.0.1:8765/livez || echo CURL_FAIL' 2>&1 \
-            | grep -E "SSH_OK|CURL_FAIL|Host key|Permission denied|no matching|Connection (refused|timed)|Server accepts|Authenticated" \
-            | tail -6)"
-          echo "::warning title=ssh-probe::USER_HEX=$USER_HEX | $OUT"
+          for PORT in 22 "$DEPLOY_PORT"; do
+            OUT="$(ssh -p "$PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+              -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=8 "${DEPLOY_USER}@${DEPLOY_HOST}" \
+              'echo SSH_OK' 2>&1 | grep -E "SSH_OK|refused|timed out|denied" | tail -1)"
+            echo "::warning title=ssh-probe::PORT=$PORT | ${OUT:-no-answer}"
+          done
