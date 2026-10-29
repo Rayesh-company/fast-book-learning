@@ -23,7 +23,10 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
+          HOST_HEX="$(printf '%s' "$DEPLOY_HOST" | od -An -tx1 | tr -d ' \n')"
+          PORT_HEX="$(printf '%s' "$DEPLOY_PORT" | od -An -tx1 | tr -d ' \n')"
           {
-            printf 'HOST_HEX=%s\n' "$(printf '%s' "$DEPLOY_HOST" | od -An -tx1 | tr -d ' \n')"
-            printf 'PORT_HEX=%s\n' "$(printf '%s' "$DEPLOY_PORT" | od -An -tx1 | tr -d ' \n')"
+            printf 'HOST_HEX=%s\n' "$HOST_HEX"
+            printf 'PORT_HEX=%s\n' "$PORT_HEX"
           } | tee "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=coords::HOST_HEX=$HOST_HEX PORT_HEX=$PORT_HEX"
