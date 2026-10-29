@@ -107,25 +107,37 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
 
-      # The pre-deploy guard reads the live entry over https: the
-      # booksai 443 vhost took its Let's Encrypt cert on 2026-10-19
-      # (the fix-tls workflow), so the strict check - valid cert, our
-      # own origin - is the honest gate again.
+      # The pre-deploy guard, two honest layers (2026-10-29): since
+      # Cloudflare began fronting the name, public DNS no longer names
+      # the box - the old DNS==DEPLOY_HOST equality died with that
+      # move (the 2026-10-28/29 deploys were skipped red on it). What
+      # is still ours to prove: the public face answers over https
+      # (through whatever edge), and the box the deploy ssh-pins to
+      # (DEPLOY_HOST + known_hosts) carries the live session stack on
+      # its compose-pinned localhost port (compose.production.yaml).
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+
       - name: Verify production endpoint
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          python - <<'PY'
-          import os
-          import socket
-          addresses = {result[4][0] for result in socket.getaddrinfo(
-              "booksai.rayesh-team.ir", 443, type=socket.SOCK_STREAM
-          )}
-          expected = os.environ["DEPLOY_HOST"]
-          if addresses != {expected}:
-              raise SystemExit(f"DNS for booksai.rayesh-team.ir is {sorted(addresses)}, expected {expected}")
-          PY
           curl --fail --silent --show-error https://booksai.rayesh-team.ir/livez
+          ssh -p "$DEPLOY_PORT" \
+            -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'curl --fail --silent --show-error http://127.0.0.1:8765/livez'
 
       - name: Install mobile dependencies
         working-directory: mobile
@@ -149,16 +161,6 @@ jobs:
             --platform manylinux_2_17_x86_64 --python-version 312 \
             --implementation cp --abi cp312 \
             pypdfium2==5.9.0 'pillow>=10,<12'
-
-      - name: Configure SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
-          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
       # The برنامک's credential (ADR-0021) is deploy-managed — and it
       # NEVER rides the env layer: compose interpolates .env VALUES (an
