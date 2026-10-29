@@ -223,10 +223,14 @@ def test_session_ui_shows_citation_not_a_second_summary():
 def test_session_ui_threads_the_three_phases():
     # ADR-0014 (supersedes the tabbed PM brief of 2026-09-11): the ask
     # becomes a user bubble and one assistant article carries the
-    # phases in place — quiet phase markers, no tab strip anywhere,
-    # while a line names the phase being generated.
+    # phases in place — quiet phase markers, no tab strip on the
+    # thread, while a line names the phase being generated. The ONE
+    # tab strip the sheet carries is the auth door's own (ADR-0017's
+    # ورود با گذرواژه / ورود با پیامک, 2026-10-28) — any tablist beyond
+    # it would relapse the thread into the tabbed brief.
     html = UI.read_text(encoding="utf-8")
-    assert 'role="tablist"' not in html
+    assert html.count('role="tablist"') == 1
+    assert 'class="auth-tabs"' in html
     assert "msg-user" in html
     assert "msg-assistant" in html
     assert "phase-mark" in html
