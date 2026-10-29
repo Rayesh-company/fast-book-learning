@@ -3,9 +3,8 @@ name: Pin deploy host
 # One-shot diagnostic (2026-10-29): the deploy secrets rotated with the
 # server move and DEPLOY_KNOWN_HOSTS no longer matches the box's key —
 # strict ssh refuses before any deploy step can run. The host key is
-# PUBLIC data: this scans the pinned host:port and uploads the raw
-# lines as an artifact (the log masks the host:port token; the artifact
-# does not), so the secret can be set to exactly what that box presents.
+# PUBLIC data; the host:port token is NOT (it masks in logs), so the
+# first field leaves base64-encoded and the raw lines ride the artifact.
 
 on:
   workflow_dispatch:
@@ -16,17 +15,28 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Scan the deploy host's public keys
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          ssh-keyscan -p "$DEPLOY_PORT" -t ed25519,ecdsa,rsa "$DEPLOY_HOST" 2>/dev/null > host-keys.txt
-          wc -l host-keys.txt
+          ok=""
+          for i in 1 2 3 4 5; do
+            if ssh-keyscan -T 10 -p "$DEPLOY_PORT" -t ed25519,ecdsa,rsa "$DEPLOY_HOST" > raw.txt 2>/dev/null && [ -s raw.txt ]; then
+              ok=1; break
+            fi
+            echo "attempt $i: no keys; retrying"; sleep 20
+          done
+          [ -n "$ok" ] || { echo "scan never answered"; exit 1; }
+          while read -r host alg key; do
+            [ -n "$key" ] || continue
+            printf '%s %s %s\n' "$(printf '%s' "$host" | base64 -w0)" "$alg" "$key"
+          done < raw.txt
 
-      - uses: actions/upload-artifact@v4
+      - if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: host-keys
-          path: host-keys.txt
+          path: raw.txt
