@@ -1,0 +1,25 @@
+name: Pin deploy host
+
+# One-shot diagnostic (2026-10-29): the deploy secrets rotated with the
+# server move and DEPLOY_KNOWN_HOSTS no longer matches the box's key —
+# strict ssh refuses before any deploy step can run. The host key is
+# PUBLIC data: this scans the pinned host:port and prints the keys, so
+# the secret can be set to exactly what that box presents.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Scan the deploy host's public keys
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh-keyscan -p "$DEPLOY_PORT" -t ed25519,ecdsa,rsa "$DEPLOY_HOST" 2>/dev/null
