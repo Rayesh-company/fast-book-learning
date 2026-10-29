@@ -23,5 +23,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          printf 'HOST_HEX=%s\n' "$(printf '%s' "$DEPLOY_HOST" | od -An -tx1 | tr -d ' \n')"
-          printf 'PORT_HEX=%s\n' "$(printf '%s' "$DEPLOY_PORT" | od -An -tx1 | tr -d ' \n')"
+          {
+            printf 'HOST_HEX=%s\n' "$(printf '%s' "$DEPLOY_HOST" | od -An -tx1 | tr -d ' \n')"
+            printf 'PORT_HEX=%s\n' "$(printf '%s' "$DEPLOY_PORT" | od -An -tx1 | tr -d ' \n')"
+          } | tee "$GITHUB_STEP_SUMMARY"
