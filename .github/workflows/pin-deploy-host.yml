@@ -1,11 +1,10 @@
 name: Pin deploy host
 
 # One-shot diagnostic (2026-10-29): the deploy secrets rotated with the
-# server move and DEPLOY_KNOWN_HOSTS no longer matches the box's key —
-# strict ssh refuses before any deploy step can run. The coordinates
-# themselves are secrets and mask in logs, so they leave hex-encoded
-# (not the literal value — nothing to mask); the keys came off the
-# wire in the first scan and are public by nature.
+# server move and the ssh path broke twice — first the host key (fixed
+# by re-pinning DEPLOY_KNOWN_HOSTS to the scanned keys), then whatever
+# this probe now reports. stderr essentials + the outcome leave as a
+# warning annotation; identities stay hex-encoded past the masker.
 
 on:
   workflow_dispatch:
@@ -14,19 +13,28 @@ permissions:
   contents: read
 
 jobs:
-  reveal:
+  probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
-      - name: Reveal the pinned coordinates hex-encoded
+      - name: Attempt the deploy ssh and annotate the outcome
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
-          HOST_HEX="$(printf '%s' "$DEPLOY_HOST" | od -An -tx1 | tr -d ' \n')"
-          PORT_HEX="$(printf '%s' "$DEPLOY_PORT" | od -An -tx1 | tr -d ' \n')"
-          {
-            printf 'HOST_HEX=%s\n' "$HOST_HEX"
-            printf 'PORT_HEX=%s\n' "$PORT_HEX"
-          } | tee "$GITHUB_STEP_SUMMARY"
-          echo "::warning title=coords::HOST_HEX=$HOST_HEX PORT_HEX=$PORT_HEX"
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
+          USER_HEX="$(printf '%s' "$DEPLOY_USER" | od -An -tx1 | tr -d ' \n')"
+          OUT="$(ssh -v -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
+            -o ConnectTimeout=10 "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'echo SSH_OK; curl -s --max-time 5 http://127.0.0.1:8765/livez || echo CURL_FAIL' 2>&1 \
+            | grep -E "SSH_OK|CURL_FAIL|Host key|Permission denied|no matching|Connection (refused|timed)|Server accepts|Authenticated" \
+            | tail -6)"
+          echo "::warning title=ssh-probe::USER_HEX=$USER_HEX | $OUT"
