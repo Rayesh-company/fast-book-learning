@@ -21,7 +21,11 @@ services:
       - cognee-network
 
   cognee:
-    image: cognee/cognee:main
+    # Digest-pinned (F-010 of the 2026-10-24 review): the floating `main` tag
+    # let any pull swap the memory platform unseen. The digest is the image
+    # the production box runs (2026-10-30); a platform upgrade is a deliberate
+    # re-pin, not a side effect of a pull.
+    image: cognee/cognee@sha256:61a1af769debf105601694df37ca1410e8c5a683932f4caa97ba21357ca87e42
     container_name: chat-with-books-cognee
     restart: unless-stopped
     depends_on:
@@ -90,7 +94,8 @@ services:
       - cognee-network
 
   cognee-next-tier:
-    image: cognee/cognee:main
+    # Same digest pin as cognee (F-010): both services run one platform image.
+    image: cognee/cognee@sha256:61a1af769debf105601694df37ca1410e8c5a683932f4caa97ba21357ca87e42
     container_name: chat-with-books-cognee-next-tier
     restart: unless-stopped
     depends_on:
