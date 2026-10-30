@@ -37,8 +37,8 @@ from urllib.request import Request, urlopen
 # enough and a running server needs no restart to pick a new value up.
 EITAA_BOT_TOKEN_ENV = "EITAA_BOT_TOKEN"
 
-# The deploy path: the panel's token carries `$` sequences (a real one
-# carried `$iDmYpyQ`), and the env layer mangles them — compose
+# The deploy path: the panel's token carries `$` sequences, and the
+# env layer mangles them — compose
 # interpolates .env VALUES (an undefined `$VAR` amputates silently)
 # and offers no escape there. So deploys write the token to a FILE on
 # the persisted volume (docker exec, no interpolation anywhere) and
