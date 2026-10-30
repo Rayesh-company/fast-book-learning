@@ -1339,6 +1339,9 @@ body.dark .book-reader-playback-focus[data-tone="search"] > span {
 }
 
 .section-chevron svg {
+  width: 16px;
+  height: 16px;
+}
 
 /* 16. The OTP's six boxes (2026-10-25): one digit each, left-to-right,
    auto-advancing — the hidden `code` input they sync rides beside them
@@ -2108,6 +2111,7 @@ body.dark .voice-wave-finish-button {
   .voice-wave-finish-button {
     transition: none;
   }
+}
 
 .admin-form {
   display: flex;
