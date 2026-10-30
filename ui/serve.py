@@ -1182,6 +1182,23 @@ _GZIP_SUFFIXES = frozenset(
     {".html", ".css", ".js", ".mjs", ".json", ".webmanifest", ".svg", ".txt"}
 )
 
+# The suffixes that may sit in the browser's cache (2026-10-30): the
+# app's own code, styles and fonts — files whose URL never carries a
+# version, so they take a short fresh window plus stale-while-revalidate
+# instead of the old revalidate-everything. The measured path costs
+# ~1s per request, and the old `max-age=0, must-revalidate` made every
+# visit replay ~30 conditional round trips before a single module ran:
+# the revisit slowness the PM reported. Five minutes fresh, a day of
+# serve-stale-while-refreshing — a deploy lands on the user's NEXT
+# load, because the HTML stays no-cache and its graph ETag changes with
+# every module it references. JSON never rides this: the OTA manifest
+# and the API's shape must be read from the origin, not yesterday's
+# cache.
+_CACHEABLE_SUFFIXES = frozenset(
+    {".mjs", ".js", ".css", ".woff", ".woff2", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".ico"}
+)
+_UI_CACHE_POLICY = "public, max-age=300, stale-while-revalidate=86400"
+
 
 class SessionHandler(SimpleHTTPRequestHandler):
     # The PWA's and the reader's static types, pinned (ADR-0019):
@@ -1435,12 +1452,17 @@ class SessionHandler(SimpleHTTPRequestHandler):
     def _serve_static(self, path: str) -> bool:
         """The UI's own static files (the mobile face's modules and
         styles, the fonts, the icons): gzipped when the client accepts
-        it and always revalidatable — the same ETag + 304 pair the Book
-        route established (ADR-0017), so a redeploy is picked up on the
-        next load (the 2026-09-11 stale-page law) while an unchanged
-        file costs one stat and a bodyless 304. Returns False for
-        anything that is not a plain file (directories, misses, Range
-        requests) so SimpleHTTPRequestHandler keeps its old answer."""
+        it, and cached by family — the app's code, styles and fonts sit
+        in the browser's cache under _UI_CACHE_POLICY (five minutes
+        fresh, a day of stale-while-revalidate: the revisit loads from
+        disk while the revalidation rides the background), everything
+        else revalidates every time on the same ETag + 304 pair the
+        Book route established (ADR-0017). A redeploy still lands on
+        the next load (the 2026-09-11 stale-page law): the page itself
+        is no-cache and its graph ETag moves with every module it
+        names. Returns False for anything that is not a plain file
+        (directories, misses, Range requests) so
+        SimpleHTTPRequestHandler keeps its old answer."""
         if path.endswith("/"):
             return False
         file_path = Path(self.translate_path(path))
@@ -1451,7 +1473,16 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if not S_ISREG(stat.st_mode) or self.headers.get("Range"):
             return False
         etag = f'"{stat.st_size:x}-{stat.st_mtime_ns:x}"'
-        self._cache_policy = "public, max-age=0, must-revalidate"
+        # The cacheable family (code, styles, fonts, icons) rides the
+        # short-max-age + stale-while-revalidate policy; everything else
+        # (JSON above all — the OTA manifest, the data files) stays on
+        # revalidate-every-time, and the HTML's own no-cache comes from
+        # end_headers' default.
+        self._cache_policy = (
+            _UI_CACHE_POLICY
+            if file_path.suffix.lower() in _CACHEABLE_SUFFIXES
+            else "public, max-age=0, must-revalidate"
+        )
         if self.headers.get("If-None-Match") == etag:
             self.send_response(304)
             self.send_header("ETag", etag)
