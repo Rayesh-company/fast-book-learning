@@ -92,36 +92,70 @@ class _Codes:
         self._lock = threading.Lock()
         self._pending: dict[str, dict] = {}
 
-    def check_may_send(self, phone: str, now: float) -> None:
+    def reserve(self, phone: str, now: float):
+        """The cooldown/cap check and the slot's occupation under ONE
+        lock — the old check-then-record left the wire's own send
+        window (up to the panel timeout) between them, and a second
+        request inside it found the store still empty and sent its own
+        SMS: the PM's two codes in one instant (2026-10-30). The
+        reservation is born unverifiable (no code, never in TTL) so a
+        racer's verify during the send answers like any wrong guess,
+        and the previous record rides back as the return value for a
+        failed send to restore."""
+        day = datetime.date.fromtimestamp(now).isoformat()
+        with self._lock:
+            previous = self._pending.get(phone)
+            if previous is not None:
+                if now - previous["sent_at"] < OTP_RESEND_SECONDS:
+                    raise OtpRateLimited("resend cooldown")
+                if (
+                    previous["day"] == day
+                    and previous["sent_today"] >= OTP_DAILY_PER_PHONE
+                ):
+                    raise OtpRateLimited("daily cap")
+            self._pending[phone] = {
+                "code": None,
+                "expires_at": 0,
+                "attempts": 0,
+                "sent_at": now,
+                "day": day,
+                "sent_today": (
+                    1
+                    if previous is None or previous["day"] != day
+                    else previous["sent_today"] + 1
+                ),
+            }
+            return previous
+
+    def confirm(self, phone: str, code: str, now: float) -> None:
+        """The send landed on the wire: the reserved slot becomes the
+        live code with its five-minute life."""
         with self._lock:
             record = self._pending.get(phone)
             if record is None:
                 return
-            if now - record["sent_at"] < OTP_RESEND_SECONDS:
-                raise OtpRateLimited("resend cooldown")
-            if (
-                record["day"] == datetime.date.fromtimestamp(now).isoformat()
-                and record["sent_today"] >= OTP_DAILY_PER_PHONE
-            ):
-                raise OtpRateLimited("daily cap")
+            record["code"] = code
+            record["expires_at"] = now + OTP_TTL_SECONDS
 
-    def record(self, phone: str, code: str, now: float) -> None:
-        day = datetime.date.fromtimestamp(now).isoformat()
+    def restore(self, phone: str, previous) -> None:
+        """A failed send charges nothing (the law the 502 answers
+        under): the reservation unwinds to exactly the record that
+        stood before it, so the next attempt starts free."""
         with self._lock:
             record = self._pending.get(phone)
-            fresh_day = record is None or record["day"] != day
-            self._pending[phone] = {
-                "code": code,
-                "expires_at": now + OTP_TTL_SECONDS,
-                "attempts": 0,
-                "sent_at": now,
-                "day": day,
-                "sent_today": 1 if fresh_day else record["sent_today"] + 1,
-            }
+            if record is None or record["code"] is not None:
+                return  # already confirmed (or gone) — never touch it
+            if previous is None:
+                self._pending.pop(phone, None)
+            else:
+                self._pending[phone] = previous
 
     def verify(self, phone: str, code: str, now: float) -> bool:
         with self._lock:
             record = self._pending.get(phone)
+            if record is not None and record["code"] is None:
+                return False  # a reservation: the send is still on the wire —
+                # refuse WITHOUT popping, the code the wire is carrying must live
             if record is None or now > record["expires_at"]:
                 self._pending.pop(phone, None)
                 return False
@@ -176,19 +210,23 @@ def send_otp_sms(phone: str, code: str) -> None:
 
 
 def request_otp(phone: str, now: float = None) -> str:
-    """The request/verify pair's request half: rate-check, send, then
-    record — in that order, so a send that fails (OtpSendFailed from
-    the panel's refusal or silence) charges nothing against the
-    cooldown or the day. Returns nothing the caller may show: the code
-    goes only down the SMS wire."""
+    """The request/verify pair's request half: reserve, send, then
+    confirm — the cooldown/cap check and the slot's occupation are one
+    atomic step (CODES.reserve), so a second request racing the first's
+    in-flight send meets the cooldown instead of a second SMS, and a
+    send that fails (OtpSendFailed from the panel's refusal or silence)
+    unwinds its reservation — it charges nothing against the cooldown
+    or the day. Returns nothing the caller may show: the code goes only
+    down the SMS wire."""
     now = time.time() if now is None else now
-    CODES.check_may_send(phone, now)
     code = f"{secrets.randbelow(1_000_000):06d}"
+    previous = CODES.reserve(phone, now)
     try:
         send_otp_sms(phone, code)
     except Exception as error:  # URLError, HTTPError, timeout, OSError
+        CODES.restore(phone, previous)
         raise OtpSendFailed(str(error)) from error
-    CODES.record(phone, code, now)
+    CODES.confirm(phone, code, now)
 
 
 def verify_otp(phone: str, code: str, now: float = None) -> bool:

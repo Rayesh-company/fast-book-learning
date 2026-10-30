@@ -14,10 +14,14 @@ lose:
   variable.
 - The refusals: cooldown, daily cap, wrong/expired code — and the
   unconfigured 503 that never wears a user error's clothing.
+- The race (the PM's double SMS, 2026-10-30): a request arriving
+  while the previous send is still on the wire answers the cooldown,
+  never a second code.
 - The success: /auth/login's own body and cookie, workable on /auth/me
   by both the cookie and the Bearer token (ADR-0020)."""
 
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -233,6 +237,67 @@ def test_the_cooldown_and_the_failed_send(tmp_path, monkeypatch):
         assert len(panel.sent) == 1  # the failed attempt never recorded
         panel.fail_with = None
         assert _otp_post(base, "/auth/otp/request", {"phone": "09120001111"})[0] == 200
+    finally:
+        stop_gate(server, originals)
+
+
+def test_a_request_racing_the_send_never_sends_a_second_sms(
+    tmp_path, monkeypatch
+):
+    """The PM's double SMS (2026-10-30): the old law checked the
+    cooldown, sent on the wire (seconds on a slow panel), and only
+    THEN recorded — a request inside that window found the store still
+    empty and the phone got two codes in one instant (and only the
+    second one verified). The reservation now occupies the slot under
+    the same lock that checks it, so the racer answers 429, the wire
+    carries one send, and THAT send's code still verifies."""
+    panel, clock = _patched_panel(monkeypatch)
+    on_the_wire = threading.Event()
+    release = threading.Event()
+
+    class SlowPanel:
+        def __call__(self, request, timeout=None):
+            on_the_wire.set()
+            release.wait(10)
+            return panel(request, timeout)
+
+    monkeypatch.setattr(otp, "urlopen", SlowPanel())
+    base, server, originals = with_gate(tmp_path, _ok_upstream)
+    try:
+        accounts.create_account("a@book.ir", "pass-word-1", phone="09120008888")
+        first = threading.Thread(
+            target=lambda: _otp_post(
+                base, "/auth/otp/request", {"phone": "09120008888"}
+            )
+        )
+        first.start()
+        assert on_the_wire.wait(10)  # send #1 is out, nothing recorded yet
+
+        # The racer — the double-tap's second POST — meets the cooldown.
+        status, payload = _otp_post(
+            base, "/auth/otp/request", {"phone": "09120008888"}
+        )
+        assert status == 429
+        assert "صبر" in payload["detail"]
+
+        release.set()
+        first.join(10)
+        assert len(panel.sent) == 1  # exactly one SMS left the panel
+
+        # The code the wire carried still verifies — the reservation
+        # became the live record, it did not swallow the send.
+        code = panel.sent[0]["body"]["attributes"]["codeotp"]
+        status, payload = _otp_post(
+            base, "/auth/otp/verify", {"phone": "09120008888", "code": code}
+        )
+        assert status == 200
+
+        # And past the cooldown the next code goes free — no residue.
+        clock["t"] += otp.OTP_RESEND_SECONDS + 1
+        assert _otp_post(base, "/auth/otp/request", {"phone": "09120008888"})[
+            0
+        ] == 200
+        assert len(panel.sent) == 2
     finally:
         stop_gate(server, originals)
 
