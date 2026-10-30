@@ -1771,7 +1771,10 @@ class SessionHandler(SimpleHTTPRequestHandler):
             self.send_error(404, "Not found")
             return
         target = (Path(audio_dir) / match.group(1) / match.group(2)).resolve()
-        if not str(target).startswith(str(Path(audio_dir).resolve())):
+        # The trailing separator is the check's teeth (F-008 of the 2026-10-24
+        # review): without it a sister directory whose name merely extends the
+        # root's name passes the containment test.
+        if not str(target).startswith(str(Path(audio_dir).resolve()) + os.sep):
             self._drain_request_body()
             self.send_error(404, "Not found")
             return
@@ -2319,7 +2322,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
         traversal outside it is a plain 404."""
         rel = path[len("/ota/current/") :]
         target = (OTA_DIR / "current" / rel).resolve()
-        if not str(target).startswith(str((OTA_DIR / "current").resolve())):
+        # Same teeth as the lecture-audio gate (F-008): the separator after
+        # the root closes the sibling-prefix hole.
+        if not str(target).startswith(str((OTA_DIR / "current").resolve()) + os.sep):
             self._drain_request_body()
             self.send_error(404, "Not found")
             return
