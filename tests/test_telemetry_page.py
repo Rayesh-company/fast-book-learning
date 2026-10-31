@@ -418,7 +418,7 @@ def test_the_filters_survive_the_url(tmp_path):
             phone_2, f"learner-{phone_2}", "پرسش دوم", "پاسخ دوم", request_id=req_id_2
         )
 
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = (chat_store._now() or datetime.now().strftime("%Y-%m-%d"))[:10]
         admin_cookie = cookie_for(base, ADMIN_EMAIL)
         query = f"?day={today}&phone={phone_1}&dataset=tarhe-kolli&status=ok"
         st, ct, html = get_req(base, f"/admin/requests{query}", cookie=admin_cookie)
