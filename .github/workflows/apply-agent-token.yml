@@ -18,7 +18,7 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          TARGET_USER: "ubuntu"
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
           AGENT_TOKEN: ${{ secrets.AGENT_SERVICE_TOKEN }}
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -29,30 +29,41 @@ jobs:
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519"
           PUBKEY="$(ssh-keygen -y -f "$RUNNER_TEMP/cwb-ssh/id_ed25519")"
 
-          echo "Connecting to VPS on port $DEPLOY_PORT..."
+          echo "Connecting to VPS on port $DEPLOY_PORT as $TARGET_USER..."
           sshpass -p "$VPS_PASSWORD" ssh -p "$DEPLOY_PORT" \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=15 \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" "
+            "${TARGET_USER}@${DEPLOY_HOST}" "
               set -eu
               mkdir -p ~/.ssh && chmod 700 ~/.ssh
               touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
               if ! grep -Fq \"$PUBKEY\" ~/.ssh/authorized_keys; then
                 printf '\n%s\n' \"$PUBKEY\" >> ~/.ssh/authorized_keys
-                echo 'Authorized GitHub Actions SSH key in authorized_keys.'
+                echo 'Authorized GitHub Actions SSH key in ~ubuntu/.ssh/authorized_keys.'
+              fi
+
+              # Also authorize in /home/cwb-deploy/.ssh if it exists
+              if [ -d /home/cwb-deploy ]; then
+                sudo mkdir -p /home/cwb-deploy/.ssh && sudo chmod 700 /home/cwb-deploy/.ssh
+                sudo touch /home/cwb-deploy/.ssh/authorized_keys && sudo chmod 600 /home/cwb-deploy/.ssh/authorized_keys
+                if ! sudo grep -Fq \"$PUBKEY\" /home/cwb-deploy/.ssh/authorized_keys; then
+                  printf '\n%s\n' \"$PUBKEY\" | sudo tee -a /home/cwb-deploy/.ssh/authorized_keys >/dev/null
+                  sudo chown -R cwb-deploy:cwb-deploy /home/cwb-deploy/.ssh
+                  echo 'Authorized GitHub Actions SSH key in /home/cwb-deploy/.ssh/authorized_keys.'
+                fi
               fi
 
               cd /home/chat-with-books/current
               touch .env
               if grep -q '^AGENT_SERVICE_TOKEN=' .env 2>/dev/null; then
-                sed -i \"s|^AGENT_SERVICE_TOKEN=.*|AGENT_SERVICE_TOKEN='${AGENT_TOKEN}'|\" .env
+                sudo sed -i \"s|^AGENT_SERVICE_TOKEN=.*|AGENT_SERVICE_TOKEN='${AGENT_TOKEN}'|\" .env
               else
-                printf \"\nAGENT_SERVICE_TOKEN='%s'\n\" \"${AGENT_TOKEN}\" >> .env
+                printf \"\nAGENT_SERVICE_TOKEN='%s'\n\" \"${AGENT_TOKEN}\" | sudo tee -a .env >/dev/null
               fi
               echo 'Upserted AGENT_SERVICE_TOKEN in /home/chat-with-books/current/.env'
 
               echo 'Starting docker compose up -d --build...'
-              docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session up -d --build
+              sudo docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session up -d --build
 
               echo 'Waiting for Session UI livez...'
               for i in \$(seq 1 60); do
