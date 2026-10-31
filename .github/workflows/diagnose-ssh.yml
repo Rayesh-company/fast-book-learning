@@ -17,18 +17,12 @@ jobs:
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
         run: |
-          echo "=== Testing ubuntu ==="
-          sshpass -p "$VPS_PASSWORD" ssh -v -p "$DEPLOY_PORT" \
-            -o StrictHostKeyChecking=no \
-            -o PreferredAuthentications=password,keyboard-interactive \
-            -o PubkeyAuthentication=no \
-            -o ConnectTimeout=10 \
-            "ubuntu@${DEPLOY_HOST}" "id; whoami" || echo "ubuntu failed with exit code $?"
-
-          echo "=== Testing root ==="
-          sshpass -p "$VPS_PASSWORD" ssh -v -p "$DEPLOY_PORT" \
-            -o StrictHostKeyChecking=no \
-            -o PreferredAuthentications=password,keyboard-interactive \
-            -o PubkeyAuthentication=no \
-            -o ConnectTimeout=10 \
-            "root@${DEPLOY_HOST}" "id; whoami" || echo "root failed with exit code $?"
+          for u in ubuntu root cwb-deploy chat-with-books; do
+            echo "=== Testing $u ==="
+            sshpass -p "$VPS_PASSWORD" ssh -p "$DEPLOY_PORT" \
+              -o StrictHostKeyChecking=no \
+              -o PreferredAuthentications=password \
+              -o PubkeyAuthentication=no \
+              -o ConnectTimeout=10 \
+              "$u@${DEPLOY_HOST}" "id; whoami" || echo "$u failed with exit code $?"
+          done
