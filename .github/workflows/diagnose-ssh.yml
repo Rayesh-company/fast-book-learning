@@ -11,40 +11,28 @@ jobs:
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Probe SSH auth methods
+      - name: Probe SSH auth methods on port 22
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          VPS_PASS_0: "m60KFvQDq5w"
-          VPS_PASS_O: "m6OKFvQDq5w"
         run: |
-          echo "Host check: target is 193.93.169.177? $([ "$DEPLOY_HOST" = "193.93.169.177" ] && echo YES || echo NO: $DEPLOY_HOST)"
-          echo "Port check: port is 6041? $([ "$DEPLOY_PORT" = "6041" ] && echo YES || echo NO: $DEPLOY_PORT)"
-          echo "DEPLOY_USER secret is: $DEPLOY_USER"
-
           install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519"
 
-          echo "=== 1. Test SSH KEY with ubuntu, root, cwb-deploy ==="
-          for u in ubuntu root "$DEPLOY_USER"; do
-            echo "--- Key auth as $u ---"
-            ssh -p 6041 -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
-              -o StrictHostKeyChecking=no -o ConnectTimeout=8 \
-              -o BatchMode=yes "$u@193.93.169.177" "id; whoami" || echo "Key failed for $u"
-          done
+          echo "=== 1. Test SSH KEY on port 22 ==="
+          ssh -v -p 22 -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            -o StrictHostKeyChecking=no -o ConnectTimeout=8 \
+            -o BatchMode=yes "ubuntu@193.93.169.177" "id; whoami" || echo "Key failed on port 22"
 
-          echo "=== 2. Test password with zero (m60KFvQDq5w) vs letter O (m6OKFvQDq5w) ==="
-          for pass_name in VPS_PASS_0 VPS_PASS_O; do
-            p="${!pass_name}"
-            for u in ubuntu root; do
-              echo "--- Password $pass_name for $u ---"
-              sshpass -p "$p" ssh -p 6041 \
-                -o StrictHostKeyChecking=no -o ConnectTimeout=8 \
-                -o PreferredAuthentications=password \
-                "$u@193.93.169.177" "id; whoami" || echo "Pass $pass_name failed for $u"
-            done
-          done
+          echo "=== 2. Test password m60KFvQDq5w on port 22 for ubuntu ==="
+          sshpass -p "$VPS_PASSWORD" ssh -v -p 22 \
+            -o StrictHostKeyChecking=no -o ConnectTimeout=8 \
+            -o PreferredAuthentications=password \
+            "ubuntu@193.93.169.177" "id; whoami" || echo "Password failed on port 22 for ubuntu"
+
+          echo "=== 3. Test password m60KFvQDq5w on port 22 for root ==="
+          sshpass -p "$VPS_PASSWORD" ssh -v -p 22 \
+            -o StrictHostKeyChecking=no -o ConnectTimeout=8 \
+            -o PreferredAuthentications=password \
+            "root@193.93.169.177" "id; whoami" || echo "Password failed on port 22 for root"
