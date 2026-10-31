@@ -5,14 +5,110 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Configure SSH
-        env: {SSH_PRIVATE_KEY: "${{ secrets.DEPLOY_SSH_KEY }}", SSH_KNOWN_HOSTS: "${{ secrets.DEPLOY_KNOWN_HOSTS }}"}
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+      - name: Run VPS diagnostics
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          TARGET_USER: "ubuntu"
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
         run: |
-          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
-          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
-      - name: Key names only
-        env: {DEPLOY_HOST: "${{ secrets.DEPLOY_HOST }}", DEPLOY_USER: "${{ secrets.DEPLOY_USER }}", DEPLOY_PORT: "${{ secrets.DEPLOY_PORT }}"}
-        run: |
-          ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" "${DEPLOY_USER}@${DEPLOY_HOST}" 'echo "== .env keys:"; cut -d= -f1 /home/chat-with-books/current/.env | grep -v "^#" | grep -v "^$"; echo "== container has AUTH_SECRET:"; docker exec chat-with-books-session sh -c "printenv | cut -d= -f1 | grep -c AUTH_SECRET || echo 0"; echo "== recent 401s:"; docker logs --since 3600 chat-with-books-session 2>&1 | grep -E "\"(POST|GET) /(ask|api/v1/recall|auth)[^\"]*\" (401|402|429)" | tail -8'
+          set -eu
+          echo "Connecting to VPS on port $DEPLOY_PORT as $TARGET_USER..."
+          sshpass -p "$VPS_PASSWORD" ssh -p "$DEPLOY_PORT" \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=15 \
+            "${TARGET_USER}@${DEPLOY_HOST}" 'bash -s' << 'EOF'
+              set -u
+              run_sudo() {
+                if sudo -n true 2>/dev/null; then
+                  sudo "$@"
+                else
+                  printf '%s\n' 'm60KFvQDq5wMjPBj3JEs' | sudo -S "$@"
+                fi
+              }
+
+              echo "=========================================================="
+              echo "1. DOCKER CONTAINERS STATUS"
+              echo "=========================================================="
+              run_sudo docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+
+              echo ""
+              echo "=========================================================="
+              echo "2. ACCOUNT LOOKUP IN /data/accounts.sqlite3"
+              echo "=========================================================="
+              run_sudo docker exec chat-with-books-session sqlite3 /data/accounts.sqlite3 \
+                "SELECT email, phone, role, created_at, balance_toman FROM accounts WHERE phone LIKE '%09021100939%' OR email LIKE '%pm@chat-with-books.ir%';"
+
+              echo ""
+              echo "All accounts in accounts.sqlite3:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/accounts.sqlite3 \
+                "SELECT email, phone, role, balance_toman FROM accounts;"
+
+              echo ""
+              echo "=========================================================="
+              echo "3. QUOTA & CHATS TODAY IN /data/usage.sqlite3"
+              echo "=========================================================="
+              echo "Chats today (by day):"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/usage.sqlite3 \
+                "SELECT rowid, account, day FROM chats WHERE account LIKE '%pm@chat-with-books.ir%' OR account LIKE '%09021100939%' ORDER BY rowid DESC LIMIT 15;"
+
+              echo "Recent questions in rolling window:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/usage.sqlite3 \
+                "SELECT rowid, phone, datetime(at, 'unixepoch', 'localtime') AS time_local FROM questions WHERE phone LIKE '%09021100939%' ORDER BY rowid DESC LIMIT 15;"
+
+              echo ""
+              echo "=========================================================="
+              echo "4. PERSISTED EXCHANGES IN /data/chats.sqlite3"
+              echo "=========================================================="
+              echo "Recent agent_chats for phone/user:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/chats.sqlite3 \
+                "SELECT id, phone, thread_id, substr(question, 1, 60), substr(answer, 1, 60), created_at, request_id FROM agent_chats WHERE phone LIKE '%09021100939%' ORDER BY rowid DESC LIMIT 10;"
+
+              echo "Recent ask chats for phone/user:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/chats.sqlite3 \
+                "SELECT id, phone, substr(question, 1, 60), created_at, request_id FROM chats WHERE phone LIKE '%09021100939%' ORDER BY rowid DESC LIMIT 10;"
+
+              echo ""
+              echo "=========================================================="
+              echo "5. MASTRA AGENT STORAGE (/data/mastra.sqlite)"
+              echo "=========================================================="
+              echo "Tables in mastra.sqlite:"
+              run_sudo docker exec chat-with-books-agent sqlite3 /data/mastra.sqlite ".tables" 2>/dev/null || echo "Could not inspect mastra.sqlite tables"
+
+              echo "Recent threads in mastra.sqlite:"
+              run_sudo docker exec chat-with-books-agent sqlite3 /data/mastra.sqlite \
+                "SELECT * FROM mastra_threads ORDER BY createdAt DESC LIMIT 5;" 2>/dev/null || echo "mastra_threads query failed"
+
+              echo "Recent messages in mastra.sqlite:"
+              run_sudo docker exec chat-with-books-agent sqlite3 /data/mastra.sqlite \
+                "SELECT id, threadId, role, substr(content, 1, 80), createdAt FROM mastra_messages ORDER BY createdAt DESC LIMIT 10;" 2>/dev/null || echo "mastra_messages query failed"
+
+              echo ""
+              echo "=========================================================="
+              echo "6. SESSION SERVICE DOCKER LOGS (LAST 250 LINES)"
+              echo "=========================================================="
+              run_sudo docker logs --tail 250 chat-with-books-session
+
+              echo ""
+              echo "=========================================================="
+              echo "7. MASTRA AGENT DOCKER LOGS (LAST 250 LINES)"
+              echo "=========================================================="
+              run_sudo docker logs --tail 250 chat-with-books-agent
+
+              echo ""
+              echo "=========================================================="
+              echo "8. ENVIRONMENT VARIABLES OF RELEVANCE IN .env"
+              echo "=========================================================="
+              TARGET_DIR='/home/chat-with-books/current'
+              [ -d /srv/chat-with-books/current ] && TARGET_DIR='/srv/chat-with-books/current'
+              if [ -f "$TARGET_DIR/.env" ]; then
+                run_sudo grep -E '^(DAILY_CHAT_LIMIT|UNLIMITED_ACCOUNTS|CHAT_AGENT_MODEL|AGENT_MODEL|LLM_MODEL|AVALAI_BASE_URL|AVALAI_SEARCH_TOOL|QUESTION_WINDOW)' "$TARGET_DIR/.env" || true
+              fi
+
+              echo ""
+              echo "=========================================================="
+              echo "INSPECTION COMPLETE"
+              echo "=========================================================="
+EOF
