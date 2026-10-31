@@ -19,6 +19,7 @@ services:
       AGENT_SERVICE_TOKEN: ${AGENT_SERVICE_TOKEN:-}
       AGENT_URL: http://chat-with-books-agent:4111
       AGENT_TIMEOUT: ${AGENT_TIMEOUT:-240}
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-8}
       COGNEE_URL: http://chat-with-books-cognee:8000
       NEXT_TIER_URL: http://chat-with-books-cognee-next-tier:8000
       NEXT_TIER_TIMEOUT: ${NEXT_TIER_TIMEOUT:-1200}
@@ -34,6 +35,7 @@ services:
       LLM_ENDPOINT: ${LLM_ENDPOINT:-https://api.avalai.ir/v1}
       LLM_MODEL: ${LLM_MODEL:-openai/glm-5.3-flash}
       LLM_API_KEY: ${LLM_API_KEY}
+      AVALAI_API_KEY: ${AVALAI_API_KEY:-${LLM_API_KEY}}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-large}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-"3072"}
       FROZEN_EMBEDDING_MODEL: ${FROZEN_EMBEDDING_MODEL:-${EMBEDDING_MODEL:-text-embedding-3-large}}
@@ -55,6 +57,7 @@ services:
       - cognee-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "api.avalai.ir:185.143.233.133"
 
 networks:
   cognee-network:

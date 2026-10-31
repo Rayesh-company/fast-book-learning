@@ -325,8 +325,10 @@ def distill_pool(
         end_idx = best_idx
         peak_page = sentences[best_idx]["page"]
 
-        # Expand backwards: at most 1 neighbor, strictly staying on the same page
-        while start_idx > 0 and (best_idx - start_idx) < 1:
+        target_span_len = max(min_chars_per_passage, 250)
+
+        # Expand backwards: strictly staying on the same page, expanding up to max_chars_per_passage
+        while start_idx > 0:
             candidate_s = sentences[start_idx - 1]
             if (
                 peak_page is not None
@@ -336,13 +338,18 @@ def distill_pool(
                 break
             candidate_start = candidate_s["start"]
             span_len = sentences[end_idx]["end"] - candidate_start
-            if span_len <= max_chars_per_passage:
-                start_idx -= 1
-            else:
+            if span_len > max_chars_per_passage:
                 break
+            if (
+                (best_idx - start_idx) >= 1
+                and span_len >= target_span_len
+                and candidate_s["score"] == 0
+            ):
+                break
+            start_idx -= 1
 
-        # Expand forward: at most 1 neighbor, strictly staying on the same page
-        while end_idx < len(sentences) - 1 and (end_idx - best_idx) < 1:
+        # Expand forward: strictly staying on the same page, expanding up to max_chars_per_passage
+        while end_idx < len(sentences) - 1:
             candidate_s = sentences[end_idx + 1]
             if (
                 peak_page is not None
@@ -352,10 +359,15 @@ def distill_pool(
                 break
             candidate_end = candidate_s["end"]
             span_len = candidate_end - sentences[start_idx]["start"]
-            if span_len <= max_chars_per_passage:
-                end_idx += 1
-            else:
+            if span_len > max_chars_per_passage:
                 break
+            if (
+                (end_idx - best_idx) >= 1
+                and span_len >= target_span_len
+                and candidate_s["score"] == 0
+            ):
+                break
+            end_idx += 1
 
         # Step 4: Extract verbatim span
         span_start = sentences[start_idx]["start"]

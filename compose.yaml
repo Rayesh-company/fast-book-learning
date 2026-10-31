@@ -84,6 +84,7 @@ services:
       - "18000:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "api.avalai.ir:185.143.233.133"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -145,6 +146,7 @@ services:
       - "8001:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "api.avalai.ir:185.143.233.133"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -176,6 +178,7 @@ services:
       AVALAI_API_KEY: ${AVALAI_API_KEY:-${LLM_API_KEY}}
       AVALAI_BASE_URL: ${AVALAI_BASE_URL:-${LLM_ENDPOINT:-https://api.avalai.ir/v1}}
       AVALAI_SEARCH_TOOL: ${AVALAI_SEARCH_TOOL:-perplexity-search}
+      CHAT_AGENT_MAX_STEPS: ${CHAT_AGENT_MAX_STEPS:-8}
       # The Book pool rides the session service's /agent/recall seam
       # (ADR-0016/0018), container-to-container.
       PYTHON_CORE_URL: http://session:8765
@@ -197,6 +200,7 @@ services:
       - cognee-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "api.avalai.ir:185.143.233.133"
 
   session:
     build:
@@ -261,6 +265,7 @@ services:
       # service's generate route, container-to-container.
       AGENT_URL: http://agent:4111
       AGENT_TIMEOUT: ${AGENT_TIMEOUT:-240}
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-8}
       # Research Mode's sessions persist beside the quota counts on the
       # same volume (ADR-0008) — a container rebuild must not throw an
       # in-progress investigation away.
@@ -366,6 +371,7 @@ services:
       - cognee-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "api.avalai.ir:185.143.233.133"
 
   frontend:
     image: cognee/cognee-ui:latest
@@ -374,7 +380,7 @@ services:
       - ui
     restart: unless-stopped
     environment:
-      COGNEE_BACKEND_URL: ${COGNEE_BACKEND_URL:-}
+      COGNEE_BACKEND_URL: ${COGNEE_BACKEND_URL:-http://localhost:18000}
     depends_on:
       cognee:
         condition: service_healthy

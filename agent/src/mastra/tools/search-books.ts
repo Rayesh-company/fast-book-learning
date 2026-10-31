@@ -7,6 +7,16 @@ import { z } from "zod";
 // Env is read at call time (the ui.ask._recall_url rule) so the
 // tests' pins hold.
 
+function cleanPassageText(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\uf076]/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ \n/g, "\n")
+    .replace(/\n /g, "\n")
+    .trim();
+}
+
 export const searchBooksTool = createTool({
   id: "search-books",
   description:
@@ -110,10 +120,11 @@ export const searchBooksTool = createTool({
       return {
         passages: rawPassages.slice(0, 4).map((p) => ({
           reference: p.reference,
-          passage:
+          passage: cleanPassageText(
             p.passage.length > 1500
               ? p.passage.slice(0, 1500) + "…"
               : p.passage,
+          ),
         })),
       };
     } catch (err) {

@@ -1240,7 +1240,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
         "img-src 'self' data: blob:; "
         "media-src 'self' blob:; "
         "font-src 'self'; "
-        "connect-src 'self'; "
+        "connect-src 'self' ws://127.0.0.1:4400 ws://localhost:4400 http://127.0.0.1:4400 http://localhost:4400; "
         "worker-src 'self' blob:; "
         "base-uri 'self'; "
         "form-action 'self'; "
@@ -1394,6 +1394,9 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path == "/api/admin/accounts":
             self._api_admin_accounts()
+            return
+        if path == "/api/admin/tokens":
+            self._api_admin_tokens()
             return
         if path == "/admin/requests":
             self._admin_requests_list()
@@ -3282,7 +3285,19 @@ class SessionHandler(SimpleHTTPRequestHandler):
             session_id = None
         raw_pool = ask_pool(query.strip(), datasets, session_id=session_id)
         distilled = distill_pool(query.strip(), raw_pool)
-        self._send_json(200, {"passages": distilled})
+        cleaned_passages = [
+            {
+                "reference": p["reference"],
+                "passage": re.sub(
+                    r"[ \t]+",
+                    " ",
+                    re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\uf076]", " ", p["passage"]),
+                ).strip(),
+            }
+            for p in distilled
+            if isinstance(p, dict) and "reference" in p and "passage" in p
+        ]
+        self._send_json(200, {"passages": cleaned_passages})
 
     def _chat_latest(self) -> None:
         """The reload's restore read (ADR-0014): the Account's newest ask
@@ -3868,6 +3883,23 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 }
             )
         self._send_json(200, {"accounts": accounts_list})
+
+    def _api_admin_tokens(self) -> None:
+        """JSON endpoint for mobile and admin dashboard: returns token usage statistics
+        and per-chat token metrics for Cognee and Mastra."""
+        admin = self._admin_gate()
+        if admin is None:
+            return
+        query_string = urlparse(self.path).query
+        qs = parse_qs(query_string)
+        limit = 50
+        try:
+            if "limit" in qs and qs["limit"]:
+                limit = int(qs["limit"][0])
+        except Exception:
+            limit = 50
+        data = telemetry.get_token_audit_summary(limit=limit)
+        self._send_json(200, data)
 
     def _api_admin_create_account(self) -> None:
         """JSON endpoint to create an operator or admin account."""

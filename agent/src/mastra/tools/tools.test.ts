@@ -98,6 +98,29 @@ describe("searchBooksTool", () => {
     const result = await runBooks({ query: "q" });
     expect(result.passages).toEqual([]);
   });
+
+  it("sanitizes raw control characters and backspaces from passages", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          passages: [
+            {
+              reference: "document tarhe-kolli (page 53)",
+              passage: "\bبهشـت\x08را\x08برای\x08مردم\x08باتقوا\x08آماده\x08کردیم\u001a\uf076",
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    const result = await runBooks({ query: "باتقوا کیست" });
+    expect(result.passages).toHaveLength(1);
+    expect(result.passages[0].passage).not.toContain("\x08");
+    expect(result.passages[0].passage).not.toContain("\b");
+    expect(result.passages[0].passage).not.toContain("\u001a");
+    expect(result.passages[0].passage).not.toContain("\uf076");
+    expect(result.passages[0].passage).toBe("بهشـت را برای مردم باتقوا آماده کردیم");
+  });
 });
 
 describe("webSearchTool", () => {

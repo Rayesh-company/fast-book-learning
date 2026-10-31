@@ -319,6 +319,8 @@ export function createApi({ fetchImpl = fetch } = {}) {
         method: 'POST',
         body: { email, amount },
       }),
+    adminTokens: async (limit = 50) =>
+      await request('/api/admin/tokens?limit=' + limit),
   };
 }
 

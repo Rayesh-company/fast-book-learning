@@ -556,3 +556,48 @@ class TestUiAskDistillPoolIntegration:
         # Invariant 3: Passage length must be substantially distilled compared to raw chunk
         assert len(first_p["passage"]) < 500
 
+
+
+    def test_muttaqi_distillation_quality_and_page_expansion(self):
+        """Ensure multi-line Persian definitions (such as 'باتقوا کیست' on p.53) expand to full sentences without fragmentation."""
+        import re
+        distill_fn = get_distill_pool()
+        raw_chunk_p53 = (
+            "\x08شـما\x08مالِ\x08مـردم\x08خوردید\x08خدایِ\x08نخواسـته،\x08 \n"
+            "\nPage 51:\n51  )1ایمـــان \uf076 1جلسۀ\nایمـان\n"
+            "روانش\x08وارد\x08آمد،\x08این\x08روحِ\x08او\x08زخمی\x08شد،\x08ناقص\x08شد،\x08از\x08کمال\x08که\x08 \n"
+            "\nPage 52:\n52  )1ایمـــان \uf076 1جلسۀ\nایمـان\n"
+            "بخشـنده\x08ام\x08بـرای\x08آن\x08کـه\x08توبه\x08کند.\x08توبـه\x08کند\x08یعنی\x08چه؟\x08یعنـی\x08برگردد.\n"
+            "\nPage 53:\n53  )1ایمـــان \uf076 1جلسۀ\nایمـان\n"
+            "اسـت.\x08مغفرت\x08این\x08نیسـت\x08که\x08خدای\x08متعال\x08بی\x08حسـاب،\x08از\x08روی\x08\n"
+            "دلبخـواه،\x08یـک\x08کسـی\x08را\x08مورد\x08لطف\x08بی\x08جایـی\x08قرار\x08بدهد،\x08بـدون\x08اینکه\x08خود\x08\n"
+            " ِكُم> \n"
+            "<وَ سارِعوا اِل او کوششی در راه این لطف الهی کرده باشد. \n"
+            "<عَر  و بهشتی، <وَ حبَ سرعت بگیرید به سوی مغفرتی از پروردگارتان، \n"
+            " که پهنا و گسـتردگی آن به قدر آسـمان ها و زمین است، السَّماوا \n"
+            "\x08برای\x08متقیان.<لِلمُ \x08آماده\x08شده\x08است،\x08<اُعِدَّ \n"
+            "ایـن\x08جملـۀ\x08معروفـی\x08کـه\x08می\x08گوینـد:\x08آقا\x08شـما\x08اهل\x08بهشـتید\x08و\x08به\x08بهشـت\x08\n"
+            "خواهیـد\x08رفـت،\x08اگـر\x08ان\x08شـاءالله\x08راهتـان\x08بدهند،\x08این\x08بسـیار\x08حـرف\x08به\x08جایی\x08\n"
+            "اسـت.\x08ما\x08همه\x08آرزومند\x08بهشـتیم،\x08همه\x08در\x08دعاها\x08بهشت\x08را\x08طلب\x08می\x08کنیم؛\x08\n"
+            "گاهی\x08طلب\x08بهشتِ\x08تنها\x08هم\x08ما\x08را\x08قانع\x08نمی\x08کند،\x08دانه\x08دانه\x08خصوصیات\x08آن\x08را\x08\n"
+            "و  غیرو ذلک، در دعاهایمان ردیف می کنیم. اما خود خدا می گوید ما این \n"
+            "بهشـت\x08را\x08برای\x08مردم\x08باتقوا\x08آماده\x08کردیم،\x08این\x08سـفره\x08را\x08برای\x08یک\x08عده\x08مردم\x08\n"
+            "خاصی\x08انداختیم،\x08آنها\x08باید\x08بیایند\x08سر\x08این\x08سفره\x08بنشینند\x08و\x08وارد\x08این\x08منطقه\x08\n"
+            "بشوند.\x08آنها\x08کی\x08هستند؟\x08باتقوایان.\n"
+            "ترجمه\x08ها\x08\x08آماده\x08شده\x08است\x08برای\x08متقیان.\x08(<اُعِدَّ باتقوا\x08کیست؟\x08\n"
+        )
+        pool = [{"reference": "document tarhe-kolli (pages 51-53)", "passage": raw_chunk_p53}]
+        results = distill_fn("باتقوا کیست", pool)
+        assert len(results) == 1
+        raw_p = results[0]["passage"]
+        assert raw_p in raw_chunk_p53
+        clean_p = re.sub(
+            r"[ \t]+",
+            " ",
+            re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\uf076]", " ", raw_p),
+        ).strip()
+        assert len(clean_p) >= 150
+        assert "بهشت" in clean_p or "بهشـت" in clean_p
+        assert "باتقوایان" in clean_p
+        assert "\x08" not in clean_p
+        assert "\b" not in clean_p

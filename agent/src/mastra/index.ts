@@ -1,12 +1,21 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { Agent, setGlobalDispatcher } from "undici";
 import { Mastra } from "@mastra/core";
 import { MastraCompositeStore } from "@mastra/core/storage";
 import { LibSQLStore } from "@mastra/libsql";
 import { DuckDBStore } from "@mastra/duckdb";
 import { chatAgent } from "./agents/chat-agent";
 import { observability } from "./observability";
+
+setGlobalDispatcher(
+  new Agent({
+    connect: { timeout: 60_000 },
+    headersTimeout: 60_000,
+    bodyTimeout: 120_000,
+  })
+);
 
 const STORAGE_URL = process.env.MASTRA_STORAGE_URL ?? "file:./data/mastra.sqlite";
 const DUCKDB_PATH =

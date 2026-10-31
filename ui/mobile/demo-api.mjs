@@ -5,7 +5,9 @@ export function createDemoApi({storage,delay=650,quota=30,guest=false,loginRequi
  const clone=x=>structuredClone(x);
  let data;
  try {data=JSON.parse(storage?.getItem(key));}catch{}
- data??={account:guest?null:{phone:'۰۹۱۲۳۴۵۶۷۸۹',email:'',role:'user'},quota,subscription:null,sessions:[],notes:[],sequence:1,accounts:[
+ const searchParams=typeof location!=='undefined'?new URLSearchParams(location.search):null;
+ const asAdmin=Boolean(searchParams&&(searchParams.get('admin')==='1'||searchParams.has('admin')||searchParams.get('view')==='admin'));
+ data??={account:guest?null:{phone:'۰۹۱۲۳۴۵۶۷۸۹',email:asAdmin?'admin@rayesh.ir':'',role:asAdmin?'admin':'user'},quota,subscription:null,sessions:[],notes:[],sequence:1,accounts:[
   {email:'admin@rayesh.ir',role:'admin',phone:'09121112233',balance_toman:1500000,today_spend_toman:0,created_at:stamp()},
   {email:'operator1@example.com',role:'operator',phone:'09123456789',balance_toman:450000,today_spend_toman:12000,created_at:stamp()},
   {email:'student@example.com',role:'operator',phone:'09998887766',balance_toman:50000,today_spend_toman:6000,created_at:stamp()}
@@ -15,6 +17,7 @@ if(!data.accounts)data.accounts=[
   {email:'operator1@example.com',role:'operator',phone:'09123456789',balance_toman:450000,today_spend_toman:12000,created_at:stamp()},
   {email:'student@example.com',role:'operator',phone:'09998887766',balance_toman:50000,today_spend_toman:6000,created_at:stamp()}
 ];
+ if(asAdmin&&data?.account){data.account.role='admin';data.account.email='admin@rayesh.ir';}
  const save=()=>{try{storage?.setItem(key,JSON.stringify(data));}catch{}};
  const wait=signal=>new Promise((resolve,reject)=>{
   if(signal?.aborted)return reject(new DOMException('Aborted','AbortError'));
@@ -83,5 +86,120 @@ if(!data.accounts)data.accounts=[
     save();
     return {email,amount_toman:Number(amount),new_balance_toman:target.balance_toman};
   },
+  adminTokens: async (limit = 50) => {
+    await wait();
+    return {
+      summary: {
+        total_chats: 24,
+        avg_mastra_prompt: 2101,
+        avg_mastra_completion: 224,
+        avg_cognee_embedding: 25,
+        avg_cognee_llm: 0,
+        avg_total_tokens: 2350,
+        search_turns: 14,
+        web_turns: 4,
+        direct_turns: 6,
+        avg_web_prompt: 3420,
+        avg_web_completion: 390,
+        avg_web_total: 3810,
+        avg_cost_toman: 6.2,
+        session_growth: [
+          {turn: 1, history_messages: 0, history_tokens: 0, direct_input: 1230, search_input: 2850, web_input: 3250},
+          {turn: 2, history_messages: 2, history_tokens: 260, direct_input: 1490, search_input: 3110, web_input: 3510},
+          {turn: 3, history_messages: 4, history_tokens: 540, direct_input: 1770, search_input: 3390, web_input: 3790},
+          {turn: 5, history_messages: 8, history_tokens: 1180, direct_input: 2410, search_input: 4030, web_input: 4430},
+          {turn: 8, history_messages: 10, history_tokens: 1680, direct_input: 2910, search_input: 4530, web_input: 4930},
+          {turn: 12, history_messages: 10, history_tokens: 1680, direct_input: 2910, search_input: 4530, web_input: 4930},
+        ],
+        memory_config: {
+          last_messages: 10,
+          max_tokens_leash: 8000,
+          at_max_remove_tokens: 2000,
+          working_memory_enabled: true,
+          working_memory_scope: 'resource',
+          tool_call_filter_active: true,
+          tool_call_filter_excluded: ['searchBooksTool', 'webSearchTool'],
+          tool_call_filter_savings_per_past_search: '~1,500 - 2,500 tokens'
+        },
+        avalai_credit: {
+          remaining_irt: 2965541.58,
+          formatted_irt: '۲,۹۶۵,۵۴۱',
+          exchange_rate: 271700,
+          account_tier: 2,
+          connected: true,
+          updated_at: '2026-10-30T10:40:00Z'
+        }
+      },
+      records: [
+        {
+          request_id: '5f8b06f5e4b5a9e6',
+          start_time: '2026-10-30T10:15:20Z',
+          phone: '09121112233',
+          question: 'نقد های بزرگان دین در مورد این کتاب چیست ؟',
+          turn_type: 'web',
+          path: 'agent',
+          mastra_prompt_tokens: 3420,
+          mastra_completion_tokens: 390,
+          cognee_embedding_tokens: 0,
+          cognee_llm_tokens: 0,
+          cognee_calls: 0,
+          cognee_passages: 0,
+          cognee_latency_ms: 0,
+          total_tokens: 3810,
+          cost_toman: 10,
+        },
+        {
+          request_id: '300a374b6d0c6456b3ba0dbda8d215f6',
+          start_time: '2026-10-30T09:42:10Z',
+          phone: '09121112233',
+          question: 'مفهوم نبوت در قرآن و کتاب طرح کلی چیست؟',
+          turn_type: 'search',
+          path: 'agent',
+          mastra_prompt_tokens: 2534,
+          mastra_completion_tokens: 225,
+          cognee_embedding_tokens: 25,
+          cognee_llm_tokens: 0,
+          cognee_calls: 1,
+          cognee_passages: 4,
+          cognee_latency_ms: 3.2,
+          total_tokens: 2784,
+          cost_toman: 7,
+        },
+        {
+          request_id: '7230291fd34f6c034e0aa1082c61cf71',
+          start_time: '2026-10-30T09:40:02Z',
+          phone: '09123456789',
+          question: 'آیا این مفهوم با توحید پیوند مستقیم دارد؟',
+          turn_type: 'direct',
+          path: 'agent',
+          mastra_prompt_tokens: 928,
+          mastra_completion_tokens: 180,
+          cognee_embedding_tokens: 0,
+          cognee_llm_tokens: 0,
+          cognee_calls: 0,
+          cognee_passages: 0,
+          cognee_latency_ms: 0.0,
+          total_tokens: 1108,
+          cost_toman: 3,
+        },
+        {
+          request_id: '484ae18c859dd9f892d48646c5c9751e',
+          start_time: '2026-10-30T09:35:18Z',
+          phone: '09998887766',
+          question: 'سیره مبارزاتی ائمه اطهار در انسان ۲۵۰ ساله چگونه تحلیل شده است؟',
+          turn_type: 'search',
+          path: 'agent',
+          mastra_prompt_tokens: 2943,
+          mastra_completion_tokens: 240,
+          cognee_embedding_tokens: 30,
+          cognee_llm_tokens: 0,
+          cognee_calls: 1,
+          cognee_passages: 4,
+          cognee_latency_ms: 2.8,
+          total_tokens: 3213,
+          cost_toman: 8,
+        }
+      ]
+    };  },
  };
 }

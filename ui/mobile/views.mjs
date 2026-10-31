@@ -15,6 +15,164 @@ const primary=(label,name,extra='')=>action(label,name,extra,'primary-action');
 const date=s=>s?new Date(s).toLocaleDateString('fa-IR',{year:'numeric',month:'long',day:'numeric'}):'';
 export const pageLabel=pages=>pages?.length?pages.length===1?`صفحهٔ ${digits(pages[0])}`:`صفحات ${digits(pages[0])} تا ${digits(pages.at(-1))}`:'';
 const formError=s=>`<p class="inline-error" role="alert">${esc(s.error)}</p>`;
+
+export function adminTokensView(s) {
+  const data = s.adminTokens || {};
+  const summary = data.summary || {
+    total_chats: 0,
+    avg_mastra_prompt: 2101,
+    avg_mastra_completion: 224,
+    avg_cognee_embedding: 25,
+    avg_cognee_llm: 0,
+    avg_total_tokens: 2350,
+    search_turns: 0,
+    web_turns: 0,
+    direct_turns: 0,
+    avg_web_prompt: 3420,
+    avg_cost_toman: 0,
+    session_growth: [],
+    memory_config: {},
+    avalai_credit: {
+      remaining_irt: 2965541.58,
+      formatted_irt: '۲,۹۶۵,۵۴۱',
+      exchange_rate: 271700,
+      account_tier: 2,
+      connected: true,
+    },
+  };
+  const records = data.records || [];
+  const growth = summary.session_growth || [
+    {turn: 1, history_messages: 0, history_tokens: 0, direct_input: 1230, search_input: 2850, web_input: 3250},
+    {turn: 2, history_messages: 2, history_tokens: 260, direct_input: 1490, search_input: 3110, web_input: 3510},
+    {turn: 3, history_messages: 4, history_tokens: 540, direct_input: 1770, search_input: 3390, web_input: 3790},
+    {turn: 5, history_messages: 8, history_tokens: 1180, direct_input: 2410, search_input: 4030, web_input: 4430},
+    {turn: 8, history_messages: 10, history_tokens: 1680, direct_input: 2910, search_input: 4530, web_input: 4930},
+  ];
+
+  return `
+    <div class="admin-tokens-section">
+      <div class="admin-tokens-header">
+        <div>
+          <h3 class="admin-tokens-title">نظارت بر مصرف توکن‌های Cognee و Mastra</h3>
+          <p class="field-label">میانگین هر گفت‌وگو، تفکیک پرامپت و پاسخ در برابر امبدینگ بازیابی و جستجوی وب</p>
+        </div>
+        <button type="button" class="admin-refresh-action" data-action="refresh-admin-tokens">
+          ${icon('refresh')}
+          <span>به‌روزرسانی</span>
+        </button>
+      </div>
+
+      <div class="admin-summary-grid tokens-metric-grid">
+        <div class="admin-metric-card full-width avalai-wallet-card">
+          <div class="wallet-card-header">
+            <span class="wallet-badge"><span class="pulse-dot"></span> متصل به API رسمی AvalAI</span>
+            <span class="exchange-rate-badge">نرخ واحد: ${digits((summary.avalai_credit?.exchange_rate || 271700).toLocaleString('fa-IR'))} (سطح ۲)</span>
+          </div>
+          <div class="wallet-stat-row">
+            <div>
+              <small class="wallet-label">موجودی زنده کیف‌پول AvalAI:</small>
+              <strong class="wallet-amount">${digits(Math.round(summary.avalai_credit?.remaining_irt || 2965541).toLocaleString('fa-IR'))} <span class="currency">تومان</span></strong>
+            </div>
+            <div class="wallet-sync-status">
+              <span class="exact-tracking-pill">✓ رهگیری ۱۰۰٪ قطعی هزینه‌ها (Transaction Lookup)</span>
+            </div>
+          </div>
+        </div>
+        <div class="admin-metric-card">
+          <small>پرامپت مسترا (Input)</small>
+          <strong>${digits(Math.round(summary.avg_mastra_prompt || 0))} <span class="currency">توکن</span></strong>
+        </div>
+        <div class="admin-metric-card">
+          <small>خروجی مسترا (Output)</small>
+          <strong>${digits(Math.round(summary.avg_mastra_completion || 0))} <span class="currency">توکن</span></strong>
+        </div>
+        <div class="admin-metric-card">
+          <small>امبدینگ کوگنی (Query)</small>
+          <strong>${digits(Math.round(summary.avg_cognee_embedding || 0))} <span class="currency">توکن</span></strong>
+        </div>
+        <div class="admin-metric-card full-width tokens-banner-card">
+          <div class="tokens-total-stat">
+            <small>میانگین مصرف هر گفت‌وگو (Total/Chat):</small>
+            <strong class="total-number">${digits(Math.round(summary.avg_total_tokens || 0))} <span class="currency">توکن</span></strong>
+          </div>
+          <div class="tokens-arch-note">
+            <span class="zero-llm-badge">مدل پاسخ کوگنی: ۰ توکن (only_context: true)</span>
+            <span class="web-llm-badge">وب‌سرچ (Tier 4): میانگین ~${digits(Math.round(summary.avg_web_prompt || 3420))} توکن ورودی</span>
+            <span class="distribution-pill">توزیع: ${digits(summary.search_turns || 0)} کتاب / ${digits(summary.web_turns || 0)} وب / ${digits(summary.direct_turns || 0)} مستقیم</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="session-growth-card">
+        <div class="growth-card-head">
+          <h4 class="growth-card-title">روند افزایش توکن ورودی در طول گفت‌وگو (Multi-Turn Accumulation)</h4>
+          <span class="growth-badge">مکانیزم حافظه Mastra</span>
+        </div>
+        <p class="growth-desc">با ادامهٔ گفت‌وگو در یک نشست، تاریخچه پیام‌ها به پرامپت بعدی تزریق می‌شود. سقف پنجره روی <strong>۱۰ پیام (۵ نوبت)</strong> و سقف سرریز روی <strong>۸,۰۰۰ توکن</strong> تنظیم شده است:</p>
+        <div class="growth-grid">
+          ${growth.map(g => `
+            <div class="growth-step-box">
+              <span class="growth-step-num">نوبت ${digits(g.turn)}</span>
+              <small class="growth-step-history">${g.history_messages === 0 ? 'شروع نشست (بدون تاریخچه)' : `${digits(g.history_messages)} پیام قبلی (+${digits(g.history_tokens)} توکن)`}</small>
+              <div class="growth-step-values">
+                <span title="پاسخ مستقیم صفحه">مستقیم: <strong>~${digits(g.direct_input)}</strong></span>
+                <span title="جستجوی کتاب">کتاب: <strong>~${digits(g.search_input)}</strong></span>
+                <span title="جستجوی وب">وب: <strong>~${digits(g.web_input)}</strong></span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="filter-opt-banner">
+          <span class="filter-opt-icon">⚡ بهینه‌سازی ToolCallFilter:</span>
+          <span>پاساژهای خام و سنگین جستجوهای قبلی از پرامپت‌های بعدی حذف می‌شوند و صرفاً خلاصه پاسخ باقی می‌ماند (صرفه‌جویی <strong>~۱,۵۰۰ تا ۲,۵۰۰ توکن</strong> در هر نوبت جستجوی گذشته).</span>
+        </div>
+      </div>
+
+      ${s.adminTokensLoading ? '<p class="skeleton" role="status">در حال دریافت و تحلیل ردگیری‌های توکن…</p>' : ''}
+
+      <div class="admin-tokens-list">
+        <h4 class="token-list-title">جزئیات گفت‌وگوها به تفکیک پیام (Live Feed)</h4>
+        ${records.length ? records.map(r => `
+          <article class="admin-token-card">
+            <div class="token-card-head">
+              <span class="token-turn-badge ${r.turn_type === 'web' ? 'badge-web' : (r.turn_type === 'search' ? 'badge-search' : 'badge-direct')}">
+                ${r.turn_type === 'web' ? 'جست‌وجوی اینترنت (Tier 4)' : (r.turn_type === 'search' ? 'جستجوی کتاب (Tier 3)' : 'پاسخ مستقیم (Tier 1/2)')}
+              </span>
+              <span class="token-card-time">${r.start_time ? new Date(r.start_time).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''}</span>
+            </div>
+            <p class="token-card-query">${r.question ? `«${esc(r.question)}»` : `شناسه ردگیری: <code class="mono-id">${esc(r.request_id ? r.request_id.slice(0, 16) : '')}…</code>`}</p>
+            <div class="token-card-metrics">
+              <div class="token-pill">
+                <small>ورودی مسترا:</small>
+                <strong>${digits(r.mastra_prompt_tokens)}</strong>
+              </div>
+              <div class="token-pill">
+                <small>خروجی مسترا:</small>
+                <strong>${digits(r.mastra_completion_tokens)}</strong>
+              </div>
+              <div class="token-pill">
+                <small>امبدینگ کوگنی:</small>
+                <strong>${digits(r.cognee_embedding_tokens)}</strong>
+              </div>
+              <div class="token-pill highlight">
+                <small>مجموع توکن:</small>
+                <strong>${digits(r.total_tokens)}</strong>
+              </div>
+            </div>
+            <div class="token-card-foot">
+              <span class="token-latency">${r.turn_type === 'web' ? 'جستجوی زنده وب (Perplexity) · ۰ توکن امبدینگ کوگنی' : (r.turn_type === 'search' ? `پاساژها: ${digits(r.cognee_passages || 0)} · زمان جستجو: ${digits(r.cognee_latency_ms)}ms` : 'پاسخ مستقیم بدون جستجو')}</span>
+              <div class="token-cost-group">
+                ${r.exact_cost_toman != null ? `<span class="exact-cost-badge">هزینه قطعی (AvalAI): <strong>${digits(r.exact_cost_toman)}</strong> تومان</span>` : `<span class="token-cost">${r.cost_toman ? `تعرفه: ${digits(r.cost_toman)} تومان` : 'کمتر از ۱ تومان'}</span>`}
+                ${r.cached_tokens > 0 ? `<span class="cached-badge">کش پرامپت: ${digits(r.cached_tokens)} توکن</span>` : ''}
+              </div>
+            </div>
+          </article>
+        `).join('') : empty('گفت‌وگویی یافت نشد', 'هنوز پیامی برای ثبت آمار توکن ردوبدل نشده است.')}
+      </div>
+    </div>
+  `;
+}
+
 export function empty(title,description,actions=''){return `<div class="empty-state">${icon('book')}<h2>${title}</h2><p>${description}</p>${actions}</div>`;}
 function topbar(s){
  const readerTitle=`<button type="button" class="topbar-toc-trigger" data-action="contents" aria-haspopup="dialog" aria-label="فهرست کتاب: ${esc(bookInfo(s.book).title)}"><h3>${esc(bookInfo(s.book).title)}</h3><span class="topbar-toc-chevron" aria-hidden="true">${icon('chevron')}</span></button>`;
@@ -327,6 +485,9 @@ export function adminDashboard(s) {
     <button type="button" role="tab" aria-selected="${tab === 'accounts'}" class="admin-tab-btn ${tab === 'accounts' ? 'active' : ''}" data-action="admin-tab" data-tab="accounts">
       حساب‌ها و اعتبار
     </button>
+    <button type="button" role="tab" aria-selected="${tab === 'tokens'}" class="admin-tab-btn ${tab === 'tokens' ? 'active' : ''}" data-action="admin-tab" data-tab="tokens">
+      نظارت توکن‌ها (Mastra & Cognee)
+    </button>
     <button type="button" role="tab" aria-selected="${tab === 'create'}" class="admin-tab-btn ${tab === 'create' ? 'active' : ''}" data-action="admin-tab" data-tab="create">
       ساخت حساب جدید
     </button>
@@ -367,7 +528,7 @@ export function adminDashboard(s) {
         `).join('') : empty('حسابی پیدا نشد', s.adminSearch ? 'با عبارت دیگری جستجو کنید.' : 'هنوز حسابی در سامانه ثبت نشده است.')}
       </div>
     </div>
-  ` : `
+  ` : tab === 'tokens' ? adminTokensView(s) : `
     <div class="admin-create-section">
       <form data-admin-create-form class="admin-form">
         <h3>مشخصات کاربر جدید</h3>

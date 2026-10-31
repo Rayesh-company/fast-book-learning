@@ -22,7 +22,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function syncHighlights(){phone()?.bookReader?.setHighlights?.(s.notes.filter(n=>(n.doc||n.source?.book)===s.book&&n.source?.capture==='highlight').flatMap(n=>n.source?.selection?.pages||[]));}
  const s={view:'boot',demo:api.demo,loginRequired:api.loginRequired!==false,pageFiltering:api.demo||api.pageFiltering===true,book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},account:null,
   messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',sessionContext:null,theme:'system',profile:null,
-  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,otpDraft:'',waitlisted:false,tocSearch:'',tocExpanded:null,drawerSections:{highlights:true,bookmarks:true,notes:true},adminTab:'accounts',adminSearch:'',adminAccounts:[],adminLoading:false};
+  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,otpDraft:'',waitlisted:false,tocSearch:'',tocExpanded:null,drawerSections:{highlights:true,bookmarks:true,notes:true},adminTab:'accounts',adminSearch:'',adminAccounts:[],adminLoading:false,adminTokens:null,adminTokensLoading:false};
  let storageKey,disposed=false,job=null,sequence=0,accountRevision=0,recordRevision=0,recordPending=false,otpTimer,otpInFlight=false,webOtpAbort=null,pending=new Set(),toastTimer,recorder,timer,media,recordingStarted,recordingPlace,recordDraft,audioCtx,analyser,waveAnimId;
  const safeRead=key=>{try{return JSON.parse(storage?.getItem(key));}catch{return null;}};
  const persist=()=>{if(!storageKey||disposed)return;try{storage?.setItem(storageKey,JSON.stringify({view:['reader','chat'].includes(s.view)?s.view:s.stack.find(v=>['reader','chat'].includes(v))||'reader',book:s.book,positions:s.positions,drafts:s.drafts,pages:s.pages,scope:s.scope,sessionContext:s.sessionContext,sessionId:s.sessionId,chatScroll:s.chatScroll,follow:s.follow,theme:s.theme,readerGuideSeen:s.readerGuideSeen}));}catch{}};
@@ -501,7 +501,27 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
      finally{s.adminLoading=false;if(s.view==='admin')render();}
     })());
    }
-   if(a==='admin-tab'){s.adminTab=t.dataset.tab;render();}
+   if(a==='admin-tab'){
+    s.adminTab=t.dataset.tab;
+    if(s.adminTab==='tokens'&&!s.adminTokens){
+      s.adminTokensLoading=true;
+      run((async()=>{
+        try{s.adminTokens=await api.adminTokens();}
+        catch(e){s.error=e.message;}
+        finally{s.adminTokensLoading=false;if(s.view==='admin')render();}
+      })());
+    }
+    render();
+   }
+   if(a==='refresh-admin-tokens'){
+    s.adminTokensLoading=true;
+    render();
+    run((async()=>{
+      try{s.adminTokens=await api.adminTokens();}
+      catch(e){s.error=e.message;}
+      finally{s.adminTokensLoading=false;if(s.view==='admin')render();}
+    })());
+   }
    if(a==='clear-admin-search'){s.adminSearch='';render();root.querySelector('[name="admin-search"]')?.focus();}
    if(a==='open-admin-topup')openSheet('admin-topup',{email:t.dataset.email,balance:t.dataset.balance});
    if(a==='pick-topup-amount'){
@@ -650,7 +670,21 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function submitOtp(){if(s.view!=='otp'||otpInFlight)return;const form=root.querySelector('[data-auth-form]');if(form)form.requestSubmit?form.requestSubmit():form.querySelector('button')?.click();}
  function startOtpCooldown(){s.resendAt=Date.now()+120000;clearInterval(otpTimer);const tick=()=>{if(disposed)return clearInterval(otpTimer);const left=Math.ceil((s.resendAt-Date.now())/1000);const button=root.querySelector('[data-action="resend-otp"]');if(left<=0){clearInterval(otpTimer);if(button){button.disabled=false;button.textContent='ارسال دوبارهٔ کد';}return;}if(button){button.disabled=true;button.textContent=`ارسال دوبارهٔ کد (${digits(Math.floor(left/60))}:${digits(String(left%60).padStart(2,'0'))})`;}};tick();otpTimer=setInterval(tick,1000);}
  function startWebOtp(){webOtpAbort?.abort();if(!win.navigator?.credentials?.get)return;webOtpAbort=new win.AbortController();win.navigator.credentials.get({otp:{transport:['sms']},signal:webOtpAbort.signal}).then(cred=>{if(disposed||s.view!=='otp')return;const code=normalDigits(cred?.code||'').slice(0,6);if(code.length===6&&setOtpCode(code))submitOtp();}).catch(()=>{});}
- async function initialize(){if(disposed)return;resetAccountState();storageKey=`book-ui:${s.demo?'demo:':''}${s.account.email||normalPhone(s.account.phone)}`;const saved=safeRead(storageKey);if(saved){for(const key of ['book','positions','drafts','pages','scope','sessionContext','sessionId','chatScroll','follow','theme','readerGuideSeen'])if(saved[key]!=null)s[key]=saved[key];s.view=['reader','chat'].includes(saved.view)?saved.view:'reader';}else s.view='reader';await refresh();if(s.sessionId){try{const row=await api.session(s.sessionId);s.messages=row.messages||[];restoreUnanswered();}catch{s.sessionId=null;s.messages=[];}}if(s.account&&!s.account.profile_completed&&!s.demo){navigate('onboarding');return;}render();}
+ async function initialize(){if(disposed)return;resetAccountState();storageKey=`book-ui:${s.demo?'demo:':''}${s.account.email||normalPhone(s.account.phone)}`;const saved=safeRead(storageKey);if(saved){for(const key of ['book','positions','drafts','pages','scope','sessionContext','sessionId','chatScroll','follow','theme','readerGuideSeen'])if(saved[key]!=null)s[key]=saved[key];s.view=['reader','chat'].includes(saved.view)?saved.view:'reader';}else s.view='reader';
+  const urlInit=new URLSearchParams(win.location.search);
+  if(urlInit.get('view')==='admin'){
+    s.view='admin';
+    s.adminTab=urlInit.get('tab')||'tokens';
+    if(s.adminTab==='tokens'&&!s.adminTokens){
+      s.adminTokensLoading=true;
+      run((async()=>{
+        try{s.adminTokens=await api.adminTokens();}
+        catch(e){s.error=e.message;}
+        finally{s.adminTokensLoading=false;if(s.view==='admin')render();}
+      })());
+    }
+  }
+  await refresh();if(s.sessionId){try{const row=await api.session(s.sessionId);s.messages=row.messages||[];restoreUnanswered();}catch{s.sessionId=null;s.messages=[];}}if(s.account&&!s.account.profile_completed&&!s.demo){navigate('onboarding');return;}render();}
  const mediaQuery=win.matchMedia?.('(prefers-color-scheme: dark)');mediaQuery?.addEventListener('change',applyTheme,{signal:lifecycle.signal});
  const viewport=win.visualViewport;
  function keyboard(){if(viewport)doc.documentElement.style.setProperty('--app-height',`${viewport.height}px`);}

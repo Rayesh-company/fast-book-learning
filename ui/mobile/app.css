@@ -2233,3 +2233,541 @@ body.dark .voice-wave-finish-button {
   width: 18px;
   height: 18px;
 }
+
+/* Admin Tokens Monitoring (Cognee & Mastra) */
+.admin-tokens-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+.admin-tokens-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-tokens-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--ink);
+}
+
+.admin-refresh-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.admin-refresh-action:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.admin-refresh-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tokens-metric-grid {
+  margin-bottom: 12px;
+}
+
+.tokens-banner-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.tokens-total-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.tokens-total-stat small {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 0;
+}
+
+.tokens-total-stat .total-number {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.tokens-arch-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.zero-llm-badge {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+body.dark .zero-llm-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.distribution-pill {
+  background: var(--soft, rgba(0, 0, 0, 0.04));
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.admin-tokens-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.token-list-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 8px 0 4px 0;
+}
+
+.admin-token-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.token-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.token-turn-badge {
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.token-turn-badge.badge-search {
+  background: rgba(3, 105, 161, 0.1);
+  color: #0284c7;
+  border: 1px solid rgba(2, 132, 199, 0.25);
+}
+
+body.dark .token-turn-badge.badge-search {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.token-turn-badge.badge-direct {
+  background: var(--soft, rgba(0, 0, 0, 0.04));
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.token-card-time {
+  font-size: 11px;
+  color: var(--muted);
+  direction: ltr;
+}
+
+.token-card-query {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--ink);
+  margin: 0;
+}
+
+.mono-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  direction: ltr;
+  background: var(--soft, rgba(0,0,0,0.04));
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+.token-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  background: var(--soft, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.token-pill {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.token-pill small {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.token-pill strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.token-pill.highlight strong {
+  color: var(--accent);
+}
+
+.token-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.token-latency {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.token-cost {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Web Search and Multi-Turn Growth Styles */
+.web-llm-badge {
+  background: rgba(147, 51, 234, 0.12);
+  color: #7e22ce;
+  border: 1px solid rgba(147, 51, 234, 0.28);
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+body.dark .web-llm-badge {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.token-turn-badge.badge-web {
+  background: rgba(147, 51, 234, 0.12);
+  color: #7e22ce;
+  border: 1px solid rgba(147, 51, 234, 0.25);
+}
+
+body.dark .token-turn-badge.badge-web {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.session-growth-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.growth-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.growth-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--ink);
+}
+
+.growth-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+
+.growth-desc {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0;
+}
+
+.growth-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.growth-step-box {
+  background: var(--soft, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.growth-step-num {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.growth-step-history {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.growth-step-values {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink);
+  border-top: 1px dashed var(--line);
+  padding-top: 4px;
+}
+
+.growth-step-values span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.filter-opt-banner {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+body.dark .filter-opt-banner {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.filter-opt-icon {
+  font-weight: 700;
+  color: #059669;
+}
+
+body.dark .filter-opt-icon {
+  color: #34d399;
+}
+
+
+/* AvalAI Wallet and Exact Billing Cards */
+.avalai-wallet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(3, 105, 161, 0.06) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 14px;
+}
+
+body.dark .avalai-wallet-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(3, 105, 161, 0.12) 100%);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.wallet-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.wallet-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+body.dark .wallet-badge {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.exchange-rate-badge {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.wallet-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.wallet-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.wallet-amount {
+  font-size: 22px;
+  font-weight: 800;
+  color: #047857;
+}
+
+body.dark .wallet-amount {
+  color: #10b981;
+}
+
+.wallet-sync-status {
+  text-align: left;
+}
+
+.exact-tracking-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0284c7;
+  background: rgba(2, 132, 199, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(2, 132, 199, 0.2);
+}
+
+body.dark .exact-tracking-pill {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.token-cost-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.exact-cost-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+body.dark .exact-cost-badge {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.cached-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+body.dark .cached-badge {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.2);
+}

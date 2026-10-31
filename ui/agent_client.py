@@ -203,6 +203,7 @@ class LearnerTurnContext:
     # Empty means the caller never minted — the body stays exactly the
     # shape the existing pins read.
     request_id: str = ""
+    max_steps: int | None = None
 
     def __post_init__(self) -> None:
         if self.datasets is None:
@@ -225,8 +226,20 @@ class LearnerTurnContext:
         metadata Studio renders as trace-list columns. No minted id, no
         tracingOptions: the body is exactly the shape the existing pins
         read."""
+        if self.max_steps is not None:
+            effective_max_steps = self.max_steps
+        else:
+            max_steps_raw = os.environ.get("AGENT_MAX_STEPS") or os.environ.get(
+                "CHAT_AGENT_MAX_STEPS"
+            )
+            try:
+                effective_max_steps = int(max_steps_raw) if max_steps_raw else 8
+            except (ValueError, TypeError):
+                effective_max_steps = 8
+
         body = {
             "messages": [{"role": "user", "content": self.query}],
+            "maxSteps": effective_max_steps,
             "memory": {
                 "thread": self.thread_id,
                 "resource": self.resource_id or self.thread_id,
@@ -440,6 +453,10 @@ class AgentStream:
     @property
     def selection_text(self) -> dict | str | None:
         return self.turn.selection_text
+
+    @property
+    def max_steps(self) -> int | None:
+        return self.turn.max_steps
 
     def to_request_body(self) -> dict:
         return self.turn.to_request_body()

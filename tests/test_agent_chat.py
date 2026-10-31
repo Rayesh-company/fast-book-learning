@@ -828,6 +828,7 @@ def test_learner_turn_context_defaults_and_to_request_body():
 
     body = turn.to_request_body()
     assert body["messages"] == [{"role": "user", "content": "تست پرسش"}]
+    assert body["maxSteps"] == 8
     assert body["memory"] == {
         "thread": "learner-09121112233",
         "resource": "learner-09121112233",
@@ -836,6 +837,27 @@ def test_learner_turn_context_defaults_and_to_request_body():
     assert "userProfile" not in body["requestContext"]
     assert "pageContext" not in body["requestContext"]
     assert "selectionText" not in body["requestContext"]
+
+
+def test_learner_turn_context_max_steps_configuration(monkeypatch):
+    # 1. Default fallback is 8
+    monkeypatch.delenv("AGENT_MAX_STEPS", raising=False)
+    monkeypatch.delenv("CHAT_AGENT_MAX_STEPS", raising=False)
+    turn = agent_client.LearnerTurnContext(query="پرسش")
+    assert turn.to_request_body()["maxSteps"] == 8
+
+    # 2. Explicit instance field overrides default
+    turn_custom = agent_client.LearnerTurnContext(query="پرسش", max_steps=12)
+    assert turn_custom.to_request_body()["maxSteps"] == 12
+
+    # 3. Environment variable AGENT_MAX_STEPS is honored
+    monkeypatch.setenv("AGENT_MAX_STEPS", "10")
+    assert agent_client.LearnerTurnContext(query="پرسش").to_request_body()["maxSteps"] == 10
+
+    # 4. Environment variable CHAT_AGENT_MAX_STEPS is honored as secondary
+    monkeypatch.delenv("AGENT_MAX_STEPS", raising=False)
+    monkeypatch.setenv("CHAT_AGENT_MAX_STEPS", "15")
+    assert agent_client.LearnerTurnContext(query="پرسش").to_request_body()["maxSteps"] == 15
 
 
 def test_learner_turn_context_to_request_body_with_full_context():

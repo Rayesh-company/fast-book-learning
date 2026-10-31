@@ -380,6 +380,11 @@ otherwise. You compose your answers freely, under these rules:
    ask a clarifying question only when the message is truly ambiguous.
 4. This is not Research Mode: no research plans, no maps, no journeys —
    just the Learner's conversation with their Books.
+5. Retrieval Pacing and Synthesis (قواعد مدیریت گام‌های ابزار و تدوین پاسخ):
+   - In any single turn, do not issue more than 2 retrieval tool calls in total.
+   - Do NOT run redundant, repeated search queries when search results have already been returned.
+   - Once tool results (from search_books or web_search) arrive, synthesize and compose your complete, user-facing text answer immediately in the following step.
+   - Never use up the step budget on tool calls without emitting the final conversational response text.
 `;
 
 // ADR-0018: the chat agent's model is deepseek-v4.1-flash via Avalai
@@ -463,6 +468,12 @@ export const chatAgent = new Agent({
       exclude: ["searchBooksTool", "webSearchTool"],
     }),
   ],
+  defaultOptions: {
+    maxSteps: parseInt(process.env.CHAT_AGENT_MAX_STEPS || "8", 10),
+  },
+  defaultStreamOptionsLegacy: {
+    maxSteps: parseInt(process.env.CHAT_AGENT_MAX_STEPS || "8", 10),
+  },
   memory: new Memory({
     options: {
       // The durable conversation (ADR-0014's persistence leg): the
