@@ -11,28 +11,14 @@ jobs:
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Probe SSH auth methods on port 22
+      - name: Probe usernames on port 22
         env:
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
-          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
-          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519"
-
-          echo "=== 1. Test SSH KEY on port 22 ==="
-          ssh -v -p 22 -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
-            -o StrictHostKeyChecking=no -o ConnectTimeout=8 \
-            -o BatchMode=yes "ubuntu@193.93.169.177" "id; whoami" || echo "Key failed on port 22"
-
-          echo "=== 2. Test password m60KFvQDq5w on port 22 for ubuntu ==="
-          sshpass -p "$VPS_PASSWORD" ssh -v -p 22 \
-            -o StrictHostKeyChecking=no -o ConnectTimeout=8 \
-            -o PreferredAuthentications=password \
-            "ubuntu@193.93.169.177" "id; whoami" || echo "Password failed on port 22 for ubuntu"
-
-          echo "=== 3. Test password m60KFvQDq5w on port 22 for root ==="
-          sshpass -p "$VPS_PASSWORD" ssh -v -p 22 \
-            -o StrictHostKeyChecking=no -o ConnectTimeout=8 \
-            -o PreferredAuthentications=password \
-            "root@193.93.169.177" "id; whoami" || echo "Password failed on port 22 for root"
+          for u in ubuntu root amir rayesh admin debian cwb-deploy fastbook; do
+            echo "--- Testing $u ---"
+            sshpass -p "$VPS_PASSWORD" ssh -p 22 \
+              -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+              -o PreferredAuthentications=password \
+              "$u@193.93.169.177" "id; whoami" && echo "SUCCESS FOR $u!" && exit 0 || echo "Failed for $u"
+          done
