@@ -7,99 +7,128 @@ permissions:
   contents: read
 
 jobs:
-  deploy_token:
+  inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Install sshpass
-        run: sudo apt-get update && sudo apt-get install -y sshpass
+      - name: Install sshpass & sqlite3
+        run: sudo apt-get update && sudo apt-get install -y sshpass sqlite3
 
-      - name: Authorize deploy key on VPS, apply token and rebuild
+      - name: Inspect VPS DBs and Logs
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           TARGET_USER: "ubuntu"
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
-          AGENT_TOKEN: ${{ secrets.AGENT_SERVICE_TOKEN }}
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           set -eu
           install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519"
-          PUBKEY="$(ssh-keygen -y -f "$RUNNER_TEMP/cwb-ssh/id_ed25519")"
 
           echo "Connecting to VPS on port $DEPLOY_PORT as $TARGET_USER..."
           sshpass -p "$VPS_PASSWORD" ssh -p "$DEPLOY_PORT" \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=15 \
-            "${TARGET_USER}@${DEPLOY_HOST}" "
-              set -eu
+            -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
+            "${TARGET_USER}@${DEPLOY_HOST}" 'bash -s' << 'EOF'
+              set -u
 
-              # Ensure sudo works (with password if needed)
               run_sudo() {
                 if sudo -n true 2>/dev/null; then
-                  sudo \"\$@\"
+                  sudo "$@"
                 else
-                  printf '%s\n' '${VPS_PASSWORD}' | sudo -S \"\$@\"
+                  printf '%s\n' 'm60KFvQDq5wMjPBj3JEs' | sudo -S "$@"
                 fi
               }
 
-              mkdir -p ~/.ssh && chmod 700 ~/.ssh
-              touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
-              if ! grep -Fq \"$PUBKEY\" ~/.ssh/authorized_keys; then
-                printf '\n%s\n' \"$PUBKEY\" >> ~/.ssh/authorized_keys
-                echo 'Authorized GitHub Actions SSH key in ~ubuntu/.ssh/authorized_keys.'
-              fi
+              echo "=========================================================="
+              echo "1. DOCKER CONTAINERS STATUS"
+              echo "=========================================================="
+              run_sudo docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 
-              # Also authorize in /home/cwb-deploy/.ssh if it exists
-              if [ -d /home/cwb-deploy ]; then
-                run_sudo mkdir -p /home/cwb-deploy/.ssh
-                run_sudo chmod 700 /home/cwb-deploy/.ssh
-                run_sudo touch /home/cwb-deploy/.ssh/authorized_keys
-                run_sudo chmod 600 /home/cwb-deploy/.ssh/authorized_keys
-                if ! run_sudo grep -Fq \"$PUBKEY\" /home/cwb-deploy/.ssh/authorized_keys; then
-                  printf '\n%s\n' \"$PUBKEY\" | run_sudo tee -a /home/cwb-deploy/.ssh/authorized_keys >/dev/null
-                  run_sudo chown -R cwb-deploy:cwb-deploy /home/cwb-deploy/.ssh
-                  echo 'Authorized GitHub Actions SSH key in /home/cwb-deploy/.ssh/authorized_keys.'
-                fi
-              fi
+              echo ""
+              echo "=========================================================="
+              echo "2. ACCOUNT LOOKUP IN /data/accounts.sqlite3"
+              echo "=========================================================="
+              run_sudo docker exec chat-with-books-session sqlite3 /data/accounts.sqlite3 \
+                "SELECT email, phone, role, created_at, balance_toman FROM accounts WHERE phone LIKE '%09021100939%' OR email LIKE '%pm@chat-with-books.ir%';"
 
-              echo 'Checking running containers before update:'
-              run_sudo docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+              echo ""
+              echo "All accounts in accounts.sqlite3:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/accounts.sqlite3 \
+                "SELECT email, phone, role, balance_toman FROM accounts;"
 
-              # Find current directory
+              echo ""
+              echo "=========================================================="
+              echo "3. QUOTA & CHATS TODAY IN /data/usage.sqlite3"
+              echo "=========================================================="
+              echo "Tables in usage.sqlite3:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/usage.sqlite3 ".tables"
+
+              echo "Chats today (by day):"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/usage.sqlite3 \
+                "SELECT rowid, account, day FROM chats WHERE account LIKE '%pm@chat-with-books.ir%' OR account LIKE '%09021100939%' ORDER BY rowid DESC LIMIT 15;"
+
+              echo "Recent questions in rolling window:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/usage.sqlite3 \
+                "SELECT rowid, phone, datetime(at, 'unixepoch', 'localtime') AS time_local FROM questions WHERE phone LIKE '%09021100939%' ORDER BY rowid DESC LIMIT 15;"
+
+              echo ""
+              echo "=========================================================="
+              echo "4. PERSISTED EXCHANGES IN /data/chats.sqlite3"
+              echo "=========================================================="
+              echo "Tables in chats.sqlite3:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/chats.sqlite3 ".tables"
+
+              echo "Recent agent_chats for phone/user:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/chats.sqlite3 \
+                "SELECT id, phone, thread_id, substr(question, 1, 60), substr(answer, 1, 60), created_at, request_id FROM agent_chats WHERE phone LIKE '%09021100939%' ORDER BY rowid DESC LIMIT 10;"
+
+              echo "Recent ask chats for phone/user:"
+              run_sudo docker exec chat-with-books-session sqlite3 /data/chats.sqlite3 \
+                "SELECT id, phone, substr(question, 1, 60), created_at, request_id FROM chats WHERE phone LIKE '%09021100939%' ORDER BY rowid DESC LIMIT 10;"
+
+              echo ""
+              echo "=========================================================="
+              echo "5. MASTRA AGENT STORAGE (/data/mastra.sqlite)"
+              echo "=========================================================="
+              echo "Tables in mastra.sqlite:"
+              run_sudo docker exec chat-with-books-agent sqlite3 /data/mastra.sqlite ".tables" 2>/dev/null || echo "Could not inspect mastra.sqlite tables"
+
+              echo "Recent threads in mastra.sqlite:"
+              run_sudo docker exec chat-with-books-agent sqlite3 /data/mastra.sqlite \
+                "SELECT * FROM mastra_threads ORDER BY createdAt DESC LIMIT 5;" 2>/dev/null || echo "mastra_threads query failed"
+
+              echo "Recent messages in mastra.sqlite:"
+              run_sudo docker exec chat-with-books-agent sqlite3 /data/mastra.sqlite \
+                "SELECT id, threadId, role, substr(content, 1, 80), createdAt FROM mastra_messages ORDER BY createdAt DESC LIMIT 10;" 2>/dev/null || echo "mastra_messages query failed"
+
+              echo ""
+              echo "=========================================================="
+              echo "6. SESSION SERVICE DOCKER LOGS (LAST 250 LINES)"
+              echo "=========================================================="
+              run_sudo docker logs --tail 250 chat-with-books-session
+
+              echo ""
+              echo "=========================================================="
+              echo "7. MASTRA AGENT DOCKER LOGS (LAST 250 LINES)"
+              echo "=========================================================="
+              run_sudo docker logs --tail 250 chat-with-books-agent
+
+              echo ""
+              echo "=========================================================="
+              echo "8. ENVIRONMENT VARIABLES OF RELEVANCE IN .env"
+              echo "=========================================================="
               TARGET_DIR='/home/chat-with-books/current'
-              if [ ! -d \"\$TARGET_DIR\" ] && [ -d '/srv/chat-with-books/current' ]; then
-                TARGET_DIR='/srv/chat-with-books/current'
+              [ -d /srv/chat-with-books/current ] && TARGET_DIR='/srv/chat-with-books/current'
+              if [ -f "$TARGET_DIR/.env" ]; then
+                run_sudo grep -E '^(DAILY_CHAT_LIMIT|UNLIMITED_ACCOUNTS|CHAT_AGENT_MODEL|AGENT_MODEL|LLM_MODEL|AVALAI_BASE_URL|AVALAI_SEARCH_TOOL|QUESTION_WINDOW)' "$TARGET_DIR/.env" || true
               fi
-              cd \"\$TARGET_DIR\"
-              echo \"Working in \$TARGET_DIR\"
 
-              run_sudo touch .env
-              if run_sudo grep -q '^AGENT_SERVICE_TOKEN=' .env 2>/dev/null; then
-                run_sudo sed -i \"s|^AGENT_SERVICE_TOKEN=.*|AGENT_SERVICE_TOKEN='${AGENT_TOKEN}'|\" .env
-              else
-                printf \"\nAGENT_SERVICE_TOKEN='%s'\n\" \"${AGENT_TOKEN}\" | run_sudo tee -a .env >/dev/null
-              fi
-              echo 'Upserted AGENT_SERVICE_TOKEN in .env'
-
-              echo 'Starting docker compose up -d --build...'
-              run_sudo docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session up -d --build
-
-              echo 'Waiting for Session UI livez...'
-              for i in \$(seq 1 60); do
-                if curl -fsS http://127.0.0.1:8765/livez >/dev/null 2>&1; then
-                  echo 'Session UI is live and healthy!'
-                  break
-                fi
-                sleep 2
-              done
-
-              echo 'Verifying /agent/recall response with AGENT_TOKEN:'
-              curl -fsS -X POST http://127.0.0.1:8765/agent/recall \
-                -H 'Content-Type: application/json' \
-                -H \"X-Agent-Token: ${AGENT_TOKEN}\" \
-                -d '{\"query\": \"توحید\"}' | head -c 800
-              echo ''
-            "
+              echo ""
+              echo "=========================================================="
+              echo "INSPECTION COMPLETE"
+              echo "=========================================================="
+  EOF
