@@ -218,6 +218,7 @@ jobs:
           FARAZSMS_API_KEY: ${{ secrets.FARAZSMS_API_KEY }}
           FARAZSMS_PATTERN_CODE: ${{ secrets.FARAZSMS_PATTERN_CODE }}
           FARAZSMS_FROM_NUMBER: ${{ secrets.FARAZSMS_FROM_NUMBER }}
+          AGENT_SERVICE_TOKEN: ${{ secrets.AGENT_SERVICE_TOKEN }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
@@ -237,6 +238,7 @@ jobs:
           upsert_val FARAZSMS_PATTERN_CODE '$FARAZSMS_PATTERN_CODE'
           upsert_val FARAZSMS_FROM_NUMBER '$FARAZSMS_FROM_NUMBER'
           upsert_val FARAZSMS_PATTERN_PARAM 'codes'
+          upsert_val AGENT_SERVICE_TOKEN '$AGENT_SERVICE_TOKEN'
           grep -c '^FARAZSMS_' .env"
           printf '%s' "$remote_script" | ssh -p "$DEPLOY_PORT" \
             -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \

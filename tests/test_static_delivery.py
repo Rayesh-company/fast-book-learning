@@ -1,3 +1,4 @@
+from pathlib import Path
 """The static delivery law (the 2026-10-23 Lighthouse work; the cache
 families landed 2026-10-30 against the PM's revisit slowness): the UI's
 text assets gzip down the wire, the mobile page carries the
@@ -85,8 +86,17 @@ def test_cache_families_split_by_suffix(tmp_path):
                 == "public, max-age=300, stale-while-revalidate=86400"
             ), path
 
-        _, headers, _ = _get(base, "/ota/manifest.json")
-        assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
+        manifest_path = Path("ui/ota/manifest.json")
+        manifest_path.parent.mkdir(exist_ok=True)
+        created_manifest = not manifest_path.exists()
+        if created_manifest:
+            manifest_path.write_text("{}")
+        try:
+            _, headers, _ = _get(base, "/ota/manifest.json")
+            assert headers["Cache-Control"] == "public, max-age=0, must-revalidate"
+        finally:
+            if created_manifest:
+                manifest_path.unlink(missing_ok=True)
 
         _, headers, _ = _get(base, "/mobile/")
         assert headers["Cache-Control"] == "no-cache"

@@ -1,0 +1,72 @@
+name: Apply Agent Token and Rebuild
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy_token:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Authorize deploy key on VPS, apply token and rebuild
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          AGENT_TOKEN: ${{ secrets.AGENT_SERVICE_TOKEN }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -eu
+          install -m 700 -d "$RUNNER_TEMP/cwb-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519"
+          PUBKEY="$(ssh-keygen -y -f "$RUNNER_TEMP/cwb-ssh/id_ed25519")"
+
+          echo "Connecting to VPS on port $DEPLOY_PORT..."
+          sshpass -p "$VPS_PASSWORD" ssh -p "$DEPLOY_PORT" \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=15 \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" "
+              set -eu
+              mkdir -p ~/.ssh && chmod 700 ~/.ssh
+              touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+              if ! grep -Fq \"$PUBKEY\" ~/.ssh/authorized_keys; then
+                printf '\n%s\n' \"$PUBKEY\" >> ~/.ssh/authorized_keys
+                echo 'Authorized GitHub Actions SSH key in authorized_keys.'
+              fi
+
+              cd /home/chat-with-books/current
+              touch .env
+              if grep -q '^AGENT_SERVICE_TOKEN=' .env 2>/dev/null; then
+                sed -i \"s|^AGENT_SERVICE_TOKEN=.*|AGENT_SERVICE_TOKEN='${AGENT_TOKEN}'|\" .env
+              else
+                printf \"\nAGENT_SERVICE_TOKEN='%s'\n\" \"${AGENT_TOKEN}\" >> .env
+              fi
+              echo 'Upserted AGENT_SERVICE_TOKEN in /home/chat-with-books/current/.env'
+
+              echo 'Starting docker compose up -d --build...'
+              docker compose -p chat-withbooks -f compose.yaml -f compose.production.yaml --profile session up -d --build
+
+              echo 'Waiting for Session UI livez...'
+              for i in \$(seq 1 60); do
+                if curl -fsS http://127.0.0.1:8765/livez >/dev/null 2>&1; then
+                  echo 'Session UI is live and healthy!'
+                  break
+                fi
+                sleep 2
+              done
+
+              echo 'Verifying /agent/recall response with AGENT_TOKEN:'
+              curl -fsS -X POST http://127.0.0.1:8765/agent/recall \
+                -H 'Content-Type: application/json' \
+                -H \"X-Agent-Token: ${AGENT_TOKEN}\" \
+                -d '{\"query\": \"توحید\"}' | head -c 800
+              echo ''
+            "
