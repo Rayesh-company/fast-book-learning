@@ -29,3 +29,30 @@ reader's raster pipeline, the full Notebook panel, and the Admin
 console stay web-first. The strings are Farsi DRAFT
 (`src/strings.ts`), the palette is the sheet's own tokens
 (`src/theme.ts`).
+
+## Release builds & distribution
+
+Distribution is sideload; release APKs are signed with the private
+upload key `cwb-upload` (keystore outside the repo at `~/.cwb-keys/`) —
+the certificate fingerprint, the `CWB_UPLOAD_*` env vars and the
+fail-closed build guard are documented in [`KEYS.md`](KEYS.md). A
+release build refuses to run without those env vars, so nothing ships
+under the public debug key again (F-018, the 2026-11-01 security
+review).
+
+The current wave is three single-ABI splits (versionCode 2,
+versionName 1.0.0), built per-ABI with no universal:
+`cwb-arm64-v8a-release.apk`, `cwb-armeabi-v7a-release.apk` and
+`cwb-x86_64-release.apk`, copied out of
+`android/app/build/outputs/apk/release/` (every `mobile/*.apk` is
+gitignored).
+
+One-time migration: devices still on the old debug-signed APK cannot
+update in place — Android rejects the new signature — so those installs
+uninstall + reinstall once (the stored token is wiped; the user signs
+in again). After that wave every next APK updates in place, and content
+changes ship as OTA updates on top of these APKs (Rule 001). OTA
+publishes must run with `CWB_OTA_PRIVATE_KEY` set — these APKs carry
+the OTA code-signing certificate in their manifest and reject unsigned
+manifests; until the first signed publish lands they stay on their
+bundled bundle (F-019).

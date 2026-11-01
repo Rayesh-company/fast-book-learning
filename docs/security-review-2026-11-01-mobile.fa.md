@@ -77,6 +77,32 @@ flowchart LR
 - اسکرین‌شاتِ محتوا unrestricted — برای اپ مطالعه، پذیرش طراحی.
 - 3 high باقیماندهٔ `npm audit` اپ — زنجیرهٔ build-time اکسپو (F-010 تعویق ثبت‌شده؛ روی دستگاه اجرا نمی‌شود).
 
+## وضعیت یافته‌های همین بازبینی — بسته‌شدن در همان روز (2026-11-01)
+
+| یافته | وضعیت | شاهد |
+|---|---|---|
+| F-018 امضای debug | **بسته** ✓ | `apksigner verify` روی APK تازه: `CN=chat-with-books, OU=Rayesh`، SHA-256 `cd599cd8…14cb6d0` = اثر انگشت ثبت‌شده در `mobile/KEYS.md`؛ گارد fail-closed در `android/app/build.gradle` (تست شد: بدون env، بیلد release می‌میرد)؛ keystore بیرون ریپو در `~/.cwb-keys/` |
+| F-019 OTA بی‌امضا | **بسته** ✓ (کد؛ انتشار بعدی امضاشدار) | `scripts/ota_codesigning.py` (stdlib خالص؛ openssl `Verified OK`)؛ `publish_ota.py` امضا + sidecar؛ `serve.py` هدر `expo-signature` (RFC 8941، از سورس نیتیو sdk-57 استخراج شد)؛ گواهی داخل APK (2 تطبیق CODE_SIGNING)؛ ۸ تست در `tests/test_ota_codesigning.py` |
+| F-020 توکن بی‌لغو | **بسته** ✓ | `token_epoch` (مهاجرت store) در توکن و گیتِ `resolve_identity`؛ `POST /api/admin/token-epoch` با audit؛ ۳ تست در `tests/test_token_epoch.py` (توکن قدیمی شکل تا اولین bump زنده می‌ماند) |
+| F-021 پرمیشن‌های اضافی | **بسته** ✓ | `blockedPermissions` در app.json → badging APK تازه: فقط `INTERNET/VIBRATE/ACCESS_NETWORK_STATE/USE_BIOMETRIC/USE_FINGERPRINT` — SYSTEM_ALERT_WINDOW و READ/WRITE_EXTERNAL_STORAGE رفته‌اند |
+| F-022 native رهگیری‌نشده | **بسته** ✓ | `mobile/android/` حالا رهگیری می‌شود (prebuild خروجی + `android/.gitignore` خودش)؛ کلیدها بیرون ریپو با سند `mobile/KEYS.md` |
+
+**بازسازی APK (استثنای قانون ۰۰۱):** go کتبی PM در نشست 2026-11-01 («از F-018 تا F-022 برو بررسی حل و تست بکن») — یک بیلد release با امضای خصوصی. مصنوع: `mobile/cwb-release-v2-arm64.apk` (~28MB) و `…-armeabi-v7a.apk` (~24MB)، versionCode 2، per-ABI بدون universal. **مهاجرت نصب‌های فعلی یک‌بار uninstall+install می‌خواهد** (امضا عوض شده؛ توکن پاک می‌شود و کاربر دوباره وارد می‌شود) — بعد از این موج، publish بعدی باید با `CWB_OTA_PRIVATE_KEY` امضاشدار باشد وگرنه APKهای گواهی‌دار آپدیت را رد می‌کنند. ماندهٔ عملیاتی: deploy سمت سرور (هدر `expo-signature` + ستون epoch) و رساندن APK جدید به کاربران.
+
+## بستن ۲۰۲۶-۱۱-۰۱ — راستی‌آزمایی مستقل مصنوع‌های نهایی (سه اسپلیت، versionCode 2)
+
+بازبینیِ جدا از بیلد، روی همان سه APK نهایی با `build-tools 35.0.0`؛ مسیرهای تحویل: `mobile/cwb-arm64-v8a-release.apk`، `mobile/cwb-armeabi-v7a-release.apk`، `mobile/cwb-x86_64-release.apk` (کپی بایت‌به‌بایت از `android/app/build/outputs/apk/release/`، با `cmp` تأیید شد؛ گیت‌نشدنی زیر قانون `mobile/*.apk` — `.gitignore:80`).
+
+- **F-018 بسته ✓ (مدرک apksigner):** `apksigner verify --print-certs` روی هر سه APK — خروجی هر سه عیناً:
+  ```
+  Signer #1 certificate DN: CN=chat-with-books, OU=Rayesh, O=Rayesh Company, L=Tehran, C=IR
+  Signer #1 certificate SHA-256 digest: cd599cd8064d21d313dd854aae83bac00b96d3f8a0a38323ab74fb6d314cb6d0
+  ```
+  SHA-256 (بدون دونقطه، حروف کوچک) عیناً برابر اثر انگشت ثبت‌شدهٔ کلید آپلود `cwb-upload` در `mobile/KEYS.md` است (`CD:59:9C:…:B6:D0`) و هیچ‌کدام `CN=Android Debug` نیستند.
+- **F-021 بسته ✓ (مدرک aapt2):** `aapt2 dump badging` روی هر سه — `package: name='ir.chatwithbooks.app' versionCode='2' versionName='1.0.0'`؛ شش uses-permission و فقط آن‌ها: `INTERNET`، `VIBRATE`، `ACCESS_NETWORK_STATE`، `USE_BIOMETRIC`، `USE_FINGERPRINT`، `ir.chatwithbooks.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`؛ شمارش `SYSTEM_ALERT_WINDOW` در هر سه صفر است و `READ/WRITE_EXTERNAL_STORAGE` هم نیست. `native-code` هر APK فقط ABI خودش: `'arm64-v8a'` / `'armeabi-v7a'` / `'x86_64'` — اسپلیت واقعاً تک‌معماری است.
+- **F-019 — وضعیت دقیق:** سمت APK بسته است: `aapt2 dump xmltree --file AndroidManifest.xml` روی هر سه APK هر دو متادیتای `expo.modules.updates.CODE_SIGNING_CERTIFICATE` و `expo.modules.updates.CODE_SIGNING_METADATA` را در مانیفست merge‌شده نشان می‌دهد — تطبیق با خروجی فاز ۱. سمت انتشار هنوز عملیاتی نشده: تا publish بعدی با `CWB_OTA_PRIVATE_KEY` اجرا شود، منیفستِ منتشرشده روی سرور امضا ندارد؛ APKهای گواهی‌دار منیفستِ بی‌امضا را رد می‌کنند و تا آن موقع روی باندلِ داخلی‌شان می‌مانند (anti-brick خود expo-updates) — یعنی «بسته (کد)؛ فعال‌سازی با اولین publish امضاشدار».
+- **versionCode 2:** بیلد نهایی با `versionCode='2'` و اسپلیت per-ABI بدون universal — سه مصنوع: arm64-v8a `29,586,834` بایت، armeabi-v7a `24,834,468` بایت، x86_64 `29,999,165` بایت؛ علیه universal قبلیِ debug-امضا `68,500,722` بایت (`mobile/cwb-release.apk`، همان مصنوعی که شواهد F-018 از آن استخراج شد).
+
 ## جدول تهدیدهای جدید
 
 | ID | تهدید | پیش‌نیاز | کنترل موجود (شاهد) | شکاف | توصیه | اثر | احتمال | اولویت |
