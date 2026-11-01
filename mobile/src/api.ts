@@ -7,7 +7,9 @@ import * as SecureStore from "expo-secure-store";
 const TOKEN_KEY = "cwb_auth_token";
 
 export const BASE_URL = (
-  process.env.EXPO_PUBLIC_API_URL ?? "https://booksai.rayesh-team.ir"
+  // fahva's bare root is the app's home (ADR-0025): the page AND the
+  // API live on the same origin, with no path in the URL bar.
+  process.env.EXPO_PUBLIC_API_URL ?? "https://fahva.rayesh-team.ir"
 ).replace(/\/+$/, "");
 
 export type Source = { reference: string; passage: string };

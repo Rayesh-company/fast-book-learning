@@ -24,7 +24,7 @@ downloads silently, and runs the new bundle on its next restart. The user does n
 2. **Export the bundle** (in `mobile/`, with the TARGET server baked in — the URL is
    frozen into the export exactly as it was into the APK):
    ```bash
-   EXPO_PUBLIC_API_URL=https://booksai.rayesh-team.ir \
+   EXPO_PUBLIC_API_URL=https://fahva.rayesh-team.ir \
      npx expo export --platform android --output-dir ../.scratch/ota-export
    ```
 
@@ -41,8 +41,8 @@ downloads silently, and runs the new bundle on its next restart. The user does n
 
 5. **Verify** (no phone needed):
    ```bash
-   curl -s "https://booksai.rayesh-team.ir/ota?runtimeVersion=1.0.0"   # the manifest JSON
-   curl -sI "https://booksai.rayesh-team.ir/ota/current/<bundle-file>" # 200, immutable
+   curl -s "https://fahva.rayesh-team.ir/ota?runtimeVersion=1.0.0"   # the manifest JSON
+   curl -sI "https://fahva.rayesh-team.ir/ota/current/<bundle-file>" # 200, immutable
    ```
    `204` means no payload — the publish or the deploy didn't land.
 

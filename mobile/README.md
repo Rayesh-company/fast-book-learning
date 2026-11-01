@@ -3,7 +3,7 @@
 The product's Android client (ADR-0020): Expo + TypeScript, speaking the
 **same backend's** wire protocol as the web sheet — one server, one API,
 both clients. The base URL rides `EXPO_PUBLIC_API_URL` (default
-`https://booksai.rayesh-team.ir`); against a dev machine's stack, point
+`https://fahva.rayesh-team.ir` — the app's home, its bare root; against a dev machine's stack, point
 it at the host (the Android emulator's loopback alias is
 `10.0.2.2:8765`):
 
