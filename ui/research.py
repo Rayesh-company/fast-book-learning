@@ -2365,6 +2365,40 @@ RESEARCH_REGISTRY = {}
 RESEARCH_RECENT_SETTLED = deque(maxlen=RESEARCH_RECENT_SETTLED_CAP)
 RESEARCH_REGISTRY_LOCK = threading.Lock()
 
+# The settle bell (ADR-0020's live line): serve parks one listener here
+# at import time, and every terminal write below rings it — the /events
+# subscribers hear the settle the moment the write lands. The tap is
+# module-level, NOT the composer meter's thread-local: a turn's worker
+# runs on its own thread (never a request thread), so nothing would be
+# parked there to find. research.py cannot import serve (serve imports
+# research — a circular import), so the dependency runs backwards: the
+# writer calls a hook serve fills in. The listener's own contract is
+# never-raise and never-block; _emit_turn_event swallows everything
+# regardless, so a broken or slow tap can never turn into a turn
+# failure, and it rings OUTSIDE the registry lock — a slow subscriber
+# must never hold every turn's writes hostage.
+_TURN_EVENT_LISTENER = None
+
+
+def set_turn_event_listener(listener) -> None:
+    """Park the module-level settle listener (serve's _publish_event
+    shim; None clears it — the tests' recorder shape)."""
+    global _TURN_EVENT_LISTENER
+    _TURN_EVENT_LISTENER = listener
+
+
+def _emit_turn_event(turn) -> None:
+    """Ring the settle listener for a turn whose terminal write just
+    landed — best-effort, outside the registry lock, never raising: the
+    write is the turn's truth, the event only its bell."""
+    listener = _TURN_EVENT_LISTENER
+    if listener is None:
+        return
+    try:
+        listener(turn)
+    except Exception:
+        pass
+
 
 def find_turn(turn_id: str):
     """One turn by id — the registry's live table first, then the
@@ -2418,20 +2452,26 @@ def _turn_write(turn, state=None, event=None, error=None) -> bool:
         return True
 
 
-def _turn_fail(turn, detail: str) -> None:
-    _turn_write(turn, "failed", RESEARCH_EVENT_FAILED, error=detail)
+def _turn_fail(turn, detail: str) -> bool:
+    written = _turn_write(turn, "failed", RESEARCH_EVENT_FAILED, error=detail)
+    if written:
+        _emit_turn_event(turn)
+    return written
 
 
 def abort_research_turn(turn: ResearchTurn) -> bool:
     """Abort one turn: the cancel flag and the `aborted` state land
-    together under the lock; a settled turn is never re-marked."""
+    together under the lock; a settled turn is never re-marked — and
+    never re-rung (the bell only when the write actually sat, so a
+    rival abort that lost the race re-reports nothing)."""
     with RESEARCH_REGISTRY_LOCK:
         if turn.state in TURN_TERMINAL_STATES:
             return False
         turn.cancel.set()
         turn.state = "aborted"
         turn.events.append(RESEARCH_EVENT_ABORTED)
-        return True
+    _emit_turn_event(turn)
+    return True
 
 
 def ensure_session(
@@ -4626,6 +4666,7 @@ def run_research_turn(
             turn.result = result
             turn.state = "done"
             turn.events.append(RESEARCH_EVENT_DONE)
+        _emit_turn_event(turn)
         research_store.save_session(session["id"], state)
         research_store.append_message(session["id"], "assistant", blocks)
         print(
@@ -4654,6 +4695,7 @@ def run_research_turn(
                 return
             turn.result = result
             turn.state = "done"
+        _emit_turn_event(turn)
         research_store.save_session(session["id"], state)
         research_store.append_message(session["id"], "assistant", blocks)
         print(

@@ -2,7 +2,9 @@
 // rendered the store's way — the operator's ask, the assistant article
 // (the server settles it itself when the body carries the sitting's id
 // and the ask's key), and the research conversation beneath, its turns
-// polled the recorded way.
+// settled by the live line's research.settled bell (the same hub the
+// app's root listens on — a second connection, the hub holds one queue
+// per subscriber) with the 2s poll kept only as the offline fallback.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,7 +19,8 @@ import {
 } from "react-native";
 import type { AskReply, Block, Palette, Selection, SittingPayload, Source, TurnStatus } from "../types";
 import { S } from "../strings";
-import { api, ApiError } from "../api";
+import { api, ApiError, loadToken } from "../api";
+import { subscribeEvents } from "../events";
 import { Blocks, PoolList, References, SelectionList } from "../components";
 
 type PhaseState = "idle" | "running" | "done" | "skipped" | "failed";
@@ -52,12 +55,43 @@ export function SittingScreen({
   const [researchBusy, setResearchBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
+  // The turn this screen is waiting on (started.turn_id is local to
+  // sendResearch; the live line's listener needs it here), the stream's
+  // up-ness (onStateChange), and the poll sleep's early wake.
+  const activeTurnId = useRef<string | null>(null);
+  const streamUp = useRef(false);
+  const wakePoll = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
     };
+  }, []);
+
+  // The live line: the settle bell for the active research turn. The
+  // bell is not the truth — the same read the poll makes is, fired the
+  // moment the frame lands instead of on the sleep's next tick. A
+  // stream that is down (or a frame lost, or a connect after the
+  // settle) costs nothing: the poll below is the fallback.
+  useEffect(() => {
+    return subscribeEvents(
+      loadToken,
+      (event) => {
+        if (event.kind !== "research.settled") return;
+        const turnId = typeof event.turn_id === "string" ? event.turn_id : null;
+        if (turnId === null || turnId !== activeTurnId.current) return;
+        api.researchTurn(turnId)
+          .then((status) => {
+            if (mounted.current) setResearchTurn(status);
+          })
+          .catch(() => {});
+        wakePoll.current?.();
+      },
+      (up) => {
+        streamUp.current = up;
+      },
+    );
   }, []);
 
   const load = useCallback(async () => {
@@ -129,6 +163,22 @@ export function SittingScreen({
     }
   };
 
+  // The poll sleep: 2s while the stream is down (or before its first
+  // connect) — the recorded cadence, the fallback's heartbeat; while
+  // the stream is up the settle bell wakes the read early, and the 15s
+  // net is only for a lost frame or a connect after the settle.
+  const sleepUntilWoken = () =>
+    new Promise<void>((resolve) => {
+      let timer: ReturnType<typeof setTimeout>;
+      const done = () => {
+        clearTimeout(timer);
+        wakePoll.current = null;
+        resolve();
+      };
+      timer = setTimeout(done, streamUp.current ? 15000 : 2000);
+      wakePoll.current = done;
+    });
+
   const sendResearch = async (text: string) => {
     const message = text.trim();
     if (!message || researchBusy) return;
@@ -143,10 +193,14 @@ export function SittingScreen({
       });
       if (!mounted.current) return;
       setResearchSession(started.session_id);
-      // The turn runs server-side; the poll is its recorded surface.
+      activeTurnId.current = started.turn_id;
+      // The turn runs server-side; the settle bell wakes the read, the
+      // poll is the read itself (and the fallback when the line is
+      // down — the hub is in-process, a restart empties it).
       for (;;) {
         if (!mounted.current) return;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await sleepUntilWoken();
+        if (!mounted.current) return;
         const status = await api.researchTurn(started.turn_id);
         if (!mounted.current) return;
         setResearchTurn(status);
@@ -157,6 +211,7 @@ export function SittingScreen({
     } catch (exc: any) {
       if (mounted.current) setError(exc?.message ?? S.researchFailed);
     } finally {
+      activeTurnId.current = null;
       if (mounted.current) setResearchBusy(false);
     }
   };
