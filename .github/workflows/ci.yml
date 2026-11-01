@@ -131,7 +131,7 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
         run: |
-          curl --fail --silent --show-error https://booksai.rayesh-team.ir/livez
+          curl --fail --silent --show-error https://fahva.rayesh-team.ir/livez
           ssh -p "$DEPLOY_PORT" \
             -i "$RUNNER_TEMP/cwb-ssh/id_ed25519" \
             -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
@@ -149,7 +149,7 @@ jobs:
           mkdir -p ../.scratch
           npx expo export --platform android --output-dir ../.scratch/ota-export
         env:
-          EXPO_PUBLIC_API_URL: https://booksai.rayesh-team.ir
+          EXPO_PUBLIC_API_URL: https://fahva.rayesh-team.ir
 
       - name: Publish OTA payload
         run: python scripts/publish_ota.py .scratch/ota-export

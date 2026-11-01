@@ -19,7 +19,8 @@ restart empties the buckets, which only widens a window by a
 restart's worth.
 
 The key is X-Real-IP when present — nginx stamps it
-(ops/nginx/booksai.conf) and the deployed server binds 127.0.0.1
+(ops/nginx/fahva.conf, and booksai.conf's proxy face) and the
+deployed server binds 127.0.0.1
 only (compose.production.yaml), so every direct client IS the proxy;
 a dev machine without nginx falls back to the socket address.
 """

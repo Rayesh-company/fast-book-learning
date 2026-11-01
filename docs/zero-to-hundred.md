@@ -29,7 +29,7 @@
 
 **نشست** یک محصول فارسیِ پرسش‌وپاسخ استنادی از روی مجموعه‌ی ثابتی از کتاب‌هاست (دو کتاب: «طرح کلی اندیشۀ اسلامی در قرآن» و «انسان ۲۵۰ ساله») که لایه‌ی حافظه‌اش کامل روی Postgres/pgvector از طریق Cognee ساخته می‌شود.
 
-- **یک بک‌اند** (`ui/serve.py` — فقط کتابخانۀ استاندارد پایتون) که هم شیت وب را سرو می‌کند و هم **API مشترک** وب و موبایل است؛ روی سرور (VPS) پشت `https://booksai.rayesh-team.ir` می‌نشیند.
+- **یک بک‌اند** (`ui/serve.py` — فقط کتابخانۀ استاندارد پایتون) که هم شیت وب را سرو می‌کند و هم **API مشترک** وب و موبایل است؛ روی سرور (VPS) پشت `https://fahva.rayesh-team.ir` می‌نشیند.
 - **دو کلاینت**: شیت وب (تک‌فایل `ui/index.html` + PWA) و اپ اندروید (`mobile/` — Expo + TypeScript). هر دو دقیقاً یک قرارداد سیمی را حرف می‌زنند. (سومین کلاینت، **برنامک ایتا** — ADR-0021 — همان قرارداد را از WebView ایتا با توکنِ عوض‌شده از initData حرف می‌زند.)
 - **سه فاز برای یک پرسش** (ADR-0014): «پاسخ اول» (انتخاب نقل‌قول از استخر بازیابی)، «پاسخ استنادی» (سند تلفیقی با نقل‌قول‌های verbatim)، و «حالت پژوهش» (گفت‌وگوی پژوهشی هدایت‌شده با نقشه و سکوی تصمیم).
 - **مدل‌ها**: `glm-5.3-flash` از طریق AvalAI (چت، استخراج، امبدینگ `text-embedding-3-large`/3072).
@@ -50,7 +50,7 @@ flowchart TB
     end
 
     subgraph VPS["سرور (VPS اوبونتو)"]
-        NG["nginx + TLS<br/>booksai.rayesh-team.ir<br/>proxy_buffering off"]
+        NG["nginx + TLS<br/>fahva.rayesh-team.ir<br/>proxy_buffering off"]
         subgraph COMPOSE["docker compose"]
             S["chat-with-books-session<br/>ui/serve.py — بک‌اند واحد<br/>API + شیت"]
             C1["chat-with-books-cognee<br/>تیر اول (پاسخ اول)"]
@@ -417,7 +417,7 @@ flowchart TD
     SIT --> RES["حالت پژوهش: POST /research/message<br/>→ poll /research/turn هر ۲ ثانیه<br/>→ بلاک‌ها + منابع + چیپ‌ها"]
 ```
 
-URL پایه با `EXPO_PUBLIC_API_URL` (پیش‌فرض: `https://booksai.rayesh-team.ir`؛ امولاتور: `http://10.0.2.2:8765`). استرینگ‌ها DRAFT در `src/strings.ts`؛ پالت در `src/theme.ts`.
+URL پایه با `EXPO_PUBLIC_API_URL` (پیش‌فرض: `https://fahva.rayesh-team.ir`؛ امولاتور: `http://10.0.2.2:8765`). استرینگ‌ها DRAFT در `src/strings.ts`؛ پالت در `src/theme.ts`.
 
 #### آپدیت‌ها: OTA، نه APK (قانون ۰۰۱)
 
@@ -525,7 +525,7 @@ npx tsc --noEmit                                          # وریفای تای�
 
 ### د) VPS
 
-`tarball swap` به `/home/ubuntu/chat-with-books` (PDFها و render-cache و `.env` و استورها از درخت قبلی منتقل می‌شوند) → `docker compose -p chat-withbooks up -d` → nginx روی `booksai.rayesh-team.ir` (TLS + `proxy_buffering off` + تایم‌اوت ≥ 1200s). اپ موبایل به همین دامنه وصل می‌شود — بک‌اندِ یکی است.
+`tarball swap` به `/home/ubuntu/chat-with-books` (PDFها و render-cache و `.env` و استورها از درخت قبلی منتقل می‌شوند) → `docker compose -p chat-withbooks up -d` → nginx روی `fahva.rayesh-team.ir` (TLS + `proxy_buffering off` + تایم‌اوت ≥ 1200s). اپ موبایل به همین دامنه وصل می‌شود — بک‌اندِ یکی است.
 
 ---
 

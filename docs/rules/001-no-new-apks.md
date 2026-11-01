@@ -35,8 +35,12 @@
     → ui/ota/ روی سرور → اپ در اجرای بعدی /events-مانند خودش را آپدیت می‌کند
 ```
 
-- `mobile/app.json`: `updates.url = https://booksai.rayesh-team.ir/ota`،
+- `mobile/app.json`: `updates.url = https://fahva.rayesh-team.ir/ota`،
   `runtimeVersion.policy = appVersion`، `checkAutomatically = ON_LOAD`.
+  ⚠️ این URL در باینری نیستِ APKهای نصب‌شده **booksai** است و هیچ OTA آن را
+  عوض نمی‌کند — به همین دلیل vhost قدیمی booksai (`ops/nginx/booksai.conf`)
+  مسیر `/ota` را تا همیشه مستقیم پروکسی می‌کند و هرگز ۳۰۱ نمی‌شود
+  (ADR-0025).
 - بک‌اند همان یک سرویس است: `GET /ota` مانیفستِ آپدیت را می‌دهد (204 = آپدیتی نیست)،
   و `GET /ota/current/*` فایل‌های باندل را سرو می‌کند (`ui/serve.py`).
 - انتشار: `py scripts/publish_ota.py <export-dir>` — خروجی `expo export` را به

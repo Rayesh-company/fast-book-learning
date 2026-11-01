@@ -22,7 +22,7 @@
 
 ## ۱. مسئله — گزارشی با نمرهٔ ۳۰
 
-گزارش Lighthouse اپراتور روی `https://booksai.rayesh-team.ir/mobile/`:
+گزارش Lighthouse اپراتور روی `https://fahva.rayesh-team.ir/mobile/`:
 
 | متریک | مقدار | آستانهٔ خوب |
 |---|---|---|
@@ -41,7 +41,7 @@
 هیچ تصمیمی روی گزارش آلوده گرفته نمی‌شود. دوباره اجرا — همان صفحه، کرومِ headless بدون افزونه و بدون نشست لاگین:
 
 ```
-npx lighthouse https://booksai.rayesh-team.ir/mobile/ \
+npx lighthouse https://fahva.rayesh-team.ir/mobile/ \
   --only-categories=performance --chrome-flags="--headless=new"
 ```
 

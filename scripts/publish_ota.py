@@ -19,7 +19,7 @@ no history on the server (git holds the source history; the runtime
 keeps the update it already downloaded).
 
 Usage:
-    py scripts/publish_ota.py <export-dir> [--base https://booksai.rayesh-team.ir] \
+    py scripts/publish_ota.py <export-dir> [--base https://fahva.rayesh-team.ir] \
         [--runtime 1.0.0] [--out ui/ota]
 """
 
@@ -70,7 +70,7 @@ def find_launch_asset(export: Path) -> Path | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("export_dir", help="the expo export output directory")
-    parser.add_argument("--base", default="https://booksai.rayesh-team.ir",
+    parser.add_argument("--base", default="https://fahva.rayesh-team.ir",
                         help="the public base the app resolves asset URLs against")
     parser.add_argument("--runtime", default=None,
                         help="runtimeVersion (default: app.json's expo.version)")

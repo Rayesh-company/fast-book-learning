@@ -1,11 +1,13 @@
 name: Fix TLS
 
-# One manual job (workflow_dispatch): give booksai.rayesh-team.ir its
-# 443 back. The migration to this box left the domain with no TLS
-# server block, so https:// falls through to the neighbor vhost and
-# serves ANOTHER PRODUCT under our name — and the mobile app's baked
-# https:// EXPO_PUBLIC_API_URL plus the Eita برنامک's registered URL
-# are unusable until it holds.
+# One manual job (workflow_dispatch): keep BOTH public names served —
+# fahva.rayesh-team.ir, the canonical face since 2026-11-01 (ADR-0025),
+# and booksai.rayesh-team.ir, the legacy redirect whose native-baked
+# /ota address outlives every APK. The migration to this box left the
+# domains with no TLS server blocks, so https:// falls through to the
+# neighbor vhost and serves ANOTHER PRODUCT under our name — and the
+# mobile app's baked https:// EXPO_PUBLIC_API_URL plus the Eita برنامک's
+# registered URL are unusable until it holds.
 #
 # The channel: the deploy's own ssh (DEPLOY_PORT + DEPLOY_KEY +
 # DEPLOY_KNOWN_HOSTS). The 2026-10-19 diagnostic proved the deploy
@@ -15,9 +17,11 @@ name: Fix TLS
 # and nsenter into PID 1's namespaces from a privileged throwaway
 # container — the standard, documented way a docker principal acts on
 # the host — runs the SAME gated runbook as host root: keep-or-issue
-# the cert through the port-80 webroot, back up the vhost, install
-# the synced 80+443 config, let `nginx -t` gate the reload (restoring
-# the backup INSTEAD of reloading if the test fails). A reload never a
+# each cert through the port-80 webroot (a name with no cert yet gets
+# a port-80-only bootstrap block first, so its challenge has a vhost
+# to land in even on a fresh box), back up the vhosts, install the
+# synced 80+443 configs, let `nginx -t` gate the reload (restoring the
+# backups INSTEAD of reloading if the test fails). A reload never a
 # restart; the neighbor's vhosts are never opened.
 
 on:
@@ -28,7 +32,7 @@ permissions:
 
 jobs:
   tls:
-    name: Issue cert and install the booksai 443 vhost
+    name: Issue certs and install the fahva + booksai vhosts
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -44,7 +48,7 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/cwb-ssh/known_hosts"
           chmod 600 "$RUNNER_TEMP/cwb-ssh/id_ed25519" "$RUNNER_TEMP/cwb-ssh/known_hosts"
 
-      - name: Issue the cert and install the vhost (docker-nsenter, gated)
+      - name: Issue certs and install the vhosts (docker-nsenter, gated)
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -58,10 +62,10 @@ jobs:
               -o UserKnownHostsFile="$RUNNER_TEMP/cwb-ssh/known_hosts" \
               "${DEPLOY_USER}@${DEPLOY_HOST}" 'bash -s' <<'REMOTE'
           set -eu
-          CONF=/home/chat-with-books/current/ops/nginx/booksai.conf
-          VHOST=/etc/nginx/sites-available/booksai.conf
-          test -s "$CONF"
-          test -f "$VHOST"
+          for N in fahva booksai; do
+            test -s "/home/chat-with-books/current/ops/nginx/$N.conf"
+          done
+          test -f /etc/nginx/sites-available/booksai.conf
           # The escape vehicle is the box's own session image (a
           # Debian-slim base: nsenter rides util-linux, essential in
           # Debian) — nothing is pulled, nothing new lands on the box.
@@ -71,28 +75,47 @@ jobs:
           set -eu
           echo "== host root check =="
           [ "$(id -u)" = "0" ]
-          CONF=/home/chat-with-books/current/ops/nginx/booksai.conf
-          VHOST=/etc/nginx/sites-available/booksai.conf
-          test -s "$CONF"
-          test -f "$VHOST"
-          echo "== the cert =="
-          if [ -s /etc/letsencrypt/live/booksai.rayesh-team.ir/fullchain.pem ]; then
-            echo "booksai cert already present - keeping it"
-          else
-            certbot certonly --webroot -w /var/www/html \
-              -d booksai.rayesh-team.ir \
-              --non-interactive --agree-tos --keep-until-expiring \
-              --register-unsafely-without-email
-          fi
-          echo "== install the vhost (backed up first) =="
-          bak="$VHOST.bak-$(date +%s)"
-          cp "$VHOST" "$bak"
-          cp "$CONF" "$VHOST"
+          SRCDIR=/home/chat-with-books/current/ops/nginx
+          for N in fahva booksai; do
+            test -s "$SRCDIR/$N.conf"
+          done
+          test -f /etc/nginx/sites-available/booksai.conf
+          echo "== port-80 bootstrap blocks for names with no cert yet =="
+          for N in fahva.rayesh-team.ir booksai.rayesh-team.ir; do
+            if [ ! -s "/etc/letsencrypt/live/$N/fullchain.pem" ]; then
+              printf 'server {\n  listen 80;\n  listen [::]:80;\n  server_name %s;\n  location /.well-known/acme-challenge/ { root /var/www/html; }\n}\n' "$N" \
+                > "/etc/nginx/sites-available/$N-bootstrap.conf"
+              ln -sfn "/etc/nginx/sites-available/$N-bootstrap.conf" \
+                "/etc/nginx/sites-enabled/$N-bootstrap.conf"
+              echo "bootstrap block installed for $N"
+            fi
+          done
+          if nginx -t 2>&1; then nginx -s reload 2>/dev/null || systemctl reload nginx || true; fi
+          echo "== the certs =="
+          for N in fahva.rayesh-team.ir booksai.rayesh-team.ir; do
+            if [ -s "/etc/letsencrypt/live/$N/fullchain.pem" ]; then
+              echo "$N cert already present - keeping it"
+            else
+              certbot certonly --webroot -w /var/www/html \
+                -d "$N" \
+                --non-interactive --agree-tos --keep-until-expiring \
+                --register-unsafely-without-email
+            fi
+          done
+          rm -f /etc/nginx/sites-enabled/*-bootstrap.conf \
+                /etc/nginx/sites-available/*-bootstrap.conf
+          echo "== install the vhosts (backed up first where they exist) =="
+          for N in fahva booksai; do
+            VHOST="/etc/nginx/sites-available/$N.conf"
+            if [ -f "$VHOST" ]; then cp "$VHOST" "$VHOST.bak-$(date +%s)"; fi
+            cp "$SRCDIR/$N.conf" "$VHOST"
+            ln -sfn "$VHOST" "/etc/nginx/sites-enabled/$N.conf"
+          done
           echo "== the renewal deploy hook (a renewed cert must reach nginx) =="
-          # This cert was issued certonly --webroot: installer NONE, so
-          # a January renewal would land on disk while nginx kept
-          # serving the expiring one from memory. The deploy hook runs
-          # after EVERY renewal and reloads — idempotent to re-install.
+          # These certs were issued certonly --webroot: installer NONE,
+          # so a renewal would land on disk while nginx kept serving
+          # the expiring one from memory. The deploy hook runs after
+          # EVERY renewal and reloads — idempotent to re-install.
           mkdir -p /etc/letsencrypt/renewal-hooks-deploy
           # The direct signal first: 2026-10-19's evidence says
           # `systemctl reload nginx` refuses on this box while
@@ -100,8 +123,10 @@ jobs:
           printf '#!/bin/sh\nnginx -s reload 2>/dev/null || systemctl reload nginx\n' \
             > /etc/letsencrypt/renewal-hooks-deploy/reload-nginx.sh
           chmod +x /etc/letsencrypt/renewal-hooks-deploy/reload-nginx.sh
-          certbot renew --cert-name booksai.rayesh-team.ir --dry-run \
-            || echo "dry-run failed/skipped (informational only - network to LE staging)"
+          for N in fahva.rayesh-team.ir booksai.rayesh-team.ir; do
+            certbot renew --cert-name "$N" --dry-run \
+              || echo "dry-run failed/skipped for $N (informational only - network to LE staging)"
+          done
           echo "== nginx -t gates the reload =="
           if nginx -t 2>&1; then
             if systemctl reload nginx 2>&1; then
@@ -109,21 +134,34 @@ jobs:
             elif nginx -s reload 2>&1; then
               echo "nginx reloaded (direct signal)"
             else
-              echo "BOTH reload paths failed - restoring the backup"
-              cp "$bak" "$VHOST"
+              echo "BOTH reload paths failed - restoring the backups"
+              for N in fahva booksai; do
+                VHOST="/etc/nginx/sites-available/$N.conf"
+                latest=$(ls -t "$VHOST".bak-* 2>/dev/null | head -1 || true)
+                if [ -n "$latest" ]; then cp "$latest" "$VHOST"
+                else rm -f "$VHOST" "/etc/nginx/sites-enabled/$N.conf"; fi
+              done
               nginx -t && nginx -s reload
               exit 1
             fi
           else
-            echo "nginx -t FAILED - restoring the backup, NO reload"
-            cp "$bak" "$VHOST"
+            echo "nginx -t FAILED - restoring the backups, NO reload"
+            for N in fahva booksai; do
+              VHOST="/etc/nginx/sites-available/$N.conf"
+              latest=$(ls -t "$VHOST".bak-* 2>/dev/null | head -1 || true)
+              if [ -n "$latest" ]; then cp "$latest" "$VHOST"
+              else rm -f "$VHOST" "/etc/nginx/sites-enabled/$N.conf"; fi
+            done
             nginx -t
             exit 1
           fi
           echo "== verify from the box =="
-          curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
-          code=$(curl -s -o /dev/null -w '%{http_code}' http://booksai.rayesh-team.ir/livez || echo 000)
-          echo "http livez from the box -> $code (301 expected)"
+          curl -fsS https://fahva.rayesh-team.ir/livez && echo " <- fahva livez over https"
+          curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- booksai livez over https (the API face still proxies)"
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://fahva.rayesh-team.ir/livez || echo 000)
+          echo "fahva http livez from the box -> $code (301 expected)"
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://booksai.rayesh-team.ir/ || echo 000)
+          echo "booksai / from the box -> $code (301 expected: the human face moves now)"
           REPAIR
           REMOTE
             echo '```'
@@ -131,9 +169,15 @@ jobs:
 
       - name: Verify from the runner
         run: |
-          code=$(curl -s -m 25 --retry 3 --retry-delay 2 -o /dev/null -w '%{http_code}' http://booksai.rayesh-team.ir/livez)
-          echo "http livez -> $code (301 expected)"
+          code=$(curl -s -m 25 --retry 3 --retry-delay 2 -o /dev/null -w '%{http_code}' http://fahva.rayesh-team.ir/livez)
+          echo "fahva http livez -> $code (301 expected)"
           [ "$code" = "301" ]
-          curl -fsS -m 25 --retry 3 https://booksai.rayesh-team.ir/livez && echo " <- livez over https"
+          curl -fsS -m 25 --retry 3 https://fahva.rayesh-team.ir/livez && echo " <- fahva livez over https"
+          curl -fsS -m 25 --retry 3 https://booksai.rayesh-team.ir/livez && echo " <- booksai livez over https (API face)"
+          code=$(curl -s -m 25 -o /dev/null -w '%{http_code}' https://booksai.rayesh-team.ir/mobile)
+          echo "booksai /mobile -> $code (301 expected: the human face moves now)"
+          [ "$code" = "301" ]
+          echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
+            -servername fahva.rayesh-team.ir 2>/dev/null | openssl x509 -noout -subject -dates
           echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
             -servername booksai.rayesh-team.ir 2>/dev/null | openssl x509 -noout -subject -dates
