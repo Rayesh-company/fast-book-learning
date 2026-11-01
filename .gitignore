@@ -39,6 +39,7 @@ fast-book-audio-delivery/
 *.tar
 *.tar.gz
 *.zip
+*.rar
 *.mp4
 
 ui/usage_ledger.sqlite3

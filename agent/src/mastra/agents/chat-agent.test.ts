@@ -245,6 +245,20 @@ describe("chatAgent dynamic instructions", () => {
     expect(instructions).not.toContain("بافت صفحهٔ فعال");
   });
 
+  it("includes retrieval pacing directives and step budget rules in instructions", async () => {
+    const instructions = await chatAgent.getInstructions({
+      requestContext: new Map() as any,
+    });
+    expect(instructions).toContain("Retrieval Pacing and Synthesis");
+    expect(instructions).toContain("In any single turn, do not issue more than 2 retrieval tool calls");
+    expect(instructions).toContain("Never use up the step budget on tool calls without emitting the final conversational response text");
+  });
+
+  it("configures defaultOptions and defaultStreamOptionsLegacy maxSteps to 8", () => {
+    expect((chatAgent as any).getDefaultOptions()?.maxSteps).toBe(8);
+    expect((chatAgent as any).getDefaultStreamOptionsLegacy()?.maxSteps).toBe(8);
+  });
+
   it("clarifies in instructions that active page context covers questions directly before calling search_books", async () => {
     const instructions = await chatAgent.getInstructions({
       requestContext: new Map() as any,

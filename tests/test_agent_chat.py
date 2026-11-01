@@ -859,6 +859,17 @@ def test_learner_turn_context_max_steps_configuration(monkeypatch):
     monkeypatch.setenv("CHAT_AGENT_MAX_STEPS", "15")
     assert agent_client.LearnerTurnContext(query="پرسش").to_request_body()["maxSteps"] == 15
 
+    # 5. Payload max_steps or maxSteps is honored in from_request
+    turn_payload = agent_client.LearnerTurnContext.from_request(
+        "09120000000", None, {"query": "پرسش", "max_steps": 14}
+    )
+    assert turn_payload.to_request_body()["maxSteps"] == 14
+
+    turn_payload_camel = agent_client.LearnerTurnContext.from_request(
+        "09120000000", None, {"query": "پرسش", "maxSteps": 16}
+    )
+    assert turn_payload_camel.to_request_body()["maxSteps"] == 16
+
 
 def test_learner_turn_context_to_request_body_with_full_context():
     turn = agent_client.LearnerTurnContext(

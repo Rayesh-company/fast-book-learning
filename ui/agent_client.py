@@ -322,6 +322,12 @@ class LearnerTurnContext:
             page_context=page_context,
             selection_text=selection_payload,
             request_id=request_id or "",
+            max_steps=(
+                int(payload.get("max_steps") or payload.get("maxSteps"))
+                if (payload.get("max_steps") or payload.get("maxSteps")) is not None
+                and str(payload.get("max_steps") or payload.get("maxSteps")).isdigit()
+                else None
+            ),
         )
 
 
@@ -335,6 +341,7 @@ def _coerce_turn_context(
     selection_text: dict | str = None,
     *,
     query: str = None,
+    max_steps: int | None = None,
 ) -> LearnerTurnContext:
     if isinstance(turn_or_query, LearnerTurnContext):
         return turn_or_query
@@ -347,6 +354,7 @@ def _coerce_turn_context(
         user_profile=user_profile or {},
         page_context=page_context,
         selection_text=selection_text,
+        max_steps=max_steps,
     )
 
 
@@ -360,6 +368,7 @@ def _request_body(
     selection_text: dict | str = None,
     *,
     query: str = None,
+    max_steps: int | None = None,
 ) -> dict:
     """The ONE body both routes carry (the generate call's own shape —
     #24's pin): the message, the per-Learner thread, and the Book
@@ -373,6 +382,7 @@ def _request_body(
         user_profile=user_profile,
         page_context=page_context,
         selection_text=selection_text,
+        max_steps=max_steps,
         query=query,
     ).to_request_body()
 
@@ -407,6 +417,7 @@ class AgentStream:
         selection_text: dict | str = None,
         *,
         query: str = None,
+        max_steps: int | None = None,
     ):
         self.turn = (
             turn
@@ -419,6 +430,7 @@ class AgentStream:
                 user_profile=user_profile,
                 page_context=page_context,
                 selection_text=selection_text,
+                max_steps=max_steps,
                 query=query,
             )
         )
@@ -607,6 +619,7 @@ def agent_answer(
     selection_text: dict | str = None,
     *,
     query: str = None,
+    max_steps: int | None = None,
 ) -> dict:
     """One Learner message through the agent; the STRUCTURED reply back
     — {"text", "web_sourced", "sources"} — the marking derived from the
@@ -623,6 +636,7 @@ def agent_answer(
         user_profile=user_profile,
         page_context=page_context,
         selection_text=selection_text,
+        max_steps=max_steps,
         query=query,
     ).to_request_body()
     request = Request(
