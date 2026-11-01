@@ -7,9 +7,7 @@ import * as SecureStore from "expo-secure-store";
 const TOKEN_KEY = "cwb_auth_token";
 
 export const BASE_URL = (
-  // fahva is the canonical name (ADR-0025); the OTA manifest address
-  // in app.json, though, is native-baked and stays on booksai forever.
-  process.env.EXPO_PUBLIC_API_URL ?? "https://fahva.rayesh-team.ir"
+  process.env.EXPO_PUBLIC_API_URL ?? "https://booksai.rayesh-team.ir"
 ).replace(/\/+$/, "");
 
 export type Source = { reference: string; passage: string };

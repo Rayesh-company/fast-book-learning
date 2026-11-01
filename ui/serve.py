@@ -2008,8 +2008,7 @@ class SessionHandler(SimpleHTTPRequestHandler):
     def _behind_tls(self) -> bool:
         """The deploy's TLS signal: nginx terminates Let's Encrypt and
         stamps X-Forwarded-Proto: https on every proxied request
-        (ops/nginx/fahva.conf, and booksai.conf's proxy face). Only
-        then does the cookie carry
+        (ops/nginx/booksai.conf). Only then does the cookie carry
         Secure — a dev or test run over plain HTTP keeps working
         (the ADR-0013 review's TLS law: a Secure cookie on a non-TLS
         app breaks the app, never the reverse)."""

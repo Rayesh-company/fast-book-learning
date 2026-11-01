@@ -15,7 +15,7 @@ Subcommands:
     report    aggregate a runs directory into CSV + a markdown table set
 
 Usage:
-    python benchmark/pilot/pilot.py accounts --base-url https://fahva.rayesh-team.ir
+    python benchmark/pilot/pilot.py accounts --base-url https://booksai.rayesh-team.ir
     python benchmark/pilot/pilot.py simple --account bench-simple-1 --runs 3 \
         --query "کتاب طرح کلی اندیشه اسلامی درباره چیست؟" --datasets tarhe-kolli
     python benchmark/pilot/pilot.py research --account bench-research-1 \
@@ -48,7 +48,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ACCOUNTS_FILE = HERE / "accounts.json"
-DEFAULT_BASE = "https://fahva.rayesh-team.ir"
+DEFAULT_BASE = "https://booksai.rayesh-team.ir"
 POLL_SECONDS = 2.0  # the sheet's own research cadence
 
 # The Book set (ui/dive.py's BOOK_DATASETS) — the two fixed Books.

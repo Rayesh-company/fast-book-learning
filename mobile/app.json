@@ -13,7 +13,7 @@
       "backgroundColor": "#d8cbae"
     },
     "updates": {
-      "url": "https://fahva.rayesh-team.ir/ota",
+      "url": "https://booksai.rayesh-team.ir/ota",
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
       "codeSigningCertificate": "./certs/certificate.pem",

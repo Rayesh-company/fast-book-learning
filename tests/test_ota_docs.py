@@ -50,7 +50,7 @@ def test_the_app_carries_the_updates_client():
         (REPO_ROOT / "mobile" / "app.json").read_text(encoding="utf-8")
     )
     expo = app_json["expo"]
-    assert expo["updates"]["url"] == "https://fahva.rayesh-team.ir/ota"
+    assert expo["updates"]["url"] == "https://booksai.rayesh-team.ir/ota"
     assert expo["updates"]["checkAutomatically"] == "ON_LOAD"
     assert expo["runtimeVersion"] == {"policy": "appVersion"}
     package = (REPO_ROOT / "mobile" / "package.json").read_text(encoding="utf-8")

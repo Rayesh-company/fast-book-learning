@@ -1,9 +1,10 @@
 name: Fix TLS
 
 # One manual job (workflow_dispatch): keep BOTH public names served —
-# fahva.rayesh-team.ir, the canonical face since 2026-11-01 (ADR-0025),
-# and booksai.rayesh-team.ir, the legacy redirect whose native-baked
-# /ota address outlives every APK. The migration to this box left the
+# booksai.rayesh-team.ir, the one public name (the APKs' baked API and
+# native /ota address live there), and fahva.rayesh-team.ir, the quiet
+# alias face serving the same proxy (ADR-0025) so that day's OTA
+# payload keeps answering. The migration to this box left the
 # domains with no TLS server blocks, so https:// falls through to the
 # neighbor vhost and serves ANOTHER PRODUCT under our name — and the
 # mobile app's baked https:// EXPO_PUBLIC_API_URL plus the Eita برنامک's
@@ -156,12 +157,12 @@ jobs:
             exit 1
           fi
           echo "== verify from the box =="
-          curl -fsS https://fahva.rayesh-team.ir/livez && echo " <- fahva livez over https"
-          curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- booksai livez over https (the API face still proxies)"
+          curl -fsS https://fahva.rayesh-team.ir/livez && echo " <- fahva livez over https (alias)"
+          curl -fsS https://booksai.rayesh-team.ir/livez && echo " <- booksai livez over https"
           code=$(curl -s -o /dev/null -w '%{http_code}' http://fahva.rayesh-team.ir/livez || echo 000)
           echo "fahva http livez from the box -> $code (301 expected)"
           code=$(curl -s -o /dev/null -w '%{http_code}' https://booksai.rayesh-team.ir/ || echo 000)
-          echo "booksai / from the box -> $code (301 expected: the human face moves now)"
+          echo "booksai / from the box -> $code (200 expected: booksai serves directly)"
           REPAIR
           REMOTE
             echo '```'
@@ -172,11 +173,11 @@ jobs:
           code=$(curl -s -m 25 --retry 3 --retry-delay 2 -o /dev/null -w '%{http_code}' http://fahva.rayesh-team.ir/livez)
           echo "fahva http livez -> $code (301 expected)"
           [ "$code" = "301" ]
-          curl -fsS -m 25 --retry 3 https://fahva.rayesh-team.ir/livez && echo " <- fahva livez over https"
-          curl -fsS -m 25 --retry 3 https://booksai.rayesh-team.ir/livez && echo " <- booksai livez over https (API face)"
+          curl -fsS -m 25 --retry 3 https://fahva.rayesh-team.ir/livez && echo " <- fahva livez over https (alias)"
+          curl -fsS -m 25 --retry 3 https://booksai.rayesh-team.ir/livez && echo " <- booksai livez over https"
           code=$(curl -s -m 25 -o /dev/null -w '%{http_code}' https://booksai.rayesh-team.ir/mobile)
-          echo "booksai /mobile -> $code (301 expected: the human face moves now)"
-          [ "$code" = "301" ]
+          echo "booksai /mobile -> $code (200 expected: booksai serves directly)"
+          [ "$code" = "200" ]
           echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
             -servername fahva.rayesh-team.ir 2>/dev/null | openssl x509 -noout -subject -dates
           echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
