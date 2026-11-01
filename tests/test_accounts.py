@@ -135,9 +135,12 @@ def test_token_signs_verifies_expires_and_refuses_tampering():
     os.environ["AUTH_SECRET"] = "test-secret"
     try:
         token = serve.issue_token("sara@sheet.test", "operator")
+        # The claims gain the Account's token generation (F-020): an
+        # unknown Account reads epoch 0, the pre-epoch shape.
         assert serve.verify_token(token) == {
             "email": "sara@sheet.test",
             "role": "operator",
+            "epoch": 0,
         }
         body, _, signature = token.partition(".")
         # A forged payload (same signature) refuses — the signature is
@@ -203,6 +206,7 @@ def test_login_me_and_logout_over_the_real_server(tmp_path):
         assert serve.verify_token(payload["token"]) == {
             "email": ADMIN_EMAIL,
             "role": "admin",
+            "epoch": 0,
         }
         cookie = cookie_for(base, ADMIN_EMAIL)
         status, payload = raw_get(base, "/auth/me", cookie=cookie)

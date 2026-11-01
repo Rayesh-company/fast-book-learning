@@ -2,9 +2,16 @@ node_modules/
 .expo/
 dist/
 web-build/
-android/
 ios/
 *.log
 .env
 .env.*
 !.env.example
+
+# Release keys live outside the repo (F-018): the upload keystore and the
+# OTA code-signing private key are the operator's, under ~/.cwb-keys/.
+# Only the PUBLIC certificate is tracked.
+certs/*.pem
+!certs/certificate.pem
+certs/*.jks
+*.jks

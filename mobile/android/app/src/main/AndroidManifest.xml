@@ -1,0 +1,30 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" tools:node="remove"/>
+  <uses-permission android:name="android.permission.VIBRATE"/>
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.VIEW"/>
+      <category android:name="android.intent.category.BROWSABLE"/>
+      <data android:scheme="https"/>
+    </intent>
+  </queries>
+  <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false" android:fullBackupContent="@xml/secure_store_backup_rules" android:dataExtractionRules="@xml/secure_store_data_extraction_rules">
+    <meta-data android:name="expo.modules.updates.CODE_SIGNING_CERTIFICATE" android:value="-----BEGIN CERTIFICATE-----&#10;MIIDCzCCAfOgAwIBAgIJbR3AObo9CIrKMA0GCSqGSIb3DQEBCwUAMC8xLTArBgNV&#10;BAMTJGNoYXQtd2l0aC1ib29rcyBPVEEgKFJheWVzaCBDb21wYW55KTAeFw0yNjEx&#10;MDExNzI0NThaFw0zNjExMDExNzI0NThaMC8xLTArBgNVBAMTJGNoYXQtd2l0aC1i&#10;b29rcyBPVEEgKFJheWVzaCBDb21wYW55KTCCASIwDQYJKoZIhvcNAQEBBQADggEP&#10;ADCCAQoCggEBANfZFmIBI2ntMFLd1s9oZ0z6j5B/UyBZX5al0qWEHu12Vs2fwMFj&#10;rOjBdMKChkb2JZJET0nXHO0mujwxfO7BtRARKE8mWKrxdfm37TKlu9VMyXAzgD21&#10;+CSXQGkjO/b4H+aWrpIR+Dfb3Dal8beyY8Bk5dohSP1tIMvW9CfVYLscmfkjDBms&#10;ut2CX7lMRzaUHTHrEu9f1QxuH+0EOhBvM+D+I3CikQP1VdQilCq9ePgicLwKK004&#10;LMyW70BacT5J9hC0sNJ5L/cR0u1kkH8HNnzvDyz6GiQagquN73pi98gCEPjlkzlh&#10;stIyX2p+3VCkGd9TaWFQM2p11LNPvE9FmQ0CAwEAAaMqMCgwDgYDVR0PAQH/BAQD&#10;AgeAMBYGA1UdJQEB/wQMMAoGCCsGAQUFBwMDMA0GCSqGSIb3DQEBCwUAA4IBAQAs&#10;deB/AdhIxrd8fnUg/Dhc4d1N7P9VVrz7BTCkfjCAZrj7+vVonCFERCRmFIARo4ZU&#10;fnDuJFEJp49vgve/q9JuFPmNL9M6A1GI1zomBnM3xvrFGErOk2KsRWa2Ot5/lHUn&#10;mRNbePhuZgOAXTrSA0CsNKrT28cn+DBHR4gA1C6F+nTK2b8NTjPmmFgJPVeZWu9u&#10;HPFV2yZB5zBSBPzZ5ehPgEip7/Lu0jQ7wL0gxb38QDTzLj7mmkEBPqavT7zYMnjn&#10;ebjzZow62HHrWok2PuDIU3ySK7gReoILyzCd+hEjrA6qDTs6zCRZrsPqL92EsPcE&#10;sPuxF7s8Ye5pw9Htoipd&#10;-----END CERTIFICATE-----"/>
+    <meta-data android:name="expo.modules.updates.CODE_SIGNING_METADATA" android:value="{&quot;keyid&quot;:&quot;main&quot;,&quot;alg&quot;:&quot;rsa-v1_5-sha256&quot;}"/>
+    <meta-data android:name="expo.modules.updates.ENABLED" android:value="true"/>
+    <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true"/>
+    <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
+    <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://fahva.rayesh-team.ir/ota"/>
+    <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|assetsPaths" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

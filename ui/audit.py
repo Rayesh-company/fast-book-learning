@@ -38,6 +38,7 @@ ACCOUNT_CREATED = "account_created"
 BALANCE_TOPPED = "balance_topped"
 ADMIN_SEEDED = "admin_seeded"
 PHONE_ATTACHED = "phone_attached"
+TOKEN_EPOCH_BUMPED = "token_epoch_bumped"
 
 
 def _now() -> str:

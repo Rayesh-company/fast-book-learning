@@ -28,8 +28,12 @@ downloads silently, and runs the new bundle on its next restart. The user does n
      npx expo export --platform android --output-dir ../.scratch/ota-export
    ```
 
-3. **Publish**: `py scripts/publish_ota.py ../.scratch/ota-export` — writes
-   `ui/ota/manifest.json` + `ui/ota/current/` (one live update; replaces the previous).
+3. **Publish**: `py scripts/publish_ota.py ../.scratch/ota-export` — signs the
+   manifest with the operator's OTA key (env `CWB_OTA_PRIVATE_KEY`, F-019) and writes
+   `ui/ota/manifest.json` + `manifest.sig.json` + `ui/ota/current/` (one live update;
+   replaces the previous). **Set the key env every publish** — a keyless publish is
+   loud and unsigned, and APKs carrying the code-signing certificate REFUSE it
+   (they stay on their embedded bundle; see `mobile/KEYS.md`).
 
 4. **Deploy**: the payload rides the tree to the server (tarball swap carries `ui/ota`,
    like `books/` and `render-cache/`); a container deploy rebuilds the session image
@@ -49,5 +53,16 @@ downloads silently, and runs the new bundle on its next restart. The user does n
 
 - `gradlew assembleRelease` / `assembleDebug`, `npx expo run:android`, `eas build`
 - Creating, copying, or shipping any `*.apk` / `*.aab`
-- Committing `ui/ota/current/` or `ui/ota/manifest.json` (build output; the publish
-  script + deploy own them)
+- Committing `ui/ota/current/`, `ui/ota/manifest.json`, or `ui/ota/manifest.sig.json`
+  (build output; the publish script + deploy own them)
+
+## If a PM-approved native build is ever on the table (the sole exception)
+
+- The release signing is fail-closed (F-018): `mobile/android/app/build.gradle` refuses a
+  release without `CWB_UPLOAD_*` env — the keystore lives outside the repo in
+  `~/.cwb-keys/` with its passwords; every value and fingerprint is in `mobile/KEYS.md`.
+- `npx expo prebuild` REGENERATES `android/app/build.gradle` — the signing block and the
+  `whenReady` guard must be re-applied after every prebuild (the comment in the file says
+  so; `mobile/KEYS.md` too).
+- A new signing identity cannot install OVER the previous APK — users uninstall + install
+  once, and re-login. Plan the wave before cutting the binary.

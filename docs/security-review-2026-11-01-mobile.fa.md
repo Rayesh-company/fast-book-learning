@@ -83,7 +83,7 @@ flowchart LR
 |---|---|---|
 | F-018 امضای debug | **بسته** ✓ | `apksigner verify` روی APK تازه: `CN=chat-with-books, OU=Rayesh`، SHA-256 `cd599cd8…14cb6d0` = اثر انگشت ثبت‌شده در `mobile/KEYS.md`؛ گارد fail-closed در `android/app/build.gradle` (تست شد: بدون env، بیلد release می‌میرد)؛ keystore بیرون ریپو در `~/.cwb-keys/` |
 | F-019 OTA بی‌امضا | **بسته** ✓ (کد؛ انتشار بعدی امضاشدار) | `scripts/ota_codesigning.py` (stdlib خالص؛ openssl `Verified OK`)؛ `publish_ota.py` امضا + sidecar؛ `serve.py` هدر `expo-signature` (RFC 8941، از سورس نیتیو sdk-57 استخراج شد)؛ گواهی داخل APK (2 تطبیق CODE_SIGNING)؛ ۸ تست در `tests/test_ota_codesigning.py` |
-| F-020 توکن بی‌لغو | **بسته** ✓ | `token_epoch` (مهاجرت store) در توکن و گیتِ `resolve_identity`؛ `POST /api/admin/token-epoch` با audit؛ ۳ تست در `tests/test_token_epoch.py` (توکن قدیمی شکل تا اولین bump زنده می‌ماند) |
+| F-020 توکن بی‌لغو | **بسته** ✓ | `token_epoch` (مهاجرت store) در توکن و گیتِ `resolve_identity`؛ `POST /api/admin/token-epoch` با audit؛ ۲ تست در `tests/test_token_epoch.py` (توکن قدیمی شکل تا اولین bump زنده می‌ماند). تغییر گذرواژه هنوز مسیری در محصول ندارد؛ هر وقت اضافه شد باید همان‌جا bump کند |
 | F-021 پرمیشن‌های اضافی | **بسته** ✓ | `blockedPermissions` در app.json → badging APK تازه: فقط `INTERNET/VIBRATE/ACCESS_NETWORK_STATE/USE_BIOMETRIC/USE_FINGERPRINT` — SYSTEM_ALERT_WINDOW و READ/WRITE_EXTERNAL_STORAGE رفته‌اند |
 | F-022 native رهگیری‌نشده | **بسته** ✓ | `mobile/android/` حالا رهگیری می‌شود (prebuild خروجی + `android/.gitignore` خودش)؛ کلیدها بیرون ریپو با سند `mobile/KEYS.md` |
 

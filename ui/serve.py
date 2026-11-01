@@ -93,12 +93,14 @@ try:
         account_by_phone,
         admins_exist,
         attach_phone,
+        bump_token_epoch,
         create_account,
         credit_balance,
         deduct_balance,
         ensure_admin,
         get_balance,
         get_profile,
+        get_token_epoch,
         list_accounts,
         normalize_local_phone,
         save_profile,
@@ -266,12 +268,14 @@ except ImportError:  # the container runs this file as a script beside the modul
         account_by_phone,
         admins_exist,
         attach_phone,
+        bump_token_epoch,
         create_account,
         credit_balance,
         deduct_balance,
         ensure_admin,
         get_balance,
         get_profile,
+        get_token_epoch,
         list_accounts,
         normalize_local_phone,
         save_profile,
@@ -729,11 +733,16 @@ def issue_token(email: str, role: str, now: float = None) -> str:
     """One signed login token — payload.signature, both URL-safe. The
     expiry rides inside the signed payload so a client cannot extend
     it; `now` is the injected clock the tests pin (the TurnBudget
-    pattern), never read from env."""
+    pattern), never read from env. The Account's token_epoch rides
+    along too (F-020 of the 2026-11-01 review): the resolver refuses
+    any token minted below the Account's current generation, so a bump
+    ends every outstanding token at once. An unknown Account reads 0 —
+    the pre-epoch shape those tests mint against."""
     payload = {
         "email": email,
         "role": role,
         "exp": int((time.time() if now is None else now) + AUTH_TOKEN_TTL),
+        "epoch": get_token_epoch(email),
     }
     body = _b64url_encode(
         json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -769,7 +778,12 @@ def verify_token(token: str):
     email, role = payload.get("email"), payload.get("role")
     if not isinstance(email, str) or not email or not isinstance(role, str):
         return None
-    return {"email": email, "role": role}
+    # The token generation rides through to the resolver (F-020): a
+    # payload without the claim — every pre-epoch token — reads 0.
+    epoch = payload.get("epoch", 0)
+    if not isinstance(epoch, int):
+        return None
+    return {"email": email, "role": role, "epoch": epoch}
 
 
 def _request_token(handler):
@@ -839,6 +853,15 @@ def resolve_identity(handler):
     claims = verify_token(_request_token(handler))
     if claims is not None:
         account = account_by_email(claims["email"])
+        # The epoch gate (F-020 of the 2026-11-01 review): a token
+        # minted below the Account's current generation refuses like a
+        # bad token — one 401, no reason leaked. A pre-epoch token
+        # (no claim) validates against epoch 0, so the migration
+        # invalidates nobody until the first bump.
+        if account is not None and claims.get("epoch", 0) != get_token_epoch(
+            claims["email"]
+        ):
+            account = None
     else:
         account = None
     if account is None:
@@ -2303,7 +2326,16 @@ class SessionHandler(SimpleHTTPRequestHandler):
         id, createdAt, runtimeVersion, launchAsset, assets); no payload
         yet answers 204 No Content, the protocol's "you are current",
         and the client keeps what it has. The route stays OPEN like
-        /health: it leaks nothing the manifest doesn't already name."""
+        /health: it leaks nothing the manifest doesn't already name.
+
+        The publish script signs the manifest with the operator's
+        private key and parks the base64 signature beside it
+        (manifest.sig.json, F-019 of the 2026-11-01 review); when the
+        sidecar exists the same bytes ride with the expo-signature
+        header — the RFC 8941 dictionary the code-signing-configured
+        client verifies against its embedded certificate. Without the
+        sidecar the response keeps the old shape: the pre-certificate
+        APKs never look at the header."""
         manifest = OTA_DIR / "manifest.json"
         try:
             body = manifest.read_bytes()
@@ -2315,6 +2347,19 @@ class SessionHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        try:
+            sig = json.loads((OTA_DIR / "manifest.sig.json").read_bytes())
+        except (OSError, ValueError):
+            sig = None
+        if isinstance(sig, dict) and isinstance(sig.get("signature"), str):
+            self.send_header(
+                "expo-signature",
+                'sig="{}", keyid="{}", alg="{}"'.format(
+                    sig["signature"],
+                    str(sig.get("keyid") or "main"),
+                    str(sig.get("alg") or "rsa-v1_5-sha256"),
+                ),
+            )
         self.end_headers()
         self.wfile.write(body)
 
@@ -2740,6 +2785,12 @@ class SessionHandler(SimpleHTTPRequestHandler):
             return
         if path == "/api/admin/topup":
             self._api_admin_topup()
+            return
+        if path == "/api/admin/token-epoch":
+            # The kill switch (F-020 of the 2026-11-01 review): every
+            # outstanding token of one Account — web cookie and phone
+            # Bearer alike — refuses from the next request on.
+            self._api_admin_bump_token_epoch()
             return
         if path == "/admin/attach":
             # The console's attach form (T21, GitLab #23): the legacy
@@ -3996,6 +4047,35 @@ class SessionHandler(SimpleHTTPRequestHandler):
                 "new_balance_toman": new_balance,
             },
         )
+
+    def _api_admin_bump_token_epoch(self) -> None:
+        """JSON endpoint to invalidate every outstanding token of one
+        Account (F-020 of the 2026-11-01 review): the Account's token
+        epoch climbs, and the resolver refuses anything minted below it
+        — web cookies and phone Bearer tokens alike, whatever their
+        signed expiry. The audited «خروج از همهٔ دستگاه‌ها»."""
+        admin = self._admin_gate()
+        if admin is None:
+            return
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            email = str(payload.get("email") or "").strip().lower()
+            if not email:
+                raise ValueError("email is required")
+        except (ValueError, KeyError, TypeError) as exc:
+            self._send_json(400, {"detail": str(exc)})
+            return
+        new_epoch = bump_token_epoch(email)
+        if new_epoch is None:
+            self._send_json(404, {"detail": "حسابی با این ایمیل یافت نشد."})
+            return
+        audit_quiet(
+            audit.TOKEN_EPOCH_BUMPED,
+            actor_email=admin["email"],
+            detail={"email": email, "new_epoch": new_epoch},
+        )
+        self._send_json(200, {"email": email, "token_epoch": new_epoch})
 
     def _profile_data(self) -> None:
         """The profile read (T24, GitLab #27): the Account's own Balance

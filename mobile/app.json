@@ -15,7 +15,12 @@
     "updates": {
       "url": "https://fahva.rayesh-team.ir/ota",
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "codeSigningCertificate": "./certs/certificate.pem",
+      "codeSigningMetadata": {
+        "keyid": "main",
+        "alg": "rsa-v1_5-sha256"
+      }
     },
     "runtimeVersion": {
       "policy": "appVersion"
@@ -29,7 +34,16 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#d8cbae"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "INTERNET",
+        "VIBRATE"
+      ],
+      "blockedPermissions": [
+        "SYSTEM_ALERT_WINDOW",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

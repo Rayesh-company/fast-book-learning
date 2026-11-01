@@ -1,0 +1,40 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath('com.android.tools.build:gradle')
+    classpath('com.facebook.react:react-native-gradle-plugin')
+    classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+  }
+}
+
+allprojects {
+  repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://www.jitpack.io' }
+  }
+}
+
+// expo-updates' CMake build (BSPatch) pins no ndkVersion of its own, so
+// AGP demands its hardcoded default (27.0.12077973) — a version the
+// SDK manager no longer serves. Pin the installed NDK for every library
+// module instead (F-018 rebuild, 2026-11-01); plugins.withId runs at the
+// plugin's apply, before the module's own android{} block and before the
+// NDK locator reads the version. Like the signing block in
+// app/build.gradle, this is a manual patch on the prebuild output:
+// re-apply after every `expo prebuild`.
+subprojects { subproject ->
+  subproject.plugins.withId('com.android.library') {
+    if (subproject.android.hasProperty('ndkVersion')) {
+      subproject.android.ndkVersion = '27.1.12297006'
+    }
+  }
+}
+
+apply plugin: "expo-root-project"
+apply plugin: "com.facebook.react.rootproject"

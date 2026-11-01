@@ -68,6 +68,7 @@ mobile/.expo/
 # scripts/publish_ota.py — the publish + deploy carry it, never git.
 ui/ota/current/
 ui/ota/manifest.json
+ui/ota/manifest.sig.json
 
 # The برنامک's binding store (ADR-0021) — the deployed copy lives on
 # /data; the worktree's is runtime data, never git.

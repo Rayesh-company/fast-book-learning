@@ -26,12 +26,17 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import os
 import shutil
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ota_codesigning  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -76,6 +81,8 @@ def main() -> int:
                         help="runtimeVersion (default: app.json's expo.version)")
     parser.add_argument("--out", default=None,
                         help="output dir (default: ui/ota, or $SESSION_OTA_DIR)")
+    parser.add_argument("--key", default=None,
+                        help="the OTA code-signing private key (default: $CWB_OTA_PRIVATE_KEY)")
     args = parser.parse_args()
 
     export = Path(args.export_dir).resolve()
@@ -130,9 +137,44 @@ def main() -> int:
         "launchAsset": asset_entry(launch, is_launch=True),
         "assets": assets,
     }
-    (out_dir / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    # The bytes signed and the bytes served must be byte-identical: the
+    # client verifies the signature over the exact response body (F-019).
+    manifest_bytes = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+    (out_dir / "manifest.json").write_bytes(manifest_bytes)
+
+    # The code signature (F-019): the operator's private key — env or
+    # --key, never in the repo — signs the manifest; the sidecar rides
+    # beside it and serve.py turns it into the expo-signature header. An
+    # APK built with the embedded certificate REFUSES an unsigned
+    # manifest, so a keyless publish is loud and stays a decision.
+    metadata = (expo.get("updates") or {}).get("codeSigningMetadata") or {}
+    keyid = str(metadata.get("keyid", "main"))
+    alg = str(metadata.get("alg", "rsa-v1_5-sha256"))
+    key_path = args.key or os.environ.get("CWB_OTA_PRIVATE_KEY")
+    if key_path:
+        n, e, d = ota_codesigning.load_private_key_pem(Path(key_path).read_text(encoding="utf-8"))
+        signature = ota_codesigning.sign_pkcs1_v15_sha256(n, d, manifest_bytes)
+        if not ota_codesigning.verify_pkcs1_v15_sha256(n, e, manifest_bytes, signature):
+            print("the just-made signature failed self-verification; refusing to publish",
+                  file=sys.stderr)
+            return 1
+        (out_dir / "manifest.sig.json").write_text(
+            json.dumps({
+                "signature": base64.b64encode(signature).decode("ascii"),
+                "keyid": keyid,
+                "alg": alg,
+            }, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"manifest signed (keyid={keyid}, alg={alg})")
+    else:
+        (out_dir / "manifest.sig.json").unlink(missing_ok=True)
+        print(
+            "هشدار (F-019): CWB_OTA_PRIVATE_KEY تنظیم نشد؛ منیفست بدون امضا منتشر شد — "
+            "APKهای دارای گواهی code signing این آپدیت را رد می‌کنند و روی باندل خودشان می‌مانند.",
+            file=sys.stderr,
+        )
+
     print(f"published OTA update {manifest['id']} (runtime {runtime}): "
           f"{len(assets)} assets + launch bundle -> {out_dir}")
     return 0

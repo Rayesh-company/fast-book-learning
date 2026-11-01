@@ -65,11 +65,17 @@ _ACCOUNTS_SCHEMA = (
     "role TEXT NOT NULL, "
     "created_at TEXT NOT NULL, "
     "balance_toman INTEGER NOT NULL DEFAULT 0, "
+    "token_epoch INTEGER NOT NULL DEFAULT 0, "
     "profile_json TEXT)"
 )
 _ACCOUNTS_MIGRATIONS = [
     ("accounts", "balance_toman", "INTEGER NOT NULL DEFAULT 0"),
     ("accounts", "profile_json", "TEXT"),
+    # F-020 of the 2026-11-01 mobile review: the token generation —
+    # every login token carries the epoch it was minted at, and the
+    # resolver refuses tokens older than the account's current one. A
+    # bump is the kill switch the stateless token never had.
+    ("accounts", "token_epoch", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 
@@ -237,6 +243,44 @@ def account_by_email(email):
     finally:
         conn.close()
     return _row_to_account(row) if row is not None else None
+
+
+def get_token_epoch(email) -> int:
+    """The Account's current token generation (F-020 of the 2026-11-01
+    review): every minted token carries the epoch it was born at and the
+    identity resolver refuses anything older. Unknown email and a fresh
+    store both read 0 — the shape every pre-epoch token was minted
+    against, so the migration invalidates nobody."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT token_epoch FROM accounts WHERE email = ?",
+            (_normalize_email(email),),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None or not isinstance(row[0], int):
+        return 0
+    return row[0]
+
+
+def bump_token_epoch(email) -> int | None:
+    """Invalidate every outstanding token of one Account (the «خروج از
+    همهٔ دستگاه‌ها» act the stateless token never had): the epoch climbs,
+    and every token minted below it — whatever its expiry — refuses at
+    the resolver from the next request on. Returns the new epoch, or
+    None for an unknown Account."""
+    conn = _connect()
+    try:
+        with conn:
+            row = conn.execute(
+                "UPDATE accounts SET token_epoch = token_epoch + 1 "
+                "WHERE email = ? RETURNING token_epoch",
+                (_normalize_email(email),),
+            ).fetchone()
+    finally:
+        conn.close()
+    return row[0] if row is not None else None
 
 
 def account_by_phone(phone):
