@@ -28,14 +28,18 @@ the Android client — living on the brand's own domain, with the booksai
   references are absolute (`/mobile/*`, `/vendor/*`, `/book-reader/*`) and
   flow through the general proxy unchanged. The bernamek's registered
   address becomes `https://fahva.rayesh-team.ir/` (eitayar panel).
-- **booksai's /mobile pages answer 404** (`location /mobile { return 404; }`
-  in `ops/nginx/booksai.conf`, answered at the edge before the proxy): the
-  page moved; typing the old address is a dead end by design. Everything
-  else on booksai is untouched — the web sheet at `/`, every API route, and
-  `/ota`, the manifest address the installed APKs hold NATIVELY (rule 001:
-  no OTA can ever change it; it proxies verbatim for the life of those
-  binaries). New builds bake `fahva/ota` (mobile/app.json); both doors serve
-  the same payload.
+- **booksai's /mobile forwards to fahva** (`location /mobile` in
+  `ops/nginx/booksai.conf`): the operator sent that address to too many
+  people for anything less than a redirect (a brief 404 interlude was
+  reversed within a day). Two shapes: plain links land on the clean root —
+  the app, no path in the bar; برنامک opens carrying `?initData=…` keep
+  path AND query on fahva, so the WebView's signed payload survives the
+  hop and every bernamek login keeps working until the eitayar panel names
+  the new root. Everything else on booksai is untouched — the web sheet at
+  `/`, every API route, and `/ota`, the manifest address the installed
+  APKs hold NATIVELY (rule 001: no OTA can ever change it; it proxies
+  verbatim for the life of those binaries). New builds bake `fahva/ota`
+  (mobile/app.json); both doors serve the same payload.
 - **The Android app points at fahva** — `mobile/src/api.ts` default and
   CI's export env are `https://fahva.rayesh-team.ir`; the OTA wave published
   under this decision (manifest `05c23d3f`, RSA-signed per F-019) carries

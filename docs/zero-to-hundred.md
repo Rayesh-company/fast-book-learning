@@ -525,7 +525,7 @@ npx tsc --noEmit                                          # وریفای تای�
 
 ### د) VPS
 
-`tarball swap` به `/home/ubuntu/chat-with-books` (PDFها و render-cache و `.env` و استورها از درخت قبلی منتقل می‌شوند) → `docker compose -p chat-withbooks up -d` → nginx روی `booksai.rayesh-team.ir` (TLS + `proxy_buffering off` + تایم‌اوت ≥ 1200s). اپ موبایل به `https://fahva.rayesh-team.ir/` وصل می‌شود (خانۀ اپ؛ `/mobile` روی booksai غلطبن است) — بک‌اندِ یکی است.
+`tarball swap` به `/home/ubuntu/chat-with-books` (PDFها و render-cache و `.env` و استورها از درخت قبلی منتقل می‌شوند) → `docker compose -p chat-withbooks up -d` → nginx روی `booksai.rayesh-team.ir` (TLS + `proxy_buffering off` + تایم‌اوت ≥ 1200s). اپ موبایل به `https://fahva.rayesh-team.ir/` وصل می‌شود (خانۀ اپ؛ `/mobile` روی booksai به همین ریشه ریدایرکت می‌شود) — بک‌اندِ یکی است.
 
 ---
 

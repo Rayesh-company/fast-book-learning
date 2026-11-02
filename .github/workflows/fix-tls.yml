@@ -177,8 +177,8 @@ jobs:
           curl -fsS -m 25 --retry 3 https://booksai.rayesh-team.ir/livez && echo " <- booksai livez over https"
           curl -fsS -m 25 --retry 3 https://fahva.rayesh-team.ir/ | grep -o "<title>[^<]*</title>" && echo " <- fahva root serves the app page"
           code=$(curl -s -m 25 -o /dev/null -w '%{http_code}' https://booksai.rayesh-team.ir/mobile)
-          echo "booksai /mobile -> $code (404 expected: the mobile pages live on fahva's root)"
-          [ "$code" = "404" ]
+          echo "booksai /mobile -> $code (301 expected: the old address forwards to fahva's root)"
+          [ "$code" = "301" ]
           echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
             -servername fahva.rayesh-team.ir 2>/dev/null | openssl x509 -noout -subject -dates
           echo | openssl s_client -connect "${{ secrets.DEPLOY_HOST }}:443" \
