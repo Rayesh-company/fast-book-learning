@@ -31,11 +31,13 @@ the Android client — living on the brand's own domain, with the booksai
 - **booksai's /mobile forwards to fahva** (`location /mobile` in
   `ops/nginx/booksai.conf`): the operator sent that address to too many
   people for anything less than a redirect (a brief 404 interlude was
-  reversed within a day). Two shapes: plain links land on the clean root —
-  the app, no path in the bar; برنامک opens carrying `?initData=…` keep
-  path AND query on fahva, so the WebView's signed payload survives the
-  hop and every bernamek login keeps working until the eitayar panel names
-  the new root. Everything else on booksai is untouched — the web sheet at
+  reversed within a day). ONE shape for every hop: the root, with the
+  query string riding it (`$is_args$args`) — plain links land on the bare
+  root, and برنامک opens carrying `?initData=…` land on
+  `https://fahva.rayesh-team.ir/?initData=…`: the app reads everything
+  from the query string (app.mjs: URLSearchParams(location.search)), so
+  the WebView's signed payload survives the hop with no path anywhere in
+  the bar. Everything else on booksai is untouched — the web sheet at
   `/`, every API route, and `/ota`, the manifest address the installed
   APKs hold NATIVELY (rule 001: no OTA can ever change it; it proxies
   verbatim for the life of those binaries). New builds bake `fahva/ota`
