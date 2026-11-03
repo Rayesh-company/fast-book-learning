@@ -1,6 +1,8 @@
 import {createMobileApp} from './app-ui.mjs';
 import {createApi} from './api.mjs';
 import {createDemoApi} from './demo-api.mjs';
+import {registerServiceWorker} from './pwa.mjs';
+registerServiceWorker(window);
 const query=new URLSearchParams(location.search);
 const demo=query.get('demo')==='1'||query.get('view')==='admin'||document.querySelector('meta[name="book-preview"]');
 const api=demo?createDemoApi({storage:localStorage}):createApi();

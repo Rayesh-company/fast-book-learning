@@ -1,0 +1,37 @@
+{
+  "id": "/mobile/",
+  "name": "کتاب و همراه",
+  "short_name": "کتاب و همراه",
+  "description": "مطالعهٔ صفحه‌به‌صفحهٔ کتاب‌ها، گفت‌وگو با متن و گوش دادن به جلسات — مثل یک اپ روی صفحهٔ گوشی.",
+  "lang": "fa",
+  "dir": "rtl",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "theme_color": "#faf8f3",
+  "background_color": "#faf8f3",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

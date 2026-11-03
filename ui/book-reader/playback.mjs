@@ -29,6 +29,7 @@ export function createNarrationPlayer({ bytes, mimeType, cues, rate = 1,
   const focus = () => { if (!disposed) onFocus(cueAt(cues, media.currentTime * 1000)); };
   const update = value => { if (!disposed) { state = value; onState(value); } };
   media.onPlaying(() => { update('playing'); focus(); });
+  media.onPaused(() => { update('paused'); }); // the platform pausing the element (locked screen) must not leave a stale 'playing'
   media.onTimeUpdate(focus);
   media.onSeeking(() => onFocus(null));
   media.onSeeked(focus);

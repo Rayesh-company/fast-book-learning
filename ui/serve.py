@@ -1499,6 +1499,11 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if not S_ISREG(stat.st_mode) or self.headers.get("Range"):
             return False
         etag = f'"{stat.st_size:x}-{stat.st_mtime_ns:x}"'
+        # The mobile face's worker may own the whole origin's scope
+        # (ADR-0026): the page answers at / on fahva while the script
+        # sits under /mobile/, so the registration needs the explicit
+        # allowance — absent the header Chrome refuses it outright.
+        sw_allowed = path == "/mobile/sw.js"
         # The cacheable family (code, styles, fonts, icons) rides the
         # short-max-age + stale-while-revalidate policy; everything else
         # (JSON above all — the OTA manifest, the data files) stays on
@@ -1512,6 +1517,8 @@ class SessionHandler(SimpleHTTPRequestHandler):
         if self.headers.get("If-None-Match") == etag:
             self.send_response(304)
             self.send_header("ETag", etag)
+            if sw_allowed:
+                self.send_header("Service-Worker-Allowed", "/")
             self.end_headers()
             return True
         body = None
@@ -1524,6 +1531,8 @@ class SessionHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", self.guess_type(file_path))
         self.send_header("ETag", etag)
+        if sw_allowed:
+            self.send_header("Service-Worker-Allowed", "/")
         if body is not None:
             self.send_header("Content-Encoding", "gzip")
             self.send_header("Vary", "Accept-Encoding")
