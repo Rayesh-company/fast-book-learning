@@ -6,11 +6,13 @@ import {createLectureTrack,sentenceIndexAt,toneFor,pageForTime,pageAtTime,lineBo
 
 import {lectureParagraphAnchors} from './lecture-paragraphs.mjs';
 
+import {createMediaSessionBridge} from './media-session-bridge.mjs';
+
 
 
 const digits=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
 
-export function installLecturePlayer({element,reader,book,getPage,showPage,getPageData,
+export function installLecturePlayer({element,reader,book,bookTitle,getPage,showPage,getPageData,
 
   fetchImpl=fetch,onActivate=()=>{},onExpanded=()=>{},createAudio}) {
 
@@ -74,6 +76,12 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
 
   let sessions=[],session=null,track=null,last='',owning=false,loadToken=0,epoch=0,ticker=null,sessionRequest=null;
 
+  // Locked-screen continuity: expectPlaying marks playback the user started and never
+  // paused — the resume net below brings it back when the page becomes visible again.
+  const media=createMediaSessionBridge({win});
+
+  let expectPlaying=false;
+
   let initialPosition=true,expanded=false,listReady,anchorsByPage=new Map(),syncRevision=0,intent=0;
 
   const say=text=>{if(status)status.textContent=text||'';};
@@ -113,6 +121,10 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
     const playing=!audio.paused&&!audio.ended;
 
     play.dataset.state=playing?'playing':'paused';play.setAttribute('aria-label',playing?'مکث درس‌گفتار':'پخش درس‌گفتار');
+
+    media.state(playing?'playing':'paused');
+
+    media.position({position:audio.currentTime,duration:session?.duration,rate:audio.playbackRate});
 
     element.querySelector('[data-lecture-player]')?.setAttribute('data-playing',String(playing));
 
@@ -176,7 +188,7 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
 
     closeRatePanel();
 
-    audio.pause();audio.removeAttribute('src');audio.currentTime=0;session=null;track=null;anchorsByPage=new Map();clearFocus();setAvailable(false);
+    audio.pause();audio.removeAttribute('src');audio.currentTime=0;session=null;track=null;anchorsByPage=new Map();clearFocus();setAvailable(false);expectPlaying=false;
 
     initialPosition=true;caption.textContent='';seek.value='0';clock.textContent=formatClock(0);total.textContent=formatClock(0);seek.setAttribute('aria-valuetext',formatClock(0));
 
@@ -199,6 +211,8 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
       seek.max=String(Math.ceil(body.duration||0));total.textContent=formatClock(body.duration);
 
       if(body.audio_url){
+
+        media.announce({title:`جلسهٔ ${digits(number)}`,artist:bookTitle||book,album:'کتاب و همراه'});
 
         const savedRate=rate?(Number(rate.value||rate.getAttribute?.('data-rate'))||1):1;
 
@@ -356,13 +370,13 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
 
     initialPosition=false;onActivate();
 
-    try{await audio.play();if(!valid(token,revision)||action!==intent)audio.pause();else say('');}
+    try{await audio.play();if(!valid(token,revision)||action!==intent){audio.pause();expectPlaying=false;}else{expectPlaying=true;say('');}}
 
     catch{if(valid(token,revision))say('پخش صوت ممکن نشد؛ دوباره پخش را بزنید.');}
 
   }
 
-  function pause(){++intent;++epoch;++syncRevision;audio.pause();}
+  function pause(){++intent;++epoch;++syncRevision;expectPlaying=false;audio.pause();}
 
   async function seekTo(time){
 
@@ -461,6 +475,8 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
     if([.75,1,1.25,1.5,2].includes(value)){
 
       audio.playbackRate=value;
+
+      media.position({position:audio.currentTime,duration:session?.duration,rate:value});
 
       if(rate){
 
@@ -677,7 +693,25 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
 
   for(const type of ['play','pause','ended'])audio.addEventListener(type,setPlayState,{signal});
 
-  audio.addEventListener('error',()=>{if(audio.getAttribute('src'))say('پخش صوت ناموفق بود؛ دوباره جلسه را انتخاب کنید.');setPlayState();},{signal});
+  audio.addEventListener('error',()=>{if(audio.getAttribute('src'))say('پخش صوت ناموفق بود؛ دوباره جلسه را انتخاب کنید.');expectPlaying=false;setPlayState();},{signal});
+
+  media.handlers({
+    play:()=>{if(audio.paused)run(start());},
+    pause:()=>{if(!audio.paused)pause();},
+    seekbackward:()=>run(seekTo(audio.currentTime-10)),
+    seekforward:()=>run(seekTo(audio.currentTime+10)),
+    previoustrack:()=>run(skipParagraph(-1)),
+    nexttrack:()=>run(skipParagraph(1)),
+  });
+
+  // A locked screen can have the platform pause the element mid-lecture; coming back,
+  // the voice resumes from where it stopped unless the user themselves paused it.
+  doc.addEventListener('visibilitychange',()=>{
+    if(doc.visibilityState!=='visible')return;
+    if(!expectPlaying||!session?.audio_url)return;
+    if(!audio.paused||audio.ended)return;
+    run(start());
+  },{signal});
 
   $('.pdf-surface')?.addEventListener('click',event=>{
 
@@ -703,7 +737,7 @@ export function installLecturePlayer({element,reader,book,getPage,showPage,getPa
 
     get track(){return track;},get audio(){return audio;},get sessions(){return sessions;},get expanded(){return expanded;},get ready(){return ready;},
 
-    dispose(){++intent;++loadToken;++epoch;stopTicker();audio.pause();clearFocus();life.abort();sessionRequest?.abort();audio.removeAttribute('src');}};
+    dispose(){++intent;++loadToken;++epoch;expectPlaying=false;stopTicker();audio.pause();clearFocus();life.abort();sessionRequest?.abort();audio.removeAttribute('src');media.clear();}};
 
 }
 

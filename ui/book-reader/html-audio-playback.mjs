@@ -22,6 +22,7 @@ export class HtmlAudioPlaybackPort {
         }
         const listeners = [];
         const endedListeners = [];
+        const pausedListeners = [];
         const errorListeners = [];
         const playingListeners = [];
         const timeUpdateListeners = [];
@@ -44,6 +45,15 @@ export class HtmlAudioPlaybackPort {
             if (detached)
                 return;
             for (const listener of endedListeners)
+                listener();
+        });
+        add(element, "pause", () => {
+            if (detached)
+                return;
+            // Reaching the end also fires pause; the ended event reports that itself.
+            if (element.ended)
+                return;
+            for (const listener of pausedListeners)
                 listener();
         });
         add(element, "error", () => {
@@ -199,6 +209,9 @@ export class HtmlAudioPlaybackPort {
             },
             onEnded(listener) {
                 endedListeners.push(listener);
+            },
+            onPaused(listener) {
+                pausedListeners.push(listener);
             },
             onError(listener) {
                 errorListeners.push(listener);

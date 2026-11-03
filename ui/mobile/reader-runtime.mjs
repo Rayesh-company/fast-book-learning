@@ -1,5 +1,6 @@
 import { createBookReader, PDF_RENDER_OPTIONS } from '../book-reader/index.mjs';
 import { installNarrationControls } from '../book-reader/audio-controls.mjs';
+import { createScreenWakeLock } from '../book-reader/screen-wake-lock.mjs';
 import { createPanelFocus } from './panel-focus.mjs';
 import { installLecturePlayer } from '../book-reader/lecture-player.mjs';
 import { pdfParagraphs } from '../book-reader/paragraphs.mjs';
@@ -26,6 +27,10 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
   const initialBook = titles[query.get('book')] ? query.get('book') : 'tarhe-kolli';
   const initialPage = Number.isInteger(number(query.get('page'))) && number(query.get('page')) > 0 ? number(query.get('page')) : 1;
   const listeners = new doc.defaultView.AbortController();
+  // The reading view holds the screen awake (PM call 2026-11-03): audio alone never
+  // does — a low-battery user locks the phone and just listens.
+  const wakeLock = createScreenWakeLock({ win: doc.defaultView });
+  const syncWakeLock = () => wakeLock.set(!disposed && records.size > 0);
   let loginPromise;
   let disposed = false;
   let authOverlay;
@@ -173,6 +178,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
       product:phone.classList.contains('product-shell'),pageData:new Map()};
     state.panelFocus = createPanelFocus(phone);
     records.set(phone, state);
+    syncWakeLock();
     state.ready = (async () => {
       await ensureLogin(phone);
       if (disposed || records.get(phone) !== state) return;
@@ -183,6 +189,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
       state.reader = createBookReader({pdfjs, onSelection: selectionChanged,
         onPaintError: () => fail(state, new Error('نمایش PDF این صفحه ممکن نشد.'))});
       phone.bookReader = state.reader;
+      phone.wakeLock = wakeLock;
       const audioFetch = phone.dataset.demo === 'true' ? async () => ({ok:false,json:async()=>({detail:'صوت نمونه تولید نمی‌شود؛ شنیدن واقعی کتاب در نسخهٔ متصل به سرویس در دسترس است.'})}) : fetchImpl;
       if(state.product){
         const changePage=page=>{state.ready=render(state,page);return state.ready;};
@@ -195,7 +202,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
           return state.pageData.get(page);
         };
         state.chrome=installReaderChrome({phone,getPage:()=>state.page,getCount:()=>state.pdf.numPages,goToPage:changePage});
-        state.lecture=installLecturePlayer({element:phone,reader:state.reader,book:state.book,fetchImpl,getPageData:pageData,
+        state.lecture=installLecturePlayer({element:phone,reader:state.reader,book:state.book,bookTitle:titles[state.book],fetchImpl,getPageData:pageData,
           getPage:()=>state.page,showPage:async page=>{if(page===state.page){await state.ready;return;}state.ready=render(state,page,false,{audio:true});await state.ready;},
           onExpanded:open=>{const player=phone.querySelector('[data-lecture-player]');player.dataset.expanded=String(open);phone.style.setProperty('--reader-player-height',`${player.getBoundingClientRect().height||88}px`);state.chrome?.setOpen(open);}});
         state.playerGestures=installPlayerGestures({root:phone.querySelector('[data-lecture-player]'),expand:()=>state.lecture.open()});
@@ -207,7 +214,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
       }else state.controls = installNarrationControls({element: phone, fetchImpl:audioFetch,
         reader: {captureSelection: () => state.reader.captureSelection() ?? state.selection,
           getPageIndex: page => state.reader.getPageIndex(page), loadAudio: input => state.reader.loadAudio(input)},
-        getContext: async () => { await state.ready; return records.get(phone) === state ? {doc:state.book,page:state.page} : null; }});
+        getContext: async () => { await state.ready; return records.get(phone) === state ? {doc:state.book,page:state.page,title:titles[state.book]} : null; }});
       try {
         const flatten = nodes => (nodes||[]).flatMap(node => [node,...flatten(node.items)]);
         state.outline = (await Promise.all(flatten(await state.pdf.getOutline?.()).slice(0,120).map(async node => {
@@ -234,7 +241,8 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
   function remove(state) {
     state.phone.dataset.pdfScroll = String(state.viewport.scrollTop);
     state.revision++; state.panelFocus.dispose(); state.chrome?.dispose();state.gestures?.dispose();state.controls?.dispose(); state.lecture?.dispose();state.playerGestures?.dispose();state.picker?.dispose(); state.reader?.clear(); state.observer?.disconnect();
-    delete state.phone.bookReader; delete state.phone.lecturePlayer; records.delete(state.phone);
+    delete state.phone.bookReader; delete state.phone.lecturePlayer; delete state.phone.wakeLock; records.delete(state.phone);
+    syncWakeLock();
   }
 
   function reconcile() {
@@ -343,7 +351,7 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
   }, {signal:listeners.signal});
   reconcile();
   return { records, ready: () => Promise.all([...records.values()].map(state => state.ready)),
-    dispose() { disposed = true; mutation.disconnect(); listeners.abort(); authOverlay?.remove();
+    dispose() { disposed = true; mutation.disconnect(); listeners.abort(); wakeLock.dispose(); authOverlay?.remove();
       for (const state of [...records.values()]) remove(state);
       for (const task of documents.values()) Promise.resolve(task.destroy()).catch(() => {}); documents.clear(); } };
 }
