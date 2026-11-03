@@ -5,6 +5,7 @@ import {createInterfaceMotion} from './motion.mjs';
 import {createPanelFocus} from './panel-focus.mjs';
 import {installPageSessionPicker,fetchLectureSessions} from './page-session-picker.mjs';
 import {resolveBookToc,renderTocBodyMarkup,activeTocLocation} from './book-toc.mjs';
+import {isStandalone,isIos} from './pwa.mjs';
 const normalPhone=v=>String(v).replace(/[۰-۹]/g,c=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/[\s()-]/g,'').replace(/^\+98|^0098/,'0');
 const normalDigits=v=>String(v).replace(/[۰-۹]/g,c=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/\D/g,'');
 const normalText=v=>String(v).normalize('NFKC').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/[\u064b-\u065f\u0670\u0640\u200c\u200b\u200d\ufeff\u00a0\x00-\x1f\s]/g,'').toLowerCase();
@@ -22,7 +23,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function syncHighlights(){phone()?.bookReader?.setHighlights?.(s.notes.filter(n=>(n.doc||n.source?.book)===s.book&&n.source?.capture==='highlight').flatMap(n=>n.source?.selection?.pages||[]));}
  const s={view:'boot',demo:api.demo,loginRequired:api.loginRequired!==false,pageFiltering:api.demo||api.pageFiltering===true,book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},account:null,
   messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',sessionContext:null,theme:'system',profile:null,
-  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,otpDraft:'',waitlisted:false,tocSearch:'',tocExpanded:null,drawerSections:{highlights:true,bookmarks:true,notes:true},adminTab:'accounts',adminSearch:'',adminAccounts:[],adminLoading:false,adminTokens:null,adminTokensLoading:false};
+  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,otpDraft:'',waitlisted:false,tocSearch:'',tocExpanded:null,drawerSections:{highlights:true,bookmarks:true,notes:true},adminTab:'accounts',adminSearch:'',adminAccounts:[],adminLoading:false,adminTokens:null,adminTokensLoading:false,canInstall:false,installKind:'none'};
  let storageKey,disposed=false,job=null,sequence=0,accountRevision=0,recordRevision=0,recordPending=false,otpTimer,otpInFlight=false,webOtpAbort=null,pending=new Set(),toastTimer,recorder,timer,media,recordingStarted,recordingPlace,recordDraft,audioCtx,analyser,waveAnimId;
  const safeRead=key=>{try{return JSON.parse(storage?.getItem(key));}catch{return null;}};
  const persist=()=>{if(!storageKey||disposed)return;try{storage?.setItem(storageKey,JSON.stringify({view:['reader','chat'].includes(s.view)?s.view:s.stack.find(v=>['reader','chat'].includes(v))||'reader',book:s.book,positions:s.positions,drafts:s.drafts,pages:s.pages,scope:s.scope,sessionContext:s.sessionContext,sessionId:s.sessionId,chatScroll:s.chatScroll,follow:s.follow,theme:s.theme,readerGuideSeen:s.readerGuideSeen}));}catch{}};
@@ -536,6 +537,16 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
     }
    }
    if(a==='account')navigate('account');
+  if(a==='install-app')openSheet('install');
+  if(a==='confirm-install')run((async()=>{
+   const prompt=installPrompt;if(!prompt)return;
+   prompt.prompt();
+   const{outcome}=await prompt.userChoice.catch(()=>({outcome:'dismissed'}));
+   installPrompt=null;s.canInstall=false;closeOverlay();
+   if(outcome!=='accepted')toast('نصب در این لحظه انجام نشد؛ بعداً از منو دوباره تلاش کنید.');
+   // The accepted ride stays silent here: appinstalled owns the
+   // celebration, wherever the install came from.
+  })());
   if(a==='edit-profile')navigate('profile');
   if(a==='subscription')navigate('subscription');
   if(a==='theme'){s.theme=t.dataset.theme;render();}
@@ -686,6 +697,16 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   }
   await refresh();if(s.sessionId){try{const row=await api.session(s.sessionId);s.messages=row.messages||[];restoreUnanswered();}catch{s.sessionId=null;s.messages=[];}}if(s.account&&!s.account.profile_completed&&!s.demo){navigate('onboarding');return;}render();}
  const mediaQuery=win.matchMedia?.('(prefers-color-scheme: dark)');mediaQuery?.addEventListener('change',applyTheme,{signal:lifecycle.signal});
+ // The install door (ADR-0026): the drawer row shows only where the
+ // platform can actually install — Chromium's beforeinstallprompt, or
+ // iOS's share-sheet path (no event, instructions instead). An
+ // already-standalone app never asks to install itself.
+ let installPrompt=null;
+ if(!isStandalone(win)){
+  if(isIos(win)){s.canInstall=true;s.installKind='ios';}
+  win.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;s.canInstall=true;s.installKind='prompt';if(s.menu)renderOverlay();},listenerOptions);
+ }
+ win.addEventListener('appinstalled',()=>{installPrompt=null;s.canInstall=false;if(s.menu)renderOverlay();toast('برنامه نصب شد');},listenerOptions);
  const viewport=win.visualViewport;
  function keyboard(){if(viewport)doc.documentElement.style.setProperty('--app-height',`${viewport.height}px`);}
  viewport?.addEventListener('resize',keyboard,{signal:lifecycle.signal});keyboard();
