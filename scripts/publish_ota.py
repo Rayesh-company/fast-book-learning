@@ -132,7 +132,13 @@ def main() -> int:
 
     manifest = {
         "id": str(uuid.uuid4()),
-        "createdAt": datetime.now(timezone.utc).isoformat(),
+        # The createdAt the SDK's own parser can read: expo-updates'
+        # parseDateString accepts exactly yyyy-MM-dd'T'HH:mm:ss.SSS'Z' —
+        # isoformat()'s microseconds-plus-offset shape fails both its
+        # attempts and falls back to the parse moment, which makes every
+        # later check see this very wave as newer than itself (the
+        # reload loop, live-measured as a climbing restartCount).
+        "createdAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "runtimeVersion": runtime,
         "launchAsset": asset_entry(launch, is_launch=True),
         "assets": assets,

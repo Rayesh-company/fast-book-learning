@@ -26,6 +26,10 @@ export function installForegroundUpdates(): () => void {
     void (async () => {
       try {
         const check = await Updates.checkForUpdateAsync();
+        console.log(
+          `[cwb-updates] check available=${check.isAvailable} ` +
+            `server=${check.manifest?.id ?? "none"} running=${Updates.manifest?.id ?? "embedded"}`
+        );
         if (!check.isAvailable) return;
         // The race guard: right after a reload expo-updates' internal
         // "current" can lag the JS actually on screen, so the server's
@@ -35,6 +39,10 @@ export function installForegroundUpdates(): () => void {
         // user is already looking at.
         if (check.manifest?.id && check.manifest.id === Updates.manifest?.id) return;
         const fetched = await Updates.fetchUpdateAsync();
+        console.log(
+          `[cwb-updates] fetched=${fetched.isNew} ` +
+            `fetched-id=${"manifest" in fetched ? fetched.manifest?.id ?? "none" : "none"}`
+        );
         if (fetched.isNew) await Updates.reloadAsync();
       } catch {
         // The wire down, a refused signature, a throttled panel — any
