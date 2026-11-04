@@ -6,6 +6,7 @@ import { StatusBar, useColorScheme, View } from "react-native";
 import { dark, light } from "./src/theme";
 import { api, loadToken } from "./src/api";
 import { subscribeEvents } from "./src/events";
+import { installForegroundUpdates } from "./src/updates";
 import { LoginScreen } from "./src/screens/Login";
 import { HomeScreen } from "./src/screens/Home";
 import { SittingScreen } from "./src/screens/Sitting";
@@ -17,6 +18,13 @@ export default function App() {
   const [me, setMe] = useState<{ email: string; role: string } | null>(null);
   const [openSessionId, setOpenSessionId] = useState<number | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
+
+  // The real-time leg (rule 001): every background->active return
+  // re-checks /ota, and a verified wave reloads as the user comes back
+  // — a feature or a button the operator ships lands on the phone
+  // without a store, without a manual update, without the next-launch
+  // wait. Disposed with the app's own lifecycle below.
+  useEffect(() => installForegroundUpdates(), []);
 
   useEffect(() => {
     loadToken().then((token) => {
