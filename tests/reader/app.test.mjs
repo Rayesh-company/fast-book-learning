@@ -324,3 +324,45 @@ test('submitting a question directly from reader floating bar uses a new session
  f.close();
 });
 
+
+// The برنامک's boot (ADR-0021): the WebView's signed initData rides the
+// root URL, and the app exchanges it for the bound Account's session
+// before the honest boot's /auth/me — an unbound user lands on the bind
+// door, a bound one opens straight in, and a refused exchange drops the
+// initData and walks the ordinary honest boot.
+function eitaaFixture(url,initData,eitaaAuth,me){
+ const dom=new JSDOM('<main id="app"></main>',{url,pretendToBeVisual:true});
+ const calls=[];
+ const api={demo:false,loginRequired:true,eitaaAuth:async init=>{calls.push(['auth',init]);return eitaaAuth(init);},me:async()=>{calls.push(['me']);return me();},sessions:async()=>[],profile:async()=>({}),notes:async()=>[]};
+ const app=createMobileApp({root:dom.window.document.querySelector('#app'),api,storage:dom.window.localStorage,initData});
+ return {dom,doc:dom.window.document,app,calls,async done(){await app.ready;return app;},close(){app.dispose();dom.window.close();}};
+}
+
+test('the برنامک boot: an unbound initData lands on the bind door',async()=>{
+ const f=eitaaFixture('http://localhost/?initData=signed','signed',async()=>({bound:false,user:{id:7}}),async()=>null);
+ await f.done();
+ assert.deepEqual(f.calls,[['auth','signed']]);
+ assert.equal(f.app.state.view,'login');assert.equal(f.app.state.eitaa,'signed');
+ const page=f.doc.querySelector('.auth-page');
+ assert.match(page.textContent,/اتصال به کتاب و همراه/);
+ assert.match(page.textContent,/یک بار حساب خود را وصل کنید/);
+ f.close();
+});
+
+test('the برنامک boot: a bound initData opens straight in past every door',async()=>{
+ const f=eitaaFixture('http://localhost/?initData=signed','signed',async()=>({bound:true}),async()=>({email:'x@y',role:'operator',profile_completed:true}));
+ const app=await f.done();
+ assert.deepEqual(f.calls,[['auth','signed'],['me']]);
+ assert.equal(app.state.view,'reader');assert.equal(app.state.eitaa,'signed');
+ assert.equal(f.doc.querySelector('.auth-page'),null);
+ f.close();
+});
+
+test('the برنامک boot: a refused exchange drops the initData and shows the plain login',async()=>{
+ const f=eitaaFixture('http://localhost/?initData=stale','stale',async()=>{throw new Error('امضا کهنه است');},async()=>null);
+ const app=await f.done();
+ assert.deepEqual(f.calls,[['auth','stale'],['me']]);
+ assert.equal(app.state.view,'login');assert.equal(app.state.eitaa,'');
+ assert.match(f.doc.querySelector('.auth-page').textContent,/از خواندن شروع کنید/);
+ f.close();
+});

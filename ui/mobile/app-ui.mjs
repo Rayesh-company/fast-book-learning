@@ -11,7 +11,7 @@ const normalDigits=v=>String(v).replace(/[۰-۹]/g,c=>'۰۱۲۳۴۵۶۷۸۹'.ind
 const normalText=v=>String(v).normalize('NFKC').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/[\u064b-\u065f\u0670\u0640\u200c\u200b\u200d\ufeff\u00a0\x00-\x1f\s]/g,'').toLowerCase();
 
 /** The product host owns UI, drafts and notebook behavior. PDF/audio remain independent. */
-export function createMobileApp({root,api,storage=root.ownerDocument.defaultView.localStorage,fetchImpl=root.ownerDocument.defaultView.fetch?.bind(root.ownerDocument.defaultView)}={}){
+export function createMobileApp({root,api,storage=root.ownerDocument.defaultView.localStorage,fetchImpl=root.ownerDocument.defaultView.fetch?.bind(root.ownerDocument.defaultView),initData=null}={}){
  const doc=root.ownerDocument,win=doc.defaultView;
  const lifecycle=new win.AbortController();
  const motion=createInterfaceMotion(root);
@@ -23,7 +23,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  function syncHighlights(){phone()?.bookReader?.setHighlights?.(s.notes.filter(n=>(n.doc||n.source?.book)===s.book&&n.source?.capture==='highlight').flatMap(n=>n.source?.selection?.pages||[]));}
  const s={view:'boot',demo:api.demo,loginRequired:api.loginRequired!==false,pageFiltering:api.demo||api.pageFiltering===true,book:'tarhe-kolli',positions:{'tarhe-kolli':{page:100},'70143-336':{page:1}},account:null,
   messages:[],sessions:[],sessionId:null,drafts:{},chatScroll:0,follow:true,pages:[100],scope:'page',sessionContext:null,theme:'system',profile:null,
-  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,otpDraft:'',waitlisted:false,tocSearch:'',tocExpanded:null,drawerSections:{highlights:true,bookmarks:true,notes:true},adminTab:'accounts',adminSearch:'',adminAccounts:[],adminLoading:false,adminTokens:null,adminTokensLoading:false,canInstall:false,installKind:'none'};
+  readerQuestion:null,readerGuideSeen:false,stack:[],menu:false,sheet:null,error:'',notes:[],noteTab:'notes',noteBook:'tarhe-kolli',noteSearch:'',selected:new Set(),selecting:false,notesLoading:false,otpDraft:'',waitlisted:false,tocSearch:'',tocExpanded:null,drawerSections:{highlights:true,bookmarks:true,notes:true},adminTab:'accounts',adminSearch:'',adminAccounts:[],adminLoading:false,adminTokens:null,adminTokensLoading:false,canInstall:false,installKind:'none',eitaa:initData?String(initData):''};
  let storageKey,disposed=false,job=null,sequence=0,accountRevision=0,recordRevision=0,recordPending=false,otpTimer,otpInFlight=false,webOtpAbort=null,pending=new Set(),toastTimer,recorder,timer,media,recordingStarted,recordingPlace,recordDraft,audioCtx,analyser,waveAnimId;
  const safeRead=key=>{try{return JSON.parse(storage?.getItem(key));}catch{return null;}};
  const persist=()=>{if(!storageKey||disposed)return;try{storage?.setItem(storageKey,JSON.stringify({view:['reader','chat'].includes(s.view)?s.view:s.stack.find(v=>['reader','chat'].includes(v))||'reader',book:s.book,positions:s.positions,drafts:s.drafts,pages:s.pages,scope:s.scope,sessionContext:s.sessionContext,sessionId:s.sessionId,chatScroll:s.chatScroll,follow:s.follow,theme:s.theme,readerGuideSeen:s.readerGuideSeen}));}catch{}};
@@ -479,7 +479,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
      toast('حساب با موفقیت ایجاد شد.');
     }catch(e){s.error=e.message;render();}
    })());
-   if(form.matches('[data-auth-form]')){if(otpInFlight)return;otpInFlight=true;const submit=form.querySelector('button[type="submit"]');if(submit)submit.disabled=true;run((async()=>{s.error='';try{if(s.view==='email-login'){s.account=await api.login({email:form.elements.email.value,password:form.elements.password.value});await initialize();}else if(s.view==='otp'){const code=String(number(form.elements.code.value)).padStart(6,'0');s.account=await api.verifyOtp(s.phone,code);s.otpDraft='';await initialize();}else{const phone=normalPhone(form.elements.phone.value);if(!/^09\d{9}$/.test(phone))throw new Error('شمارهٔ موبایل ایرانی را با ۱۱ رقم وارد کنید.');s.phone=phone;await api.requestOtp(phone);s.otpDraft='';startOtpCooldown();navigate('otp');startWebOtp();}}catch(e){s.error=e.message;render();if(s.view==='otp')root.querySelector('[data-otp-box]')?.focus({preventScroll:true});}finally{otpInFlight=false;if(submit?.isConnected)submit.disabled=false;}})());}
+   if(form.matches('[data-auth-form]')){if(otpInFlight)return;otpInFlight=true;const submit=form.querySelector('button[type="submit"]');if(submit)submit.disabled=true;run((async()=>{s.error='';try{if(s.view==='email-login'){const credentials={email:form.elements.email.value,password:form.elements.password.value};s.account=await (s.eitaa?api.eitaaLink(s.eitaa,credentials):api.login(credentials));await initialize();}else if(s.view==='otp'){const code=String(number(form.elements.code.value)).padStart(6,'0');s.account=await (s.eitaa?api.eitaaLink(s.eitaa,{phone:s.phone,code}):api.verifyOtp(s.phone,code));s.otpDraft='';await initialize();}else{const phone=normalPhone(form.elements.phone.value);if(!/^09\d{9}$/.test(phone))throw new Error('شمارهٔ موبایل ایرانی را با ۱۱ رقم وارد کنید.');s.phone=phone;await api.requestOtp(phone);s.otpDraft='';startOtpCooldown();navigate('otp');startWebOtp();}}catch(e){s.error=e.message;render();if(s.view==='otp')root.querySelector('[data-otp-box]')?.focus({preventScroll:true});}finally{otpInFlight=false;if(submit?.isConnected)submit.disabled=false;}})());}
  },listenerOptions);
  root.addEventListener('pointerdown',e=>{if(sessionMenu&&!sessionMenu.node.contains(e.target)&&!sessionMenu.trigger.contains(e.target))closeSessionMenu();},{...listenerOptions,capture:true});
  root.addEventListener('click',e=>{if(sessionMenu&&!sessionMenu.node.contains(e.target)&&!sessionMenu.trigger.contains(e.target))closeSessionMenu();},{...listenerOptions,capture:true});
@@ -668,7 +668,7 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
   if(a==='return-activity'){s.stack=[];navigate('chat');}
   if(a==='record'||a==='reader-record')run(startRecording(a==='record'?'chat':'reader'));
   if(a==='finish-record'||a==='cancel-record')run(finishRecording(a==='cancel-record'));
-  if(a==='logout')run((async()=>{capture();persist();abortJob();stopRecording();await api.logout();resetAccountState();s.account=null;storageKey=null;navigate(s.loginRequired?'login':'reader',{captured:true});})());
+  if(a==='logout')run((async()=>{capture();persist();abortJob();stopRecording();if(s.eitaa){try{await api.eitaaUnlink(s.eitaa);}catch(e){}await api.logout();}else{await api.logout();}resetAccountState();s.account=null;storageKey=null;navigate(s.loginRequired?'login':'reader',{captured:true});})());
   if(a==='email-login')navigate('email-login');
   if(a==='login-back')navigate('login');
   if(a==='resend-otp'){if(s.resendAt>Date.now())return;run((async()=>{await api.requestOtp(s.phone);s.otpDraft='';startOtpCooldown();render();startWebOtp();root.querySelector('[data-otp-box]')?.focus({preventScroll:true});toast('کد ورود دوباره درخواست شد.');})());}
@@ -713,7 +713,12 @@ export function createMobileApp({root,api,storage=root.ownerDocument.defaultView
  render();
  // The honest boot in every mode: an anonymous or failed /auth/me lands
  // on the login door — the client never fabricates an Account to walk
- // past it (ADR-0013; F-001's client half, the 2026-10-25 gap).
- const ready=(async()=>{try{s.account=await api.me();if(disposed)return;if(s.account)await initialize();else navigate('login');}catch(e){if(disposed)return;navigate('login');s.error=e.message;render();}})();
+ // past it (ADR-0013; F-001's client half, the 2026-10-25 gap). The
+ // برنامک's open rides one step ahead (ADR-0021): the signed initData
+ // exchanges for the bound Account's token and the app opens straight
+ // in, an unbound user lands on the bind door, and a refused exchange
+ // (a stale signature, an unconfigured bot, the wire down) drops the
+ // initData and walks the ordinary honest boot instead.
+ const ready=(async()=>{try{if(s.eitaa){try{const boot=await api.eitaaAuth(s.eitaa);if(boot&&boot.bound===false){navigate('login');return;}}catch(e){s.eitaa='';}}s.account=await api.me();if(disposed)return;if(s.account)await initialize();else navigate('login');}catch(e){if(disposed)return;navigate('login');s.error=e.message;render();}})();
  return{state:s,ready,settled:async()=>{while(pending.size)await Promise.allSettled([...pending]);},dispose(){capture();persist();disposePicker();closeSessionMenu({restore:false});disposed=true;abortJob();lifecycle.abort();panelFocus.dispose();motion.dispose();clearTimeout(toastTimer);clearInterval(otpTimer);webOtpAbort?.abort();stopRecording();}};
 }

@@ -30,3 +30,24 @@ test('the SMS login speaks the wired endpoints and stores the verified token',as
  await assert.rejects(api.purchase(),/هنوز/);assert.equal(calls.length,2);
  prev?Object.defineProperty(globalThis,'localStorage',prev):delete globalThis.localStorage;
 });
+
+test('the برنامک exchange: a bound answer stores the token, an unbound one stores nothing',async()=>{
+ const calls=[];let stored=null;
+ const prev=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>stored,setItem:(k,v)=>{stored=v;},removeItem:()=>{stored=null;}}});
+ const api=createApi({fetchImpl:async(path,options)=>{calls.push({path,body:JSON.parse(options.body)});return{ok:true,json:async()=>path==='/eitaa/auth'?{bound:false,user:{id:7,first_name:'مهدی'}}:path==='/eitaa/link'?{bound:true,token:'tok-eitaa',email:'x@y',role:'operator',user:{id:7}}:{deleted:true}};}});
+ // The silent open of an unbound user: bound:false names the door, and
+ // no token ever touches the store.
+ assert.deepEqual(await api.eitaaAuth('signed-init-data'),{bound:false,user:{id:7,first_name:'مهدی'}});
+ assert.equal(calls[0].path,'/eitaa/auth');assert.equal(calls[0].body.initData,'signed-init-data');assert.equal(stored,null);
+ // The bind door asked once with the email pair: the token stores.
+ await api.eitaaLink('signed-init-data',{email:'x@y',password:'pw'});
+ assert.equal(calls[1].path,'/eitaa/link');assert.equal(calls[1].body.email,'x@y');assert.equal(calls[1].body.password,'pw');assert.equal(stored,'tok-eitaa');
+ // The phone pair rides the SAME door — the SMS login's verify check.
+ await api.eitaaLink('signed-init-data',{phone:'09123456789',code:'042021'});
+ assert.equal(calls[2].path,'/eitaa/link');assert.equal(calls[2].body.phone,'09123456789');assert.equal(calls[2].body.code,'042021');
+ // خروج در برنامک: the binding row moves with the initData.
+ await api.eitaaUnlink('signed-init-data');
+ assert.equal(calls[3].path,'/eitaa/unlink');assert.equal(calls[3].body.initData,'signed-init-data');
+ prev?Object.defineProperty(globalThis,'localStorage',prev):delete globalThis.localStorage;
+});

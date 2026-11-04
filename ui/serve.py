@@ -541,11 +541,13 @@ NEXT_TIER_SEARCH_TYPE = "GRAPH_COMPLETION_COT"
 # The cookie the sheet's browser carries; HttpOnly so the sheet's own
 # JS can never read the token, Path=/ so every endpoint sees it.
 AUTH_COOKIE = "cwb_auth"
-# Thirty days: the PM's monthly-Session law (2026-10-25) — a login
-# lasts one month, then the honest 401 walks the caller back to the
-# door and the client's honest boot shows the login page again.
-# Pinned in source, never env.
-AUTH_TOKEN_TTL = 30 * 24 * 3600
+# Ninety days (the operator's 2026-11-04 call, superseding the PM's
+# monthly-Session law of 2026-10-25): a login lasts a season, then the
+# honest 401 walks the caller back to the door and the client's honest
+# boot shows the login page again. The bernamek's own door never waits
+# out any TTL — the initData re-authenticates every open. Pinned in
+# source, never env.
+AUTH_TOKEN_TTL = 90 * 24 * 3600
 AUTH_LOGIN_401_DETAIL = "برای ادامه وارد شوید."
 AUTH_NOT_ADMIN_403_DETAIL = "ساختن حساب فقط از دست مدیر برمی‌آید."
 # The console's own refusal (T25): the mirror is the Admin's surface —
@@ -2273,22 +2275,43 @@ class SessionHandler(SimpleHTTPRequestHandler):
 
     def _eitaa_link(self) -> None:
         """The one door, asked once: the signed initData beside an
-        Account's real email and password. The credentials check is
-        /auth/login's own path — the identical 401 for an unknown
-        email and a wrong password — and the binding it records keys
-        every silent open after."""
+        Account's real credentials — either the email and password
+        /auth/login checks (the identical 401 for an unknown email and
+        a wrong password) or the phone and code the SMS login verifies,
+        an unknown phone walking into its self-issued Account exactly
+        as /auth/otp/verify walks it. The binding it records keys every
+        silent open after."""
         fields, payload = self._eitaa_init_data()
         if fields is None:
             return
         email = payload.get("email")
         password = payload.get("password")
-        if not isinstance(email, str) or not isinstance(password, str):
+        phone = payload.get("phone")
+        code = payload.get("code")
+        if isinstance(email, str) and isinstance(password, str):
+            account = verify_login(email, password)
+            if account is None:
+                self._send_json(401, {"detail": AUTH_BAD_CREDENTIALS_DETAIL})
+                return
+        elif isinstance(phone, str) and isinstance(code, (str, int)):
+            # The SMS login's own check, verbatim: the same per-IP
+            # budget, the same one-shape 401 for a wrong and an expired
+            # code alike, and the open door's law for a phone no
+            # Account carries.
+            if not throttle.allow(throttle.OTP_VERIFIES, throttle.client_ip(self)):
+                self._send_json(429, {"detail": THROTTLE_429_DETAIL})
+                return
+            normalized = normalize_local_phone(phone)
+            if not normalized:
+                self._send_json(400, {"detail": OTP_BAD_PHONE_DETAIL})
+                return
+            if not otp.verify_otp(normalized, str(code).strip()):
+                self._send_json(401, {"detail": OTP_BAD_CODE_401_DETAIL})
+                return
+            account = account_by_phone(normalized) or signup_phone_account(normalized)
+        else:
             # The body is already read above, so _send_json is safe.
             self._send_json(400, {"detail": AUTH_BAD_LOGIN_BODY_DETAIL})
-            return
-        account = verify_login(email, password)
-        if account is None:
-            self._send_json(401, {"detail": AUTH_BAD_CREDENTIALS_DETAIL})
             return
         user = eitaa.init_data_user(fields)
         eitaa_store.bind(

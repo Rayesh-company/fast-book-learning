@@ -218,6 +218,24 @@ export function createApi({ fetchImpl = fetch } = {}) {
       storeToken(payload.token || null);
       return payload;
     },
+    // The برنامک's silent door (ADR-0021): the WebView's signed initData
+    // exchanges for the bound Account's ordinary token, and an unbound
+    // user answers {bound:false} — the app shows the one bind door
+    // instead of inventing a session. The link is that door asked once:
+    // either the email/password pair /auth/login checks or the
+    // phone/code pair /auth/otp/verify checks, riding the same 401s.
+    eitaaAuth: async initData => {
+      const payload = await request('/eitaa/auth', { method: 'POST', body: { initData } });
+      if (payload.bound) storeToken(payload.token || null);
+      return payload;
+    },
+    eitaaLink: async (initData, credentials) => {
+      const payload = await request('/eitaa/link', { method: 'POST', body: { initData, ...credentials } });
+      if (payload.bound) storeToken(payload.token || null);
+      return payload;
+    },
+    eitaaUnlink: initData =>
+      request('/eitaa/unlink', { method: 'POST', body: { initData } }),
     profile: async () => {
       await request('/profile/data');
       return { subscription: null, subscription_available: false, questions_remaining: null };

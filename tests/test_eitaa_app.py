@@ -443,3 +443,59 @@ def test_the_page_and_its_routes_are_the_sheets_own():
     # The push is wired beside the settle, and opt-in by env.
     assert "_eitaa_push(account, EITAA_PUSH_SETTLED_TEXT)" in server
     assert serve.EITAA_PUSH_ENABLED_ENV == "EITAA_PUSH_ENABLED"
+
+
+def test_the_link_accepts_the_sms_login_pair(tmp_path, monkeypatch):
+    """The bind door answers the phone half too: the OTP check rides
+    verbatim (/auth/otp/verify's per-IP budget, its one-shape 401, the
+    open door's self-signup for a phone no Account carries), so a
+    phone-registered user binds with one SMS and the binding keys every
+    silent open after. A body with neither credential pair stays a 400 —
+    the door is asked with credentials, never bare."""
+    from tests.test_otp_login import _patched_panel
+    from ui import otp
+
+    base, server, original = _gate(tmp_path, monkeypatch)
+    try:
+        # The pending-code store is module-level memory; the SMS login's
+        # tests left records under THEIR clock, and this test's fresh
+        # clock must not inherit them (tests/test_otp_login's own rule).
+        monkeypatch.setattr(otp, "CODES", otp._Codes())
+        real_now = time.time()
+        panel, clock = _patched_panel(monkeypatch)
+        # The panel's tick is a fixed 2027 stamp; the initData this test
+        # mints must ride the real hour or the freshness bound refuses it
+        # before the OTP branch ever speaks — so the tick starts at the
+        # wall clock captured before the patch landed.
+        clock["t"] = real_now
+        # The code goes out over the faked panel; the wrong code refuses
+        # with the SMS login's own one shape, never binding.
+        assert _post(base, "/auth/otp/request", {"phone": PHONE})[0] == 200
+        code = panel.sent[0]["body"]["attributes"]["codeotp"]
+        status, payload = _post(
+            base,
+            "/eitaa/link",
+            {"initData": _init_data(), "phone": PHONE, "code": "000000"},
+        )
+        assert status == 401
+        assert payload["detail"] == serve.OTP_BAD_CODE_401_DETAIL
+        # The right code binds: a phone no Account carried walks into
+        # its self-issued Account exactly as /auth/otp/verify walks it.
+        status, payload = _post(
+            base,
+            "/eitaa/link",
+            {"initData": _init_data(), "phone": PHONE, "code": code},
+        )
+        assert status == 200 and payload["bound"] is True
+        assert payload["email"] == f"{PHONE}@phone.local"
+        assert serve.verify_token(payload["token"])["email"] == payload["email"]
+        # The next open rides silently — no credentials anywhere.
+        status, payload = _post(base, "/eitaa/auth", {"initData": _init_data()})
+        assert status == 200 and payload["bound"] is True
+        assert serve.verify_token(payload["token"])["email"] == payload["email"]
+        # A bare initData is a 400, never a bind.
+        status, payload = _post(base, "/eitaa/link", {"initData": _init_data()})
+        assert status == 400
+        assert payload["detail"] == serve.AUTH_BAD_LOGIN_BODY_DETAIL
+    finally:
+        stop_gate(server, original)
