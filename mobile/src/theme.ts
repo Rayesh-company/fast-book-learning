@@ -1,30 +1,35 @@
-// The sheet's own paper world (ui/index.html's :root tokens), carried
-// to the phone: one palette, both themes, the reader never decodes a
-// second visual language.
+// The web face's own tokens (ui/mobile/app.css :root + body.dark),
+// carried to the phone VERBATIM — color for color, no second palette:
+// bg, surface, the app's raised takes the web's soft, rule takes line,
+// ink and muted ride unchanged, clay is the web's accent (buttons,
+// bubbles, phase titles), bad is the sheet-error red the web itself
+// paints (#a03831, dark included — sameness wins over contrast here),
+// gold's note text reads in the muted voice like the web's own notes,
+// and ok stays the quiet green both worlds already agree on.
 export const light = {
-  bg: "#d8cbae",
-  surface: "#f3ead6",
-  raised: "#faf4e6",
-  rule: "#cdbf9f",
-  ink: "#2e2417",
-  mute: "#6d5e48",
-  clay: "#1f4a78",
-  gold: "#a67c2e",
+  bg: "#faf8f3",
+  surface: "#fffefa",
+  raised: "#f0eee8",
+  rule: "#dfe2dc",
+  ink: "#262c2b",
+  mute: "#626965",
+  clay: "#16786e",
+  gold: "#626965",
   ok: "#3e6b4f",
-  bad: "#9c3529",
+  bad: "#a03831",
 };
 
 export const dark = {
-  bg: "#141821",
-  surface: "#1e242e",
-  raised: "#273040",
-  rule: "#3e4757",
-  ink: "#eae1c9",
-  mute: "#a9997c",
-  clay: "#7ea6d6",
-  gold: "#c9a355",
+  bg: "#202524",
+  surface: "#272d2b",
+  raised: "#333a37",
+  rule: "#454d48",
+  ink: "#f3f4ed",
+  mute: "#b2bab5",
+  clay: "#82cfc0",
+  gold: "#b2bab5",
   ok: "#7fb091",
-  bad: "#d98a7c",
+  bad: "#a03831",
 };
 
 export type Palette = typeof light;
