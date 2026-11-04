@@ -216,6 +216,7 @@ try:
         research_suggestions,
         run_research_turn,
         seed_evidence,
+        set_turn_event_listener,
         start_research_turn,
         turn_status_payload,
         with_references,
@@ -391,6 +392,7 @@ except ImportError:  # the container runs this file as a script beside the modul
         research_suggestions,
         run_research_turn,
         seed_evidence,
+        set_turn_event_listener,
         start_research_turn,
         turn_status_payload,
         with_references,
@@ -913,6 +915,23 @@ def _publish_event(account: str, kind: str, **payload) -> None:
             client.put_nowait(event)
         except Exception:
             pass
+
+
+# The research turn's settle rides this same hub (ADR-0020): the
+# engine's terminal writes ring the module-level listener (research.py
+# cannot import serve — the dependency runs backwards), and the tap
+# fans the settle out as "research.settled". Small announcement shape,
+# like every event here: the poll (/research/turn) stays the full
+# payload's read, the stream stays the bell.
+set_turn_event_listener(
+    lambda turn: _publish_event(
+        turn.account,
+        "research.settled",
+        turn_id=turn.id,
+        state=turn.state,
+        session_id=turn.session_id,
+    )
+)
 
 
 def _eitaa_push(account: str, text: str) -> None:
@@ -2366,16 +2385,22 @@ class SessionHandler(SimpleHTTPRequestHandler):
         header — the RFC 8941 dictionary the code-signing-configured
         client verifies against its embedded certificate. Without the
         sidecar the response keeps the old shape: the pre-certificate
-        APKs never look at the header."""
+        APKs never look at the header. Both answers also carry
+        expo-protocol-version: 1 — the SDK 57 client refuses a manifest
+        without it as "legacy" (the refusal surfaces wrapped in a
+        misleading code-signing error, which is how this hole stayed
+        invisible through the channel's whole life)."""
         manifest = OTA_DIR / "manifest.json"
         try:
             body = manifest.read_bytes()
         except OSError:
             self.send_response(204)
+            self.send_header("expo-protocol-version", "1")
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
         self.send_response(200)
+        self.send_header("expo-protocol-version", "1")
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         try:
