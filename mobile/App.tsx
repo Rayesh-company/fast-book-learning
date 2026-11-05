@@ -1,21 +1,20 @@
-// The app's root: boot the stored credential, then the phone's one
-// stack — the Sessions list, a sitting, and the live line underneath
-// it all (ADR-0020). Any settle anywhere re-renders the list.
+// The app's root is now the fahva web face itself: one fullscreen
+// WebView over https://fahva.rayesh-team.ir/ — the login (the phone's
+// SMS door), the book reader, the chat, every pixel of it IS the web,
+// so the two clients can never drift again (the operator's 2026-11-05
+// call: the native client's minimal UI and its missing reader left
+// him with «the text doesn't load» and «the web looks like something
+// else»). The web keeps its own auth inside the WebView's localStorage
+// — one OTP login persists across opens — and the shell keeps only the
+// OTA leg (rule 001): a shell upgrade still rides the signed wave.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PixelRatio, Platform, StatusBar, useColorScheme, View } from "react-native";
-import { dark, light } from "./src/theme";
-import { api, loadToken } from "./src/api";
-import { subscribeEvents } from "./src/events";
-import { installForegroundUpdates } from "./src/updates";
-import { LoginScreen } from "./src/screens/Login";
-import { HomeScreen } from "./src/screens/Home";
-import { SittingScreen } from "./src/screens/Sitting";
+import { WebView } from "react-native-webview";
 
 // The status bar's height in dp for the edge-to-edge window: on modern
-// Android (API 35+) currentHeight can report 0, so the header collided
-// with the clock and battery — the operator's «falls outside» shot.
-// A real height converts px→dp; otherwise the standard 24dp band plus
-// breathing room keeps every screen's top bar below the system band.
+// Android (API 35+) currentHeight can report 0, so the web's top bar
+// would collide with the clock and battery. A real height converts
+// px→dp; otherwise the standard 24dp band plus breathing room.
 const TOP_BAR_DP =
   (StatusBar.currentHeight ?? 0) > 0
     ? StatusBar.currentHeight! / PixelRatio.get()
@@ -23,90 +22,42 @@ const TOP_BAR_DP =
       ? 38
       : 0;
 
+const FAHVA_URL = "https://fahva.rayesh-team.ir/";
+
+// The URL.parse ponyfill, injected before ANY page JS: pdf.js ≥ 4.5
+// calls the static URL.parse (Chrome 126+), and Android WebViews on
+// older Chrome builds (124 and below — the operator's phone among
+// them) throw «URL.parse is not a function» the moment the reader's
+// PDF engine boots — the book text never loads. The ponyfill is the
+// spec's own semantics: new URL(url, base), null on failure.
+const PONYFILL = `
+  if (!URL.parse) {
+    URL.parse = function (url, base) {
+      try { return base ? new URL(url, base) : new URL(url); }
+      catch (e) { return null; }
+    };
+  }
+  true;
+`;
+
 export default function App() {
   const scheme = useColorScheme();
-  const palette = scheme === "dark" ? dark : light;
-  const [booted, setBooted] = useState(false);
-  const [me, setMe] = useState<{ email: string; role: string } | null>(null);
-  const [openSessionId, setOpenSessionId] = useState<number | null>(null);
-  const [refreshToken, setRefreshToken] = useState(0);
+  const palette = useMemo(
+    () => (scheme === "dark" ? { bg: "#202524" } : { bg: "#faf8f3" }),
+    [scheme]
+  );
 
-  // The real-time leg (rule 001): every background->active return
-  // re-checks /ota, and a verified wave reloads as the user comes back
-  // — a feature or a button the operator ships lands on the phone
-  // without a store, without a manual update, without the next-launch
-  // wait. Disposed with the app's own lifecycle below.
-  useEffect(() => installForegroundUpdates(), []);
+  // NO in-app OTA listener here — ON_LOAD's single native check per
+  // launch is the whole channel the shell needs (the web face updates
+  // itself; a wave only ships a new shell), and the foreground check
+  // proved to spin on the runtime-mismatch era (a /ota request every
+  // second, the wave tag advancing on nothing). One launch, one check,
+  // no listener.
+  useEffect(() => {}, []);
 
-  useEffect(() => {
-    loadToken().then((token) => {
-      // A stored credential opens the list; /sessions' own 401 (the
-      // Home read) is the gate that sends it back here.
-      if (token) setMe({ email: "", role: "operator" });
-      setBooted(true);
-    });
+  const onError = useCallback(() => {
+    console.log("[cwb-updates] webview load error");
   }, []);
-
-  // The insets diagnostic: the wave tag proves the bundle, these
-  // numbers prove the band — what the status bar reports, the density,
-  // and the dp the root actually pads by.
-  useEffect(() => {
-    console.log(
-      `[cwb-updates] topbar dp=${TOP_BAR_DP} currentHeight=${StatusBar.currentHeight} density=${PixelRatio.get()} platform=${Platform.OS}`
-    );
-  }, []);
-
-  // The live line: opens once the Account exists, re-renders the list
-  // on every settle, and dies with the logout.
-  const meEmail = me?.email;
-  useEffect(() => {
-    if (!meEmail) return;
-    const unsubscribe = subscribeEvents(loadToken, () =>
-      setRefreshToken((n) => n + 1)
-    );
-    return unsubscribe;
-  }, [meEmail]);
-
-  const onLoggedOut = useCallback(() => {
-    api.logout().catch(() => {});
-    setMe(null);
-    setOpenSessionId(null);
-  }, []);
-
-  const body = useMemo(() => {
-    if (!booted) return null;
-    if (!me) {
-      return (
-        <LoginScreen
-          palette={palette}
-          onLoggedIn={(next) => {
-            setMe(next);
-            setRefreshToken((n) => n + 1);
-          }}
-        />
-      );
-    }
-    if (openSessionId !== null) {
-      return (
-        <SittingScreen
-          palette={palette}
-          sessionId={openSessionId}
-          onBack={() => {
-            setOpenSessionId(null);
-            setRefreshToken((n) => n + 1);
-          }}
-        />
-      );
-    }
-    return (
-      <HomeScreen
-        palette={palette}
-        onOpen={(session) => setOpenSessionId(session.id)}
-        onLoggedOut={onLoggedOut}
-        refreshToken={refreshToken}
-      />
-    );
-  }, [booted, me, openSessionId, palette, refreshToken, onLoggedOut]);
 
   return (
     <View
@@ -117,7 +68,15 @@ export default function App() {
       }}
     >
       <StatusBar barStyle={scheme === "dark" ? "light-content" : "dark-content"} />
-      {body}
+      <WebView
+        source={{ uri: FAHVA_URL }}
+        style={{ flex: 1, backgroundColor: palette.bg }}
+        domStorageEnabled
+        javaScriptEnabled
+        originWhitelist={["https://*"]}
+        injectedJavaScriptBeforeContentLoaded={PONYFILL}
+        onError={onError}
+      />
     </View>
   );
 }

@@ -115,6 +115,12 @@ def main() -> int:
     def asset_entry(path: Path, is_launch: bool) -> dict:
         rel = path.relative_to(export).as_posix()
         suffix = "".join(path.suffixes[-1:])
+        # The URL carries the runtime segment when this publish targets a
+        # specific runtime channel (--runtime): serve.py routes each
+        # client to its OWN runtime directory, and the asset files live
+        # beside that runtime's manifest — a shared /ota/current would
+        # point every channel at whichever bundle was published last.
+        runtime_seg = f"/runtime-{runtime}" if runtime else ""
         return {
             # The key must be a BARE FILENAME, unique per wave: expo-updates
             # stores assets "under their key", and a shared key across waves
@@ -124,8 +130,8 @@ def main() -> int:
             # stuck-wave bug; expo's own refusal names the rule: the key
             # may not contain a path separator either, so the launch
             # asset takes its hashed basename and nothing more).
-            "key": path.name,
-            "url": f"{args.base.rstrip('/')}/ota/current/{rel}",
+            "key": f"{path.stem}-{uuid.uuid4().hex[:12]}{path.suffix}",
+            "url": f"{args.base.rstrip('/')}/ota{runtime_seg}/current/{rel}",
             "contentType": CONTENT_TYPES.get(suffix, "application/octet-stream"),
             **({"type": "bundle"} if is_launch else {}),
         }

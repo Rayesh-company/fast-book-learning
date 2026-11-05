@@ -74,7 +74,15 @@ export function installMobileReaders({ root = document, fetchImpl = fetch, pdfjs
 
   async function bookDocument(pdfjs, book) {
     if (!documents.has(book)) {
+      // The PDF fetch must carry the credential itself: pdf.js knows
+      // nothing about the app's Bearer token, and inside the Android
+      // WebView (the native shell, 2026-11-05) the HttpOnly login
+      // cookie does not ride along the way it does in a desktop
+      // browser — without the header the book fetch answers 401 and
+      // the text never loads.
+      const token = localStorage.getItem('cwb_auth_token');
       const task = pdfjs.getDocument({ url: `/books/${book}/book`, ...PDF_RENDER_OPTIONS,
+        httpHeaders: token ? { Authorization: `Bearer ${token}` } : undefined,
         cMapUrl: '/vendor/cmaps/', cMapPacked: true, standardFontDataUrl: '/vendor/standard_fonts/',
         isEvalSupported: false, disableAutoFetch: true });
       documents.set(book, task);

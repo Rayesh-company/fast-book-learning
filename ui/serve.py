@@ -2389,8 +2389,21 @@ class SessionHandler(SimpleHTTPRequestHandler):
         expo-protocol-version: 1 — the SDK 57 client refuses a manifest
         without it as "legacy" (the refusal surfaces wrapped in a
         misleading code-signing error, which is how this hole stayed
-        invisible through the channel's whole life)."""
-        manifest = OTA_DIR / "manifest.json"
+        invisible through the channel's whole life). The manifest each
+        client reads comes from its OWN runtime directory: the request's
+        expo-runtime-version header picks OTA_DIR/runtime-<v>/ (the
+        webview shell vs the native client are separate channels now —
+        a wave for one runtime must never reach devices of the other,
+        where a launch-time mismatch strands them in a fetch/reload
+        loop), falling back to the legacy OTA_DIR files for clients
+        that send no header (curl probes, very old builds)."""
+        runtime = self.headers.get("expo-runtime-version")
+        base = OTA_DIR
+        if runtime:
+            candidate = OTA_DIR / f"runtime-{runtime}"
+            if (candidate / "manifest.json").is_file():
+                base = candidate
+        manifest = base / "manifest.json"
         try:
             body = manifest.read_bytes()
         except OSError:
