@@ -13,11 +13,14 @@ import {
 import type { Palette, SessionRow } from "../types";
 import { S } from "../strings";
 import { api } from "../api";
+import { currentWaveTag } from "../updates";
 
 const BOOKS: { dataset: string; title: string }[] = [
   { dataset: "tarhe-kolli", title: S.bookTarheKolli },
   { dataset: "70143-336", title: S.bookEnsan250 },
 ];
+
+const waveTag = currentWaveTag();
 
 export function HomeScreen({
   palette,
@@ -91,6 +94,16 @@ export function HomeScreen({
         ListEmptyComponent={
           <Text style={[styles.empty, { color: palette.mute }]}>{S.emptySessions}</Text>
         }
+        ListFooterComponent={
+          // The real-time receipt: this is the OTA wave the phone is
+          // running right now — the same id /ota's manifest names on
+          // fahva. The two matching IS the proof the app reads the
+          // backend, and a fresh id after a publish IS the proof the
+          // wave landed without a store or a manual update.
+          <Text style={[styles.wave, { color: palette.mute }]}>
+            {S.waveLabel(waveTag)}
+          </Text>
+        }
       />
       <Modal visible={picking} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
@@ -158,6 +171,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 40,
     fontSize: 14,
+  },
+  wave: {
+    textAlign: "center",
+    fontSize: 11,
+    paddingVertical: 10,
   },
   error: {
     textAlign: "center",

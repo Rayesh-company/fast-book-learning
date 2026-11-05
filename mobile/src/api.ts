@@ -144,6 +144,23 @@ export const api = {
     await storeToken(null);
   },
 
+  // The SMS login, the web face's primary door (ADR-0013's open-door
+  // law): the code goes to every Iranian phone, a phone no Account
+  // carries signs itself in, and verify answers the email login's own
+  // body — as far as every later endpoint cares this IS the login.
+  async requestOtp(phone: string): Promise<void> {
+    await call("/auth/otp/request", { method: "POST", json: { phone } });
+  },
+
+  async verifyOtp(phone: string, code: string): Promise<{ email: string; role: string }> {
+    const payload = await call<{ email: string; role: string; token: string }>(
+      "/auth/otp/verify",
+      { method: "POST", json: { phone, code } }
+    );
+    await storeToken(payload.token);
+    return { email: payload.email, role: payload.role };
+  },
+
   sessions(): Promise<{ sessions: SessionRow[] }> {
     return call("/sessions");
   },

@@ -6,9 +6,17 @@
 // the session is never yanked: a check only fires on the foreground
 // transition itself, so a TTS/lecture playing in hand is never cut.
 import * as Updates from "expo-updates";
-import { AppState } from "react-native";
+import { AppState, Platform, ToastAndroid } from "react-native";
 
 const CHECK_INTERVAL_MS = 5 * 60_000;
+
+// The user's own real-time proof: the wave this session runs, short
+// form — Home paints it, and the same id is readable on /ota's
+// manifest at fahva, so the two lines matching IS the verification.
+export function currentWaveTag(): string {
+  const id = Updates.manifest?.id;
+  return typeof id === "string" ? id.slice(0, 8) : "embedded";
+}
 
 export function installForegroundUpdates(): () => void {
   // The dev client and the Metro dev server carry no OTA channel —
@@ -17,6 +25,13 @@ export function installForegroundUpdates(): () => void {
   // Which bundle runs, one line at boot: the operator reads the wave id
   // straight off logcat, and every reload names its own new one.
   console.log(`[cwb-updates] bundle ${Updates.manifest?.id ?? "embedded"}`);
+  // The applied-update announcement: a wave that downloads and reloads
+  // boots THIS branch as a non-embedded launch, so the user SEES the
+  // real-time channel working — the update landed without a store and
+  // without them doing anything.
+  if (!Updates.isEmbeddedLaunch && Platform.OS === "android") {
+    ToastAndroid.show("به‌روزرسانی فحوا نصب شد", ToastAndroid.SHORT);
+  }
   let lastCheck = 0;
   const subscription = AppState.addEventListener("change", (state) => {
     if (state !== "active") return;

@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "نشست",
+    "name": "فحوا",
     "slug": "chat-with-books",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#d8cbae",
+    "backgroundColor": "#faf8f3",
     "splash": {
       "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#d8cbae"
+      "backgroundColor": "#faf8f3"
     },
     "updates": {
       "url": "https://fahva.rayesh-team.ir/ota",
@@ -32,7 +32,7 @@
       "package": "ir.chatwithbooks.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#d8cbae"
+        "backgroundColor": "#faf8f3"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
