@@ -2,7 +2,7 @@
 // stack — the Sessions list, a sitting, and the live line underneath
 // it all (ADR-0020). Any settle anywhere re-renders the list.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { StatusBar, useColorScheme, View } from "react-native";
+import { PixelRatio, Platform, StatusBar, useColorScheme, View } from "react-native";
 import { dark, light } from "./src/theme";
 import { api, loadToken } from "./src/api";
 import { subscribeEvents } from "./src/events";
@@ -10,6 +10,18 @@ import { installForegroundUpdates } from "./src/updates";
 import { LoginScreen } from "./src/screens/Login";
 import { HomeScreen } from "./src/screens/Home";
 import { SittingScreen } from "./src/screens/Sitting";
+
+// The status bar's height in dp for the edge-to-edge window: on modern
+// Android (API 35+) currentHeight can report 0, so the header collided
+// with the clock and battery — the operator's «falls outside» shot.
+// A real height converts px→dp; otherwise the standard 24dp band plus
+// breathing room keeps every screen's top bar below the system band.
+const TOP_BAR_DP =
+  (StatusBar.currentHeight ?? 0) > 0
+    ? StatusBar.currentHeight! / PixelRatio.get()
+    : Platform.OS === "android"
+      ? 38
+      : 0;
 
 export default function App() {
   const scheme = useColorScheme();
@@ -33,6 +45,15 @@ export default function App() {
       if (token) setMe({ email: "", role: "operator" });
       setBooted(true);
     });
+  }, []);
+
+  // The insets diagnostic: the wave tag proves the bundle, these
+  // numbers prove the band — what the status bar reports, the density,
+  // and the dp the root actually pads by.
+  useEffect(() => {
+    console.log(
+      `[cwb-updates] topbar dp=${TOP_BAR_DP} currentHeight=${StatusBar.currentHeight} density=${PixelRatio.get()} platform=${Platform.OS}`
+    );
   }, []);
 
   // The live line: opens once the Account exists, re-renders the list
@@ -88,7 +109,13 @@ export default function App() {
   }, [booted, me, openSessionId, palette, refreshToken, onLoggedOut]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.bg }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: palette.bg,
+        paddingTop: TOP_BAR_DP,
+      }}
+    >
       <StatusBar barStyle={scheme === "dark" ? "light-content" : "dark-content"} />
       {body}
     </View>
