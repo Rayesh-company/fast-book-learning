@@ -96,10 +96,14 @@ export function SittingScreen({
 
   const load = useCallback(async () => {
     try {
+      console.log(`[cwb-updates] sitting load id=${sessionId} hasTitle=${typeof (sitting as { title?: string } | null)?.title}`);
       const payload = await api.sitting(sessionId);
       if (!mounted.current) return;
+      console.log(
+        `[cwb-updates] sitting payload keys=${Object.keys(payload as object).join(",")} title=${typeof (payload as { title?: unknown }).title}`
+      );
       setSitting(payload);
-      setResearchSession(payload.session.research_session_id ?? null);
+      setResearchSession(payload.research_session_id ?? null);
       const rows: Turn[] = (payload.messages ?? []).map((message) => ({
         role: message.role,
         text: String(message.payload?.text ?? message.payload?.question ?? ""),
@@ -128,7 +132,7 @@ export function SittingScreen({
     const askKey = `ask-${Date.now()}`;
     setTurns((rows) => [...rows, { role: "user", text: question }]);
     try {
-      const reply: AskReply = await api.ask(question, sitting?.session.book ? [sitting.session.book] : []);
+      const reply: AskReply = await api.ask(question, sitting?.book ? [sitting.book] : []);
       if (!mounted.current) return;
       setPool(reply.sources ?? []);
       api.appendMessage(sessionId, "user", { text: question }).catch(() => {});
@@ -188,7 +192,7 @@ export function SittingScreen({
     setTurns((rows) => [...rows, { role: "user", text: message }]);
     try {
       const started = await api.researchStart(message, {
-        book: sitting?.session.book,
+        book: sitting?.book,
         chatSessionId: sessionId,
       });
       if (!mounted.current) return;
@@ -231,7 +235,7 @@ export function SittingScreen({
           <Text style={[styles.back, { color: palette.clay }]}>{S.close}</Text>
         </TouchableOpacity>
         <Text numberOfLines={1} style={[styles.headerTitle, { color: palette.ink }]}>
-          {sitting?.session.title || S.appName}
+          {sitting?.title || S.appName}
         </Text>
       </View>
       <ScrollView contentContainerStyle={styles.thread}>

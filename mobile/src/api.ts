@@ -47,8 +47,15 @@ export type StoreMessage = {
 };
 
 export type SittingPayload = {
-  session: SessionRow & { research_session_id?: string | null };
+  // The server's /sessions/:id body is FLAT — the row's own fields
+  // beside messages (no session wrapper; pinned against the live wire
+  // 2026-11-05 after the first real sitting tap crashed the render).
+  id: number;
+  title?: string;
+  book?: string;
   messages: StoreMessage[];
+  research_session_id?: string | null;
+  [key: string]: unknown;
 };
 
 export type AskReply = {

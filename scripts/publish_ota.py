@@ -116,7 +116,15 @@ def main() -> int:
         rel = path.relative_to(export).as_posix()
         suffix = "".join(path.suffixes[-1:])
         return {
-            "key": rel if not is_launch else "index.android.bundle",
+            # The key must be a BARE FILENAME, unique per wave: expo-updates
+            # stores assets "under their key", and a shared key across waves
+            # ("index.android.bundle") makes every new wave reuse the
+            # previously stored file — the manifest advances, the device
+            # keeps executing the old bundle forever (the 2026-11-05
+            # stuck-wave bug; expo's own refusal names the rule: the key
+            # may not contain a path separator either, so the launch
+            # asset takes its hashed basename and nothing more).
+            "key": path.name,
             "url": f"{args.base.rstrip('/')}/ota/current/{rel}",
             "contentType": CONTENT_TYPES.get(suffix, "application/octet-stream"),
             **({"type": "bundle"} if is_launch else {}),
