@@ -8,7 +8,15 @@
 // — one OTP login persists across opens — and the shell keeps only the
 // OTA leg (rule 001): a shell upgrade still rides the signed wave.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PixelRatio, Platform, StatusBar, useColorScheme, View } from "react-native";
+import {
+  PixelRatio,
+  Platform,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+  View,
+} from "react-native";
 import { WebView } from "react-native-webview";
 
 // The status bar's height in dp for the edge-to-edge window: on modern
@@ -46,6 +54,16 @@ export default function App() {
     () => (scheme === "dark" ? { bg: "#202524" } : { bg: "#faf8f3" }),
     [scheme]
   );
+  // The connection-failure door: a network cut (or a server restart —
+  // the operator's ERR_CONNECTION_CLOSED screenshot, 2026-11-06) must
+  // land on a Persian «try again» screen, never the raw WebView error
+  // page. A retry bumps the key, forcing the WebView to reload.
+  const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const retry = useCallback(() => {
+    setFailed(false);
+    setReloadKey((k) => k + 1);
+  }, []);
 
   // NO in-app OTA listener here — ON_LOAD's single native check per
   // launch is the whole channel the shell needs (the web face updates
@@ -56,7 +74,7 @@ export default function App() {
   useEffect(() => {}, []);
 
   const onError = useCallback(() => {
-    console.log("[cwb-updates] webview load error");
+    setFailed(true);
   }, []);
 
   return (
@@ -68,15 +86,49 @@ export default function App() {
       }}
     >
       <StatusBar barStyle={scheme === "dark" ? "light-content" : "dark-content"} />
-      <WebView
-        source={{ uri: FAHVA_URL }}
-        style={{ flex: 1, backgroundColor: palette.bg }}
-        domStorageEnabled
-        javaScriptEnabled
-        originWhitelist={["https://*"]}
-        injectedJavaScriptBeforeContentLoaded={PONYFILL}
-        onError={onError}
-      />
+      {failed ? (
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 32,
+            gap: 18,
+          }}
+        >
+          <Text style={{ fontSize: 17, color: "#262c2b", textAlign: "center" }}>
+            اتصال برقرار نشد
+          </Text>
+          <Text style={{ fontSize: 13, color: "#626965", textAlign: "center", lineHeight: 22 }}>
+            اینترنت یا اتصال به سرور قطع بود. دوباره تلاش کنید؛ اگر تکرار شد، شبکه را عوض کنید (وای‌فای/داده).
+          </Text>
+          <TouchableOpacity
+            onPress={retry}
+            style={{
+              backgroundColor: "#16786e",
+              borderRadius: 12,
+              paddingVertical: 12,
+              paddingHorizontal: 40,
+            }}
+          >
+            <Text style={{ color: "#fffefa", fontSize: 15, fontWeight: "700" }}>
+              تلاش دوباره
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <WebView
+          key={reloadKey}
+          source={{ uri: FAHVA_URL }}
+          style={{ flex: 1, backgroundColor: palette.bg }}
+          domStorageEnabled
+          javaScriptEnabled
+          originWhitelist={["https://*"]}
+          injectedJavaScriptBeforeContentLoaded={PONYFILL}
+          onError={onError}
+          onRenderProcessGone={retry}
+        />
+      )}
     </View>
   );
 }
