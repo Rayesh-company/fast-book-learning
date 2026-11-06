@@ -19,7 +19,7 @@
  * real open instead.
  */
 
-const SHELL_CACHE = "cwb-mobile-shell-v1";
+const SHELL_CACHE = "cwb-mobile-shell-v2";
 
 const SHELL_ASSETS = [
   "/",
@@ -106,19 +106,22 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isShellAsset(url)) {
-    // Stale-while-revalidate: the modules, styles, fonts and icons are
-    // stable bytes; the cache answers, the network refreshes.
+    // Network-first, like the navigations — the shell era's freshness
+    // contract: the app IS the web now, and a web deploy must never
+    // leave a stale face one restart behind (the 2026-11-06 report:
+    // the drawer's logout icon stayed invisible through SWR's
+    // first-load-stale window). The cache answers ONLY when the wire
+    // fails — the offline fallback, not the freshness source.
     event.respondWith(
-      caches.open(SHELL_CACHE).then(async (cache) => {
-        const cached = await cache.match(request);
-        const refresh = fetch(request)
-          .then((response) => {
-            if (response && response.ok) cache.put(request, response.clone());
-            return response;
-          })
-          .catch(() => cached);
-        return cached || refresh;
-      })
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => (await caches.match(request)) || Response.error())
     );
     return;
   }
