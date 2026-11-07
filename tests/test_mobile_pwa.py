@@ -82,18 +82,27 @@ def test_manifest_icons_exist_and_dimensions_match_the_claim():
 
 def test_worker_owns_only_the_shell_whitelist_and_never_the_product():
     source = SW.read_text(encoding="utf-8")
-    # One versioned cache — a bump is the update story.
-    assert 'const SHELL_CACHE = "cwb-mobile-shell-v1"' in source
+    # One versioned cache — a bump is the update story (v2, 2026-11-06:
+    # the shell era turned the static families network-first, and the
+    # bump discarded the stale-while-revalidate v1 home of modules the
+    # operator's phone kept serving one restart behind the deploys).
+    assert 'const SHELL_CACHE = "cwb-mobile-shell-v2"' in source
     # The worker only ever speaks GET.
     assert 'request.method !== "GET"' in source
-    # Navigations network-first: the 2026-09-11 freshness contract
-    # stands — the cached shell is the OFFLINE answer, never the
-    # deploy's. The check comes BEFORE the whitelist: the page itself
-    # lives under /mobile/ and must never be served stale.
+    # Navigations AND the shell's static families are network-first:
+    # the 2026-09-11 freshness contract now covers the modules too —
+    # the app IS the web, so a deploy must never leave a stale face
+    # one restart behind. The navigate check comes BEFORE the
+    # whitelist: the page itself lives under /mobile/ and must never
+    # be served stale.
     assert 'request.mode === "navigate"' in source
     assert source.index('request.mode === "navigate"') < source.index(
         "if (isShellAsset(url))"
     )
+    # The shell assets fall back to the cache only when the wire
+    # fails — never as the freshness source.
+    assert "fetch(request)" in source
+    assert "caches.match(request)" in source
     # The whitelist is the whole contract: only static families are
     # owned, everything else passes through untouched.
     for prefix in ('"/mobile/"', '"/vendor/"', '"/book-reader/"', '"/icons/"'):
